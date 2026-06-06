@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <circle cx="64" cy="40" r="28" fill="#0ea5e9"/>
+  <rect x="16" y="78" width="96" height="34" rx="6" fill="#38bdf8"/>
+  <text x="64" y="92" font-family="Arial" font-size="12" fill="#fff" text-anchor="middle">LVC</text>
+</svg>

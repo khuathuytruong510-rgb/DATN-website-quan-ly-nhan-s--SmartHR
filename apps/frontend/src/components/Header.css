@@ -1,0 +1,13 @@
+.header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.header-bar h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
