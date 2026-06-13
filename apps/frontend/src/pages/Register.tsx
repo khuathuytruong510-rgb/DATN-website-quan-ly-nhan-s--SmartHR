@@ -30,9 +30,9 @@ export default function Register() {
       <div className="auth-card">
         <h1>Đăng ký</h1>
         <form onSubmit={handleSubmit} className="auth-form">
-          <Input label="Họ và tên" type="text" value={name} onChange={(e) => setName(e.target.value)} />
-          <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <Input label="Mật khẩu" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <Input label="Họ và tên" name="name" type="text" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
+          <Input label="Email" name="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input label="Mật khẩu" name="password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           {error && <div className="auth-error">{error}</div>}
           <Button type="submit" fullWidth>
             Đăng ký
