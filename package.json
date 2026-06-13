@@ -1,19 +1,17 @@
 {
-  "name": "smarthr",
-  "version": "1.0.0",
-  "description": "Dự án Quản lí nhân sự SmartHR - Hệ thống quản lý nhân sự tổng thể",
-  "private": true,
-  "scripts": {
-    "dev": "npx concurrently \"npm run serve --workspace=apps/backend\" \"npm run dev --workspace=apps/frontend\" --names backend,frontend --kill-others",
-    "build": "npm run build --workspace=apps/backend && npm run build --workspace=apps/frontend",
-    "lint": "npm run lint --workspace=apps/backend && npm run lint --workspace=apps/frontend",
-    "format": "npm run format --workspace=apps/backend && npm run format --workspace=apps/frontend"
-  },
-  "workspaces": [
-    "apps/backend",
-    "apps/frontend"
-  ],
-  "devDependencies": {
-    "concurrently": "^8.2.2"
-  }
+    "$schema": "https://www.schemastore.org/package.json",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "vite build",
+        "dev": "vite",
+        "serve": "composer dev"
+    },
+    "devDependencies": {
+        "@tailwindcss/vite": "^4.0.0",
+        "concurrently": "^9.0.1",
+        "laravel-vite-plugin": "^3.1",
+        "tailwindcss": "^4.0.0",
+        "vite": "^8.0.0"
+    }
 }
