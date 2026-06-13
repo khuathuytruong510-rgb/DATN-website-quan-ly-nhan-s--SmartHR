@@ -30,8 +30,8 @@ export default function Login() {
       <div className="auth-card">
         <h1>Đăng nhập</h1>
         <form onSubmit={handleSubmit} className="auth-form">
-          <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <Input label="Mật khẩu" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <Input label="Email" name="email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input label="Mật khẩu" name="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           {error && <div className="auth-error">{error}</div>}
           <Button type="submit" fullWidth>
             Đăng nhập
