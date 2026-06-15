@@ -3,7 +3,10 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'SmartHR')</title>
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+
     <style>
         :root {
             --bg: #eef3ff;
@@ -79,6 +82,9 @@
                     <a class="{{ request()->routeIs('employees.*') ? 'active' : '' }}" href="{{ route('employees.index') }}">Nhân viên</a>
                     <a class="{{ request()->routeIs('departments.*') ? 'active' : '' }}" href="{{ route('departments.index') }}">Phòng ban</a>
                     <a class="{{ request()->routeIs('contracts.*') ? 'active' : '' }}" href="{{ route('contracts.index') }}">Hợp đồng</a>
+                    <a class="{{ request()->routeIs('attendance') || request()->routeIs('attendance.*') ? 'active' : '' }}" href="{{ route('attendance.index') }}">Chấm công</a>
+                    <a class="{{ request()->routeIs('payroll') || request()->routeIs('payroll.*') ? 'active' : '' }}" href="{{ route('payroll.index') }}">Lương</a>
+                    <a class="{{ request()->routeIs('leave_requests.index') || request()->routeIs('leave_requests.*') ? 'active' : '' }}" href="{{ route('leave_requests.index') }}">Nghỉ phép</a>
                 </nav>
             </aside>
             <main class="main">

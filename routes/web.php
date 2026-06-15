@@ -35,4 +35,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/contracts/{contract}/edit', [SmartHrController::class, 'editContract'])->name('contracts.edit');
     Route::put('/contracts/{contract}', [SmartHrController::class, 'updateContract'])->name('contracts.update');
     Route::delete('/contracts/{contract}', [SmartHrController::class, 'destroyContract'])->name('contracts.destroy');
+
+    Route::get('/attendance', [SmartHrController::class, 'attendance'])->name('attendance.index');
+    Route::get('/payroll', [SmartHrController::class, 'payroll'])->name('payroll.index');
+    Route::get('/leave-requests', [SmartHrController::class, 'leaveRequests'])->name('leave_requests.index');
 });

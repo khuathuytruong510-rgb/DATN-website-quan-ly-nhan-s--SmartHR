@@ -180,6 +180,27 @@ class SmartHrController extends Controller
         ]);
     }
 
+    public function attendance(): View
+    {
+        return view('hr.attendance.index', [
+            'attendances' => \App\Models\Attendance::with('employee')->latest()->paginate(10),
+        ]);
+    }
+
+    public function payroll(): View
+    {
+        return view('hr.payroll.index', [
+            'payrolls' => Payroll::with('employee')->latest()->paginate(10),
+        ]);
+    }
+
+    public function leaveRequests(): View
+    {
+        return view('hr.leave.index', [
+            'leaveRequests' => \App\Models\LeaveRequest::with('employee')->latest()->paginate(10),
+        ]);
+    }
+
     public function createContract(): View
     {
         return view('contracts.form', [

@@ -17,8 +17,32 @@ export default defineConfig({
         tailwindcss(),
     ],
     server: {
+        host: '127.0.0.1',
+        port: 5173,
+        strictPort: true,
         watch: {
             ignored: ['**/storage/framework/views/**'],
+        },
+        proxy: {
+            '/': {
+                target: 'http://127.0.0.1:8000',
+                changeOrigin: false,
+                xfwd: true,
+                secure: false,
+                bypass: (req) => {
+                    if (req.url.startsWith('/@vite') || req.url.startsWith('/resources') || req.url.startsWith('/node_modules') || req.url.startsWith('/favicon.ico') || req.url.startsWith('/robots.txt')) {
+                        return req.url;
+                    }
+                },
+                configure: (proxy) => {
+                    proxy.on('proxyRes', (proxyRes, req, res) => {
+                        const location = proxyRes.headers['location'];
+                        if (location) {
+                            res.setHeader('location', location.replace('http://127.0.0.1:8000', 'http://127.0.0.1:5173'));
+                        }
+                    });
+                },
+            },
         },
     },
 });
