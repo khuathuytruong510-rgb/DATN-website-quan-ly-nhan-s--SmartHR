@@ -2,9 +2,12 @@
 
 namespace Database\Seeders;
 
+use App\Models\Attendance;
 use App\Models\Contract;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\LeaveRequest;
+use App\Models\Payroll;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -149,6 +152,97 @@ class DatabaseSeeder extends Seeder
             'start_date' => '2024-01-01',
             'end_date' => '2026-12-31',
             'status' => 'active',
+        ]);
+
+        // Attendance sample data
+        Attendance::updateOrCreate([
+            'employee_id' => $employee1->id,
+            'date' => '2026-06-10',
+        ], [
+            'check_in' => '08:05:00',
+            'check_out' => '17:15:00',
+            'status' => 'late',
+            'notes' => 'Về muộn 5 phút do tắc đường',
+        ]);
+
+        Attendance::updateOrCreate([
+            'employee_id' => $employee2->id,
+            'date' => '2026-06-10',
+        ], [
+            'check_in' => '08:00:00',
+            'check_out' => '17:00:00',
+            'status' => 'present',
+            'notes' => 'Đúng giờ',
+        ]);
+
+        Attendance::updateOrCreate([
+            'employee_id' => $employee3->id,
+            'date' => '2026-06-10',
+        ], [
+            'check_in' => null,
+            'check_out' => null,
+            'status' => 'leave',
+            'notes' => 'Nghỉ ốm',
+        ]);
+
+        // Payroll sample data
+        Payroll::updateOrCreate([
+            'employee_id' => $employee1->id,
+            'month' => '2026-06',
+        ], [
+            'base_salary' => 45000000,
+            'allowance' => 5000000,
+            'deduction' => 0,
+            'total_salary' => 50000000,
+            'status' => 'paid',
+            'paid_at' => now()->subDays(7),
+        ]);
+
+        Payroll::updateOrCreate([
+            'employee_id' => $employee2->id,
+            'month' => '2026-06',
+        ], [
+            'base_salary' => 18000000,
+            'allowance' => 2000000,
+            'deduction' => 500000,
+            'total_salary' => 19500000,
+            'status' => 'approved',
+            'paid_at' => null,
+        ]);
+
+        Payroll::updateOrCreate([
+            'employee_id' => $employee3->id,
+            'month' => '2026-06',
+        ], [
+            'base_salary' => 22000000,
+            'allowance' => 1500000,
+            'deduction' => 0,
+            'total_salary' => 23500000,
+            'status' => 'pending',
+            'paid_at' => null,
+        ]);
+
+        // Leave requests sample data
+        LeaveRequest::updateOrCreate([
+            'employee_id' => $employee4->id,
+            'start_date' => '2026-06-14',
+            'end_date' => '2026-06-16',
+        ], [
+            'days' => 3,
+            'type' => 'annual',
+            'reason' => 'Du lịch cùng gia đình',
+            'status' => 'approved',
+        ]);
+
+        LeaveRequest::updateOrCreate([
+            'employee_id' => $employee5->id,
+            'start_date' => '2026-06-20',
+            'end_date' => '2026-06-21',
+        ], [
+            'days' => 2,
+            'type' => 'sick',
+            'reason' => 'Khám sức khỏe',
+            'status' => 'pending',
         ]);
     }
 }
