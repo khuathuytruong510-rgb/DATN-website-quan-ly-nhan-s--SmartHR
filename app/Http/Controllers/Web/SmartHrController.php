@@ -242,6 +242,79 @@ class SmartHrController extends Controller
         ]);
     }
 
+    public function createPayroll(): View
+    {
+        return view('hr.payroll.form', [
+            'payroll' => new Payroll(['status' => 'pending']),
+            'employees' => Employee::orderBy('name')->get(),
+        ]);
+    }
+
+    public function storePayroll(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'employee_id' => ['required', 'exists:employees,id'],
+            'month' => ['required', 'date_format:Y-m'],
+            'base_salary' => ['required', 'numeric', 'min:0'],
+            'allowance' => ['nullable', 'numeric', 'min:0'],
+            'deduction' => ['nullable', 'numeric', 'min:0'],
+            'status' => ['nullable', 'in:pending,approved,paid'],
+        ]);
+
+        $data['allowance'] = $data['allowance'] ?? 0;
+        $data['deduction'] = $data['deduction'] ?? 0;
+        $data['total_salary'] = $data['base_salary'] + $data['allowance'] - $data['deduction'];
+        $data['status'] = $data['status'] ?? 'pending';
+
+        Payroll::create($data);
+
+        return redirect()->route('payroll.index')->with('success', 'Tạo bản ghi lương thành công.');
+    }
+
+    public function showPayroll(Payroll $payroll): View
+    {
+        return view('hr.payroll.show', compact('payroll'));
+    }
+
+    public function editPayroll(Payroll $payroll): View
+    {
+        return view('hr.payroll.form', [
+            'payroll' => $payroll,
+            'employees' => Employee::orderBy('name')->get(),
+        ]);
+    }
+
+    public function updatePayroll(Request $request, Payroll $payroll): RedirectResponse
+    {
+        $data = $request->validate([
+            'employee_id' => ['sometimes', 'required', 'exists:employees,id'],
+            'month' => ['sometimes', 'required', 'date_format:Y-m'],
+            'base_salary' => ['sometimes', 'required', 'numeric', 'min:0'],
+            'allowance' => ['nullable', 'numeric', 'min:0'],
+            'deduction' => ['nullable', 'numeric', 'min:0'],
+            'status' => ['nullable', 'in:pending,approved,paid'],
+        ]);
+
+        // Calculate total salary if any salary field is updated
+        if (isset($data['base_salary']) || isset($data['allowance']) || isset($data['deduction'])) {
+            $baseSalary = $data['base_salary'] ?? $payroll->base_salary;
+            $allowance = $data['allowance'] ?? $payroll->allowance;
+            $deduction = $data['deduction'] ?? $payroll->deduction;
+            $data['total_salary'] = $baseSalary + $allowance - $deduction;
+        }
+
+        $payroll->update($data);
+
+        return redirect()->route('payroll.index')->with('success', 'Cập nhật bản ghi lương thành công.');
+    }
+
+    public function destroyPayroll(Payroll $payroll): RedirectResponse
+    {
+        $payroll->delete();
+
+        return redirect()->route('payroll.index')->with('success', 'Xóa bản ghi lương thành công.');
+    }
+
     public function leaveRequests(): View
     {
         return view('hr.leave.index', [
