@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Models\Attendance;
 use App\Models\Contract;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\LeaveRequest;
+use App\Models\Payroll;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -107,6 +110,11 @@ class SmartHrController extends Controller
         return view('departments.form', compact('department'));
     }
 
+    public function showDepartment(Department $department): View
+    {
+        return view('departments.show', compact('department'));
+    }
+
     public function updateDepartment(Request $request, Department $department): RedirectResponse
     {
         $department->update($this->validateDepartment($request));
@@ -183,8 +191,48 @@ class SmartHrController extends Controller
     public function attendance(): View
     {
         return view('hr.attendance.index', [
-            'attendances' => \App\Models\Attendance::with('employee')->latest()->paginate(10),
+            'attendances' => Attendance::with('employee')->latest()->paginate(10),
         ]);
+    }
+
+    public function createAttendance(): View
+    {
+        return view('hr.attendance.form', [
+            'attendance' => new Attendance([
+                'status' => 'present',
+                'date' => now()->toDateString(),
+            ]),
+            'employees' => Employee::orderBy('name')->get(),
+        ]);
+    }
+
+    public function storeAttendance(Request $request): RedirectResponse
+    {
+        $attendance = Attendance::create($this->validateAttendance($request));
+
+        return redirect()->route('attendance.index')->with('success', 'Thêm bản ghi chấm công thành công.');
+    }
+
+    public function editAttendance(Attendance $attendance): View
+    {
+        return view('hr.attendance.form', [
+            'attendance' => $attendance,
+            'employees' => Employee::orderBy('name')->get(),
+        ]);
+    }
+
+    public function updateAttendance(Request $request, Attendance $attendance): RedirectResponse
+    {
+        $attendance->update($this->validateAttendance($request));
+
+        return redirect()->route('attendance.index')->with('success', 'Cập nhật bản ghi chấm công thành công.');
+    }
+
+    public function destroyAttendance(Attendance $attendance): RedirectResponse
+    {
+        $attendance->delete();
+
+        return redirect()->route('attendance.index')->with('success', 'Xóa bản ghi chấm công thành công.');
     }
 
     public function payroll(): View
@@ -197,8 +245,73 @@ class SmartHrController extends Controller
     public function leaveRequests(): View
     {
         return view('hr.leave.index', [
-            'leaveRequests' => \App\Models\LeaveRequest::with('employee')->latest()->paginate(10),
+            'leaveRequests' => LeaveRequest::with('employee', 'approver')->latest()->paginate(10),
         ]);
+    }
+
+    public function createLeaveRequest(): View
+    {
+        return view('hr.leave.form', [
+            'leaveRequest' => new LeaveRequest([
+                'status' => 'pending',
+                'start_date' => now()->toDateString(),
+                'end_date' => now()->addDays(1)->toDateString(),
+            ]),
+            'employees' => Employee::orderBy('name')->get(),
+        ]);
+    }
+
+    public function storeLeaveRequest(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'employee_id' => ['required', 'exists:employees,id'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'type' => ['required', 'in:sick,personal,annual,unpaid'],
+            'reason' => ['nullable', 'string'],
+        ]);
+
+        $data['days'] = \Carbon\Carbon::parse($data['end_date'])
+            ->diffInDays(\Carbon\Carbon::parse($data['start_date'])) + 1;
+        $data['status'] = 'pending';
+
+        LeaveRequest::create($data);
+
+        return redirect()->route('leave_requests.index')->with('success', 'Gửi đơn xin nghỉ phép thành công.');
+    }
+
+    public function approveLeaveRequest(LeaveRequest $leaveRequest): RedirectResponse
+    {
+        $leaveRequest->update([
+            'status' => 'approved',
+            'approved_by' => auth()->id(),
+            'approved_at' => now(),
+        ]);
+
+        return redirect()->route('leave_requests.index')->with('success', 'Đã duyệt đơn nghỉ phép.');
+    }
+
+    public function rejectLeaveRequest(\App\Models\LeaveRequest $leaveRequest): RedirectResponse
+    {
+        $leaveRequest->update([
+            'status' => 'rejected',
+            'approved_by' => auth()->id(),
+            'approved_at' => now(),
+        ]);
+
+        return redirect()->route('leave_requests.index')->with('success', 'Đã từ chối đơn nghỉ phép.');
+    }
+
+    public function destroyLeaveRequest(\App\Models\LeaveRequest $leaveRequest): RedirectResponse
+    {
+        $leaveRequest->delete();
+
+        return redirect()->route('leave_requests.index')->with('success', 'Xóa đơn nghỉ phép thành công.');
+    }
+
+    public function showEmployee(Employee $employee): View
+    {
+        return view('employees.show', compact('employee'));
     }
 
     public function createContract(): View
@@ -214,6 +327,11 @@ class SmartHrController extends Controller
         Contract::create($this->validateContract($request));
 
         return redirect()->route('contracts.index')->with('success', 'Tạo hợp đồng thành công.');
+    }
+
+    public function showContract(Contract $contract): View
+    {
+        return view('contracts.show', compact('contract'));
     }
 
     public function editContract(Contract $contract): View
@@ -267,6 +385,18 @@ class SmartHrController extends Controller
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'status' => ['required', 'in:active,pending,expired'],
+        ]);
+    }
+
+    private function validateAttendance(Request $request): array
+    {
+        return $request->validate([
+            'employee_id' => ['required', 'exists:employees,id'],
+            'date' => ['required', 'date'],
+            'check_in' => ['nullable', 'date_format:H:i'],
+            'check_out' => ['nullable', 'date_format:H:i'],
+            'status' => ['required', 'in:present,absent,late,leave'],
+            'notes' => ['nullable', 'string'],
         ]);
     }
 
