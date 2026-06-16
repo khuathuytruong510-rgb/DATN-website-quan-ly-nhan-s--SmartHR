@@ -31,6 +31,7 @@
                         <td>{{ $department->description ?: '-' }}</td>
                         <td>
                             <div class="actions">
+                                <a class="btn link" href="{{ route('departments.show', $department) }}">Xem</a>
                                 <a class="btn" href="{{ route('departments.edit', $department) }}">Sửa</a>
                                 <form method="POST" action="{{ route('departments.destroy', $department) }}" onsubmit="return confirm('Xóa phòng ban này?')">
                                     @csrf
