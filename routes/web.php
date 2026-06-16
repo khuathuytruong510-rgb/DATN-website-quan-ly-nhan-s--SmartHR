@@ -45,7 +45,15 @@ Route::middleware('auth')->group(function () {
     Route::get('/attendance/{attendance}/edit', [SmartHrController::class, 'editAttendance'])->name('attendance.edit');
     Route::put('/attendance/{attendance}', [SmartHrController::class, 'updateAttendance'])->name('attendance.update');
     Route::delete('/attendance/{attendance}', [SmartHrController::class, 'destroyAttendance'])->name('attendance.destroy');
+    
     Route::get('/payroll', [SmartHrController::class, 'payroll'])->name('payroll.index');
+    Route::get('/payroll/create', [SmartHrController::class, 'createPayroll'])->name('payroll.create');
+    Route::post('/payroll', [SmartHrController::class, 'storePayroll'])->name('payroll.store');
+    Route::get('/payroll/{payroll}', [SmartHrController::class, 'showPayroll'])->name('payroll.show');
+    Route::get('/payroll/{payroll}/edit', [SmartHrController::class, 'editPayroll'])->name('payroll.edit');
+    Route::put('/payroll/{payroll}', [SmartHrController::class, 'updatePayroll'])->name('payroll.update');
+    Route::delete('/payroll/{payroll}', [SmartHrController::class, 'destroyPayroll'])->name('payroll.destroy');
+    
     Route::get('/leave-requests', [SmartHrController::class, 'leaveRequests'])->name('leave_requests.index');
     Route::get('/leave-requests/create', [SmartHrController::class, 'createLeaveRequest'])->name('leave_requests.create');
     Route::post('/leave-requests', [SmartHrController::class, 'storeLeaveRequest'])->name('leave_requests.store');
