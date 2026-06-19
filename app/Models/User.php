@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password', 'api_token', 'avatar'])]
+#[Fillable(['name', 'email', 'password', 'api_token', 'avatar', 'is_admin', 'is_hr'])]
 #[Hidden(['password', 'remember_token', 'api_token'])]
 class User extends Authenticatable
 {
@@ -24,5 +24,7 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'is_admin' => 'boolean',
+        'is_hr' => 'boolean',
     ];
 }
