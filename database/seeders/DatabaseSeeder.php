@@ -31,6 +31,8 @@ class DatabaseSeeder extends Seeder
             'password' => Hash::make('123456'),
             'api_token' => Str::random(60),
             'avatar' => '/images/avatars/truong.svg',
+            'is_admin' => true,
+            'is_hr' => false,
         ]);
 
         // Departments (idempotent)
