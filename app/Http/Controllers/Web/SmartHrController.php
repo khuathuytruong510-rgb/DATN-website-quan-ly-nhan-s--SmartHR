@@ -75,15 +75,67 @@ class SmartHrController extends Controller
         return redirect()->route('login');
     }
 
-    public function dashboard(): View
+    public function dashboard(): View|RedirectResponse
     {
-        return view('admin.dashboard', [
-            'departmentCount' => Department::count(),
-            'employeeCount' => Employee::count(),
-            'contractCount' => Contract::count(),
-            'latestEmployees' => Employee::with('department')->latest()->take(5)->get(),
-            'latestContracts' => Contract::with('employee')->latest()->take(5)->get(),
+        $user = auth()->user();
+
+        if ($user->is_admin || $user->is_hr) {
+            return view('admin.dashboard', [
+                'departmentCount' => Department::count(),
+                'employeeCount' => Employee::count(),
+                'contractCount' => Contract::count(),
+                'latestEmployees' => Employee::with('department')->latest()->take(5)->get(),
+                'latestContracts' => Contract::with('employee')->latest()->take(5)->get(),
+            ]);
+        }
+
+        return redirect()->route('me.dashboard');
+    }
+
+    public function positions(): View
+    {
+        $positions = Employee::select('position')->distinct()->orderBy('position')->pluck('position');
+
+        return view('positions.index', compact('positions'));
+    }
+
+    public function notifications(): View
+    {
+        return view('notifications.index');
+    }
+
+    public function accounts(): View
+    {
+        return view('accounts.index', [
+            'users' => User::latest()->paginate(10),
         ]);
+    }
+
+    public function permissions(): View
+    {
+        return view('permissions.index', [
+            'users' => User::latest()->paginate(10),
+        ]);
+    }
+
+    public function updatePermissions(Request $request, User $user): RedirectResponse
+    {
+        $user->update([
+            'is_admin' => $request->boolean('is_admin'),
+            'is_hr' => $request->boolean('is_hr'),
+        ]);
+
+        return redirect()->route('permissions.index')->with('success', 'Cập nhật phân quyền người dùng thành công.');
+    }
+
+    public function systemLogs(): View
+    {
+        return view('system_logs.index');
+    }
+
+    public function settings(): View
+    {
+        return view('settings.index');
     }
 
     public function departments(): View
