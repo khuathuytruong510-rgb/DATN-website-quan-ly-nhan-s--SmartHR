@@ -1,12 +1,21 @@
-console.log('SmartHR frontend loaded');
+import { createApp } from 'vue';
+import AlertComponent from './components/Alert.vue';
 
-document.addEventListener('DOMContentLoaded', () => {
-    const flash = document.querySelector('.alert');
+const app = createApp({});
 
-    if (flash) {
-        setTimeout(() => {
-            flash.classList.add('fade-out');
-            setTimeout(() => flash.remove(), 300);
-        }, 5000);
-    }
+app.component('Alert', AlertComponent);
+
+// Auto-register all Vue components
+const components = import.meta.glob('./components/**/*.vue', { eager: true });
+Object.entries(components).forEach(([path, component]) => {
+    const name = path
+        .split('/')
+        .pop()
+        .replace(/\.vue$/, '');
+    app.component(name, component.default || component);
 });
+
+// Only mount if #app exists to avoid interfering with auth pages
+if (document.getElementById('app')) {
+    app.mount('#app');
+}
