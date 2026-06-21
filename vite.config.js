@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
+import vue from '@vitejs/plugin-vue';
 import { bunny } from 'laravel-vite-plugin/fonts';
 import tailwindcss from '@tailwindcss/vite';
 
@@ -14,8 +15,14 @@ export default defineConfig({
                 }),
             ],
         }),
+        vue(),
         tailwindcss(),
     ],
+    resolve: {
+        alias: {
+            vue: 'vue/dist/vue.esm-bundler.js',
+        },
+    },
     server: {
         host: '127.0.0.1',
         port: 5173,
@@ -30,7 +37,7 @@ export default defineConfig({
                 xfwd: true,
                 secure: false,
                 bypass: (req) => {
-                    if (req.url.startsWith('/@vite') || req.url.startsWith('/resources') || req.url.startsWith('/node_modules') || req.url.startsWith('/favicon.ico') || req.url.startsWith('/robots.txt')) {
+                    if (req.url.startsWith('/@') || req.url.startsWith('/resources') || req.url.startsWith('/node_modules') || req.url.startsWith('/favicon.ico') || req.url.startsWith('/robots.txt')) {
                         return req.url;
                     }
                 },

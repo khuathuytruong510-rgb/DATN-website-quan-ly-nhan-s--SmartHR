@@ -24,21 +24,21 @@ Route::middleware('auth')->group(function () {
         Route::get('/settings', [SmartHrController::class, 'settings'])->name('settings.index');
     });
 
-    Route::get('/me', [EmployeeController::class, 'dashboard'])->name('me.dashboard');
-    Route::get('/me/profile', [EmployeeController::class, 'profile'])->name('me.profile');
-    Route::get('/me/profile/edit', [EmployeeController::class, 'editProfile'])->name('me.profile.edit');
-    Route::put('/me/profile', [EmployeeController::class, 'updateProfile'])->name('me.profile.update');
-    Route::get('/me/trainings', [EmployeeController::class, 'trainings'])->name('me.trainings');
-    Route::get('/me/rewards', [EmployeeController::class, 'rewards'])->name('me.rewards');
-    Route::get('/me/attendance', [EmployeeController::class, 'attendanceIndex'])->name('me.attendance');
-    Route::get('/me/attendance/create', [EmployeeController::class, 'attendanceCreate'])->name('me.attendance.create');
-    Route::post('/me/attendance', [EmployeeController::class, 'attendanceStore'])->name('me.attendance.store');
-    Route::get('/me/contracts', [EmployeeController::class, 'contracts'])->name('me.contracts');
-    Route::get('/me/payroll', [EmployeeController::class, 'payrolls'])->name('me.payrolls');
-    Route::get('/me/leave-requests', [EmployeeController::class, 'leaveIndex'])->name('me.leave_requests');
-    Route::get('/me/leave-requests/create', [EmployeeController::class, 'leaveCreate'])->name('me.leave_requests.create');
-    Route::post('/me/leave-requests', [EmployeeController::class, 'leaveStore'])->name('me.leave_requests.store');
-    Route::get('/me/notifications', [EmployeeController::class, 'notifications'])->name('me.notifications');
+    Route::get('/me', [EmployeeController::class, 'dashboard'])->name('me.dashboard')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/profile', [EmployeeController::class, 'profile'])->name('me.profile')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/profile/edit', [EmployeeController::class, 'editProfile'])->name('me.profile.edit')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::put('/me/profile', [EmployeeController::class, 'updateProfile'])->name('me.profile.update')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/trainings', [EmployeeController::class, 'trainings'])->name('me.trainings')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/rewards', [EmployeeController::class, 'rewards'])->name('me.rewards')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/attendance', [EmployeeController::class, 'attendanceIndex'])->name('me.attendance')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/attendance/create', [EmployeeController::class, 'attendanceCreate'])->name('me.attendance.create')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::post('/me/attendance', [EmployeeController::class, 'attendanceStore'])->name('me.attendance.store')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/contracts', [EmployeeController::class, 'contracts'])->name('me.contracts')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/payroll', [EmployeeController::class, 'payrolls'])->name('me.payrolls')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/leave-requests', [EmployeeController::class, 'leaveIndex'])->name('me.leave_requests')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/leave-requests/create', [EmployeeController::class, 'leaveCreate'])->name('me.leave_requests.create')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::post('/me/leave-requests', [EmployeeController::class, 'leaveStore'])->name('me.leave_requests.store')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/notifications', [EmployeeController::class, 'notifications'])->name('me.notifications')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
 
     Route::middleware(\App\Http\Middleware\EnsureAdminOrHr::class)->group(function () {
         Route::get('/positions', [SmartHrController::class, 'positions'])->name('positions.index');
