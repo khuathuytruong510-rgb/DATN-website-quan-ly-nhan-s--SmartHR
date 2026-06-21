@@ -126,9 +126,12 @@
                         </form>
                     </div>
                 </header>
-                <section class="content">
+                <section id="app" class="content">
                     @if (session('success'))
-                        <div class="alert">{{ session('success') }}</div>
+                        <alert type="success">{{ session('success') }}</alert>
+                    @endif
+                    @if (session('error'))
+                        <alert type="error">{{ session('error') }}</alert>
                     @endif
                     @yield('content')
                 </section>
@@ -139,5 +142,6 @@
             @yield('content')
         </main>
     @endauth
+    @stack('scripts')
 </body>
 </html>
