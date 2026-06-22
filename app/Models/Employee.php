@@ -12,13 +12,34 @@ class Employee extends Model
     use HasFactory;
 
     protected $fillable = [
+        'user_id',
         'name',
         'email',
         'position',
         'department_id',
         'status',
         'avatar',
+        'employee_code',
+        'gender',
+        'dob',
+        'cccd',
+        'phone',
+        'address',
+        'start_date',
+        'education',
+        'experience',
+        'leave_balance',
     ];
+
+    protected $casts = [
+        'dob' => 'date',
+        'start_date' => 'date',
+    ];
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 
     public function department(): BelongsTo
     {

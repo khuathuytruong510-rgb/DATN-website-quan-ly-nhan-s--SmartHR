@@ -16,6 +16,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'api.auth' => ApiTokenAuthenticate::class,
+            'admin' => \App\Http\Middleware\IsAdmin::class,
+            'employee' => \App\Http\Middleware\IsEmployee::class,
         ]);
         // Exclude API routes from CSRF verification (single-page app API calls)
         $middleware->preventRequestForgery(['api/*']);

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Web\EmployeeController;
 use App\Http\Controllers\Web\SmartHrController;
+use App\Http\Controllers\Web\EmployeeAttendanceController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
@@ -12,8 +13,6 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
-    Route::get('/', [SmartHrController::class, 'dashboard'])->name('dashboard');
-    Route::get('/dashboard', [SmartHrController::class, 'dashboard']);
     Route::post('/logout', [SmartHrController::class, 'logout'])->name('logout');
 
     Route::middleware(\App\Http\Middleware\EnsureAdmin::class)->group(function () {
@@ -91,3 +90,5 @@ Route::middleware('auth')->group(function () {
         Route::delete('/leave-requests/{leaveRequest}', [SmartHrController::class, 'destroyLeaveRequest'])->name('leave_requests.destroy');
     });
 });
+
+
