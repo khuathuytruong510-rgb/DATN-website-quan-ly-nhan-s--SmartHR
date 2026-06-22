@@ -6,11 +6,18 @@ use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 
 class ApiTokenAuthenticate
 {
-    public function handle(Request $request, Closure $next): JsonResponse
+    public function handle(Request $request, Closure $next)
     {
+        // Kiểm tra session auth trước (từ web login)
+        if (Auth::check()) {
+            return $next($request);
+        }
+
+        // Nếu không có session, kiểm tra API token
         $token = $request->bearerToken();
 
         if (! $token) {

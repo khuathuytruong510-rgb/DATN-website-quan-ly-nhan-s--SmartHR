@@ -38,7 +38,18 @@ class SmartHrController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard'));
+        // Check if user is an employee
+        $user = Auth::user();
+        $employee = Employee::where('user_id', $user->id)->first();
+        if ($employee) {
+            // Redirect to employee attendance page
+            return redirect()->intended(route('employee.attendance'))
+                ->with('success', 'Đăng nhập thành công! Chào mừng ' . $user->name);
+        }
+
+        // Otherwise, redirect to admin dashboard
+        return redirect()->intended(route('dashboard'))
+            ->with('success', 'Đăng nhập thành công! Chào mừng ' . $user->name);
     }
 
     public function showRegister(): View
@@ -407,9 +418,14 @@ class SmartHrController extends Controller
 
     public function approveLeaveRequest(LeaveRequest $leaveRequest): RedirectResponse
     {
+        // Check if user is authorized to approve leave requests (HR/Admin only)
+        if (!$this->isHROrAdmin()) {
+            abort(403, 'Unauthorized: Only HR and Admin can approve leave requests.');
+        }
+
         $leaveRequest->update([
             'status' => 'approved',
-            'approved_by' => auth()->id(),
+            'approved_by' => Auth::id(),
             'approved_at' => now(),
         ]);
 
@@ -418,9 +434,14 @@ class SmartHrController extends Controller
 
     public function rejectLeaveRequest(\App\Models\LeaveRequest $leaveRequest): RedirectResponse
     {
+        // Check if user is authorized to reject leave requests (HR/Admin only)
+        if (!$this->isHROrAdmin()) {
+            abort(403, 'Unauthorized: Only HR and Admin can reject leave requests.');
+        }
+
         $leaveRequest->update([
             'status' => 'rejected',
-            'approved_by' => auth()->id(),
+            'approved_by' => Auth::id(),
             'approved_at' => now(),
         ]);
 
@@ -534,5 +555,21 @@ class SmartHrController extends Controller
         Department::whereKey($departmentId)->update([
             'employee_count' => Employee::where('department_id', $departmentId)->count(),
         ]);
+    }
+
+    /**
+     * Check if the authenticated user is HR or Admin
+     * This is a simple check - can be replaced with proper Role/Permission system
+     */
+    private function isHROrAdmin(): bool
+    {
+        $user = Auth::user();
+
+        // TODO: Implement proper role checking
+        // For now, we check if the user does NOT have an associated employee record
+        // (Admins/HR don't have employee records, only employees do)
+        $isEmployee = Employee::where('user_id', $user->id)->exists();
+
+        return !$isEmployee; // If not an employee, they're HR/Admin
     }
 }

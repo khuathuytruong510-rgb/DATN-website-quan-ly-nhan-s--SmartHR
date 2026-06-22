@@ -66,6 +66,31 @@ class DatabaseSeeder extends Seeder
             'employee_count' => 2,
         ]);
 
+        // Employee Users
+        $employeeUser1 = User::updateOrCreate([
+            'email' => 'nguyenvana@example.com',
+        ], [
+            'name' => 'Nguyễn Văn An',
+            'password' => Hash::make('123456'),
+            'api_token' => Str::random(60),
+        ]);
+
+        $employeeUser2 = User::updateOrCreate([
+            'email' => 'tranthib@example.com',
+        ], [
+            'name' => 'Trần Thị Bích',
+            'password' => Hash::make('123456'),
+            'api_token' => Str::random(60),
+        ]);
+
+        $employeeUser3 = User::updateOrCreate([
+            'email' => 'levanc@example.com',
+        ], [
+            'name' => 'Lê Văn Cường',
+            'password' => Hash::make('123456'),
+            'api_token' => Str::random(60),
+        ]);
+
         // Employees (idempotent by email)
         $employee1 = Employee::updateOrCreate(['email' => 'truongkh@example.com'], [
             'name' => 'Khuất Huy Trường',
@@ -76,6 +101,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $employee2 = Employee::updateOrCreate(['email' => 'nguyenvana@example.com'], [
+            'user_id' => $employeeUser1->id,
             'name' => 'Nguyễn Văn An',
             'position' => 'Senior Developer',
             'department_id' => $it->id,
@@ -84,6 +110,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $employee3 = Employee::updateOrCreate(['email' => 'tranthib@example.com'], [
+            'user_id' => $employeeUser2->id,
             'name' => 'Trần Thị Bích',
             'position' => 'HR Manager',
             'department_id' => $hr->id,
@@ -92,6 +119,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $employee4 = Employee::updateOrCreate(['email' => 'levanc@example.com'], [
+            'user_id' => $employeeUser3->id,
             'name' => 'Lê Văn Cường',
             'position' => 'Sales Executive',
             'department_id' => $sales->id,
