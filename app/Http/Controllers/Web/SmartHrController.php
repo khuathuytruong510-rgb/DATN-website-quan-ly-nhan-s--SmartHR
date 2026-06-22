@@ -86,15 +86,67 @@ class SmartHrController extends Controller
         return redirect()->route('login');
     }
 
-    public function dashboard(): View
+    public function dashboard(): View|RedirectResponse
     {
-        return view('admin.dashboard', [
-            'departmentCount' => Department::count(),
-            'employeeCount' => Employee::count(),
-            'contractCount' => Contract::count(),
-            'latestEmployees' => Employee::with('department')->latest()->take(5)->get(),
-            'latestContracts' => Contract::with('employee')->latest()->take(5)->get(),
+        $user = auth()->user();
+
+        if ($user->is_admin || $user->is_hr) {
+            return view('admin.dashboard', [
+                'departmentCount' => Department::count(),
+                'employeeCount' => Employee::count(),
+                'contractCount' => Contract::count(),
+                'latestEmployees' => Employee::with('department')->latest()->take(5)->get(),
+                'latestContracts' => Contract::with('employee')->latest()->take(5)->get(),
+            ]);
+        }
+
+        return redirect()->route('me.dashboard');
+    }
+
+    public function positions(): View
+    {
+        $positions = Employee::select('position')->distinct()->orderBy('position')->pluck('position');
+
+        return view('positions.index', compact('positions'));
+    }
+
+    public function notifications(): View
+    {
+        return view('notifications.index');
+    }
+
+    public function accounts(): View
+    {
+        return view('accounts.index', [
+            'users' => User::latest()->paginate(10),
         ]);
+    }
+
+    public function permissions(): View
+    {
+        return view('permissions.index', [
+            'users' => User::latest()->paginate(10),
+        ]);
+    }
+
+    public function updatePermissions(Request $request, User $user): RedirectResponse
+    {
+        $user->update([
+            'is_admin' => $request->boolean('is_admin'),
+            'is_hr' => $request->boolean('is_hr'),
+        ]);
+
+        return redirect()->route('permissions.index')->with('success', 'Cập nhật phân quyền người dùng thành công.');
+    }
+
+    public function systemLogs(): View
+    {
+        return view('system_logs.index');
+    }
+
+    public function settings(): View
+    {
+        return view('settings.index');
     }
 
     public function departments(): View
@@ -251,6 +303,79 @@ class SmartHrController extends Controller
         return view('hr.payroll.index', [
             'payrolls' => Payroll::with('employee')->latest()->paginate(10),
         ]);
+    }
+
+    public function createPayroll(): View
+    {
+        return view('hr.payroll.form', [
+            'payroll' => new Payroll(['status' => 'pending']),
+            'employees' => Employee::orderBy('name')->get(),
+        ]);
+    }
+
+    public function storePayroll(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'employee_id' => ['required', 'exists:employees,id'],
+            'month' => ['required', 'date_format:Y-m'],
+            'base_salary' => ['required', 'numeric', 'min:0'],
+            'allowance' => ['nullable', 'numeric', 'min:0'],
+            'deduction' => ['nullable', 'numeric', 'min:0'],
+            'status' => ['nullable', 'in:pending,approved,paid'],
+        ]);
+
+        $data['allowance'] = $data['allowance'] ?? 0;
+        $data['deduction'] = $data['deduction'] ?? 0;
+        $data['total_salary'] = $data['base_salary'] + $data['allowance'] - $data['deduction'];
+        $data['status'] = $data['status'] ?? 'pending';
+
+        Payroll::create($data);
+
+        return redirect()->route('payroll.index')->with('success', 'Tạo bản ghi lương thành công.');
+    }
+
+    public function showPayroll(Payroll $payroll): View
+    {
+        return view('hr.payroll.show', compact('payroll'));
+    }
+
+    public function editPayroll(Payroll $payroll): View
+    {
+        return view('hr.payroll.form', [
+            'payroll' => $payroll,
+            'employees' => Employee::orderBy('name')->get(),
+        ]);
+    }
+
+    public function updatePayroll(Request $request, Payroll $payroll): RedirectResponse
+    {
+        $data = $request->validate([
+            'employee_id' => ['sometimes', 'required', 'exists:employees,id'],
+            'month' => ['sometimes', 'required', 'date_format:Y-m'],
+            'base_salary' => ['sometimes', 'required', 'numeric', 'min:0'],
+            'allowance' => ['nullable', 'numeric', 'min:0'],
+            'deduction' => ['nullable', 'numeric', 'min:0'],
+            'status' => ['nullable', 'in:pending,approved,paid'],
+        ]);
+
+        // Calculate total salary if any salary field is updated
+        if (isset($data['base_salary']) || isset($data['allowance']) || isset($data['deduction'])) {
+            $baseSalary = $data['base_salary'] ?? $payroll->base_salary;
+            $allowance = $data['allowance'] ?? $payroll->allowance;
+            $deduction = $data['deduction'] ?? $payroll->deduction;
+            $data['total_salary'] = $baseSalary + $allowance - $deduction;
+        }
+
+        $payroll->update($data);
+
+        return redirect()->route('payroll.index')->with('success', 'Cập nhật bản ghi lương thành công.');
+    }
+
+    public function destroyPayroll(Payroll $payroll): RedirectResponse
+    {
+        $payroll->delete();
+
+        return redirect()->route('payroll.index')->with('success', 'Xóa bản ghi lương thành công.');
     }
 
     public function leaveRequests(): View

@@ -31,6 +31,8 @@ class DatabaseSeeder extends Seeder
             'password' => Hash::make('123456'),
             'api_token' => Str::random(60),
             'avatar' => '/images/avatars/truong.svg',
+            'is_admin' => true,
+            'is_hr' => false,
         ]);
 
         // Departments (idempotent)
@@ -146,7 +148,7 @@ class DatabaseSeeder extends Seeder
             'employee_id' => $employee2->id,
             'title' => 'Full-time Developer Contract',
         ], [
-            'salary' => 18000000,
+            'base_salary' => 18000000,
             'start_date' => '2025-01-01',
             'end_date' => '2025-12-31',
             'status' => 'active',
@@ -156,7 +158,7 @@ class DatabaseSeeder extends Seeder
             'employee_id' => $employee3->id,
             'title' => 'HR Manager Contract',
         ], [
-            'salary' => 22000000,
+            'base_salary' => 22000000,
             'start_date' => '2025-03-15',
             'end_date' => '2026-03-14',
             'status' => 'active',
@@ -166,7 +168,7 @@ class DatabaseSeeder extends Seeder
             'employee_id' => $employee4->id,
             'title' => 'Sales Executive Contract',
         ], [
-            'salary' => 15000000,
+            'base_salary' => 15000000,
             'start_date' => '2025-05-01',
             'end_date' => '2026-04-30',
             'status' => 'active',
@@ -176,7 +178,7 @@ class DatabaseSeeder extends Seeder
             'employee_id' => $employee1->id,
             'title' => 'Executive Contract',
         ], [
-            'salary' => 45000000,
+            'base_salary' => 45000000,
             'start_date' => '2024-01-01',
             'end_date' => '2026-12-31',
             'status' => 'active',
