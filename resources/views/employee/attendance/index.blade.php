@@ -1,0 +1,528 @@
+@extends('layouts.employee')
+
+@section('content')
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto">
+        <!-- CSRF Token Meta -->
+        <meta name="csrf-token" content="{{ csrf_token() }}">
+        
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Chấm Công</h1>
+            <p class="text-gray-600">Hôm nay: <strong>{{ date('d/m/Y H:i:s') }}</strong></p>
+        </div>
+
+        <!-- Map Section -->
+        <div class="bg-white rounded-lg shadow-md mb-6 overflow-hidden">
+            <div id="map" class="w-full h-96"></div>
+        </div>
+
+        <!-- Status & Information Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <!-- Check-in Status -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="text-sm text-gray-600 mb-2">Chấm Công Vào</div>
+                <div id="check-in-time" class="text-2xl font-bold text-gray-800">--:--:--</div>
+                <div id="check-in-status" class="text-sm text-gray-500 mt-2">Chưa chấm công</div>
+            </div>
+
+            <!-- Current Location -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="text-sm text-gray-600 mb-2">Vị Trí Hiện Tại</div>
+                <div id="current-distance" class="text-2xl font-bold text-gray-800">--/100m</div>
+                <div id="current-location" class="text-sm text-gray-500 mt-2">Đang xác định...</div>
+            </div>
+
+            <!-- Check-out Status -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="text-sm text-gray-600 mb-2">Chấm Công Ra</div>
+                <div id="check-out-time" class="text-2xl font-bold text-gray-800">--:--:--</div>
+                <div id="check-out-status" class="text-sm text-gray-500 mt-2">Chưa chấm công</div>
+            </div>
+        </div>
+
+        <!-- Check-in/Check-out Buttons -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Check-in Section -->
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Chấm Công Vào</h3>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Ghi Chú (Tùy Chọn)</label>
+                        <textarea id="check-in-notes" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500" rows="3" placeholder="Nhập ghi chú nếu cần..."></textarea>
+                    </div>
+                    <button id="check-in-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200" onclick="handleCheckIn()">
+                        <span class="inline-block mr-2">📍</span> Chấm Công Vào
+                    </button>
+                    <div id="check-in-message" class="mt-3 text-sm"></div>
+                </div>
+
+                <!-- Check-out Section -->
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Chấm Công Ra</h3>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Ghi Chú (Tùy Chọn)</label>
+                        <textarea id="check-out-notes" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500" rows="3" placeholder="Nhập ghi chú nếu cần..."></textarea>
+                    </div>
+                    <button id="check-out-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed" onclick="handleCheckOut()" disabled>
+                        <span class="inline-block mr-2">📍</span> Chấm Công Ra
+                    </button>
+                    <div id="check-out-message" class="mt-3 text-sm"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Distance Alert -->
+        <div id="distance-alert" class="mb-6 hidden">
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <span class="text-2xl">⚠️</span>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-yellow-700">
+                            <strong>Thông báo:</strong> <span id="distance-alert-message">Bạn đang cách văn phòng quá xa</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendance History -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Lịch Sử Chấm Công</h2>
+            <div id="attendance-history" class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-4 py-2 text-left">Ngày</th>
+                            <th class="px-4 py-2 text-left">Chấm Vào</th>
+                            <th class="px-4 py-2 text-left">Chấm Ra</th>
+                            <th class="px-4 py-2 text-left">Trạng Thái</th>
+                            <th class="px-4 py-2 text-left">Vị Trí Vào</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-table">
+                        <tr>
+                            <td class="px-4 py-2 text-center" colspan="5">Đang tải...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Leaflet Map Library -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+<script>
+    // Global variables
+    let map;
+    let userMarker;
+    let officeMarker;
+    let currentLatitude;
+    let currentLongitude;
+    let officeLatitude;
+    let officeLongitude;
+    let allowedDistance;
+    let todayAttendance = null;
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeMap();
+        loadOfficeLocation();
+        loadTodayAttendance();
+        startLocationTracking();
+        loadAttendanceHistory();
+    });
+
+    // Initialize Map
+    function initializeMap() {
+        // Default to Hanoi
+        map = L.map('map').setView([21.0285, 105.8542], 13);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19,
+        }).addTo(map);
+    }
+
+    // Load office location from API
+    function loadOfficeLocation() {
+        console.log('Loading office location from /api/employee/attendance/office-location');
+        fetch('/api/employee/attendance/office-location', {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'include'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                officeLatitude = data.office_latitude;
+                officeLongitude = data.office_longitude;
+                allowedDistance = data.allowed_distance;
+
+                // Add office marker
+                officeMarker = L.marker([officeLatitude, officeLongitude], {
+                    icon: L.icon({
+                        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+                        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34],
+                        shadowSize: [41, 41]
+                    })
+                }).addTo(map)
+                .bindPopup('Văn Phòng Công Ty');
+
+                // Draw circle for allowed distance
+                L.circle([officeLatitude, officeLongitude], {
+                    color: 'blue',
+                    fillColor: '#30b0eb',
+                    fillOpacity: 0.2,
+                    radius: allowedDistance
+                }).addTo(map);
+
+                map.setView([officeLatitude, officeLongitude], 15);
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+
+    // Load today's attendance
+    function loadTodayAttendance() {
+        fetch('/api/employee/attendance/today', {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'include'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.attendance) {
+                todayAttendance = data.attendance;
+                updateAttendanceDisplay();
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+
+    // Update attendance display
+    function updateAttendanceDisplay() {
+        if (todayAttendance) {
+            if (todayAttendance.check_in) {
+                const checkInTime = new Date(todayAttendance.check_in);
+                document.getElementById('check-in-time').textContent = checkInTime.toLocaleTimeString('vi-VN');
+                document.getElementById('check-in-status').textContent = `Khoảng cách: ${todayAttendance.check_in_distance}m`;
+                document.getElementById('check-in-btn').disabled = true;
+                document.getElementById('check-in-btn').classList.add('opacity-50', 'cursor-not-allowed');
+                document.getElementById('check-out-btn').disabled = false;
+                document.getElementById('check-out-btn').classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+
+            if (todayAttendance.check_out) {
+                const checkOutTime = new Date(todayAttendance.check_out);
+                document.getElementById('check-out-time').textContent = checkOutTime.toLocaleTimeString('vi-VN');
+                document.getElementById('check-out-status').textContent = `Khoảng cách: ${todayAttendance.check_out_distance}m`;
+                document.getElementById('check-out-btn').disabled = true;
+                document.getElementById('check-out-btn').classList.add('opacity-50', 'cursor-not-allowed');
+            }
+
+            // Update status display
+            const statusColors = {
+                'present': 'text-green-600',
+                'late': 'text-yellow-600',
+                'absent': 'text-red-600',
+                'leave': 'text-blue-600'
+            };
+            const statusTexts = {
+                'present': 'Đúng Giờ',
+                'late': 'Trễ',
+                'absent': 'Vắng',
+                'leave': 'Nghỉ'
+            };
+        }
+    }
+
+    // Start location tracking
+    function startLocationTracking() {
+        if (navigator.geolocation) {
+            // Get current position
+            navigator.geolocation.getCurrentPosition(
+                position => updateMapWithUserLocation(position),
+                error => {
+                    handleLocationError(error);
+                    // Use fallback test location (Hanoi)
+                    useTestLocation();
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+
+            // Watch position for continuous updates
+            navigator.geolocation.watchPosition(
+                position => updateMapWithUserLocation(position),
+                error => console.error('Location watch error:', error),
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        } else {
+            showMessage('check-in-message', 'Trình duyệt không hỗ trợ Geolocation', 'error');
+            useTestLocation();
+        }
+    }
+
+    // Use test location for development
+    function useTestLocation() {
+        const testPosition = {
+            coords: {
+                latitude: 21.0285,
+                longitude: 105.8542,
+                accuracy: 100
+            }
+        };
+        updateMapWithUserLocation(testPosition);
+        console.log('Using test location for development');
+    }
+
+    // Update map with user location
+    function updateMapWithUserLocation(position) {
+        currentLatitude = position.coords.latitude;
+        currentLongitude = position.coords.longitude;
+        const accuracy = position.coords.accuracy;
+
+        // Update or create user marker
+        if (userMarker) {
+            userMarker.setLatLng([currentLatitude, currentLongitude]);
+        } else {
+            userMarker = L.marker([currentLatitude, currentLongitude], {
+                icon: L.icon({
+                    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34],
+                    shadowSize: [41, 41]
+                })
+            }).addTo(map)
+            .bindPopup('Vị Trí Của Tôi');
+        }
+
+        // Center map on user
+        map.setView([currentLatitude, currentLongitude], 15);
+
+        // Calculate and display distance
+        if (officeLatitude && officeLongitude) {
+            const distance = calculateDistance(currentLatitude, currentLongitude, officeLatitude, officeLongitude);
+            const distancePercent = Math.round((distance / allowedDistance) * 100);
+            
+            document.getElementById('current-distance').textContent = `${Math.round(distance)}/${allowedDistance}m`;
+            document.getElementById('current-location').textContent = `${currentLatitude.toFixed(6)}, ${currentLongitude.toFixed(6)}`;
+
+            // Show warning if too far
+            if (distance > allowedDistance) {
+                document.getElementById('distance-alert').classList.remove('hidden');
+                document.getElementById('distance-alert-message').textContent = `Bạn đang cách văn phòng ${Math.round(distance)}m. Không thể chấm công ngoài phạm vi ${allowedDistance}m.`;
+            } else {
+                document.getElementById('distance-alert').classList.add('hidden');
+            }
+        }
+    }
+
+    // Calculate distance using Haversine formula
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371000; // meters
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c; // distance in meters
+    }
+
+    // Handle check-in
+    function handleCheckIn() {
+        if (!currentLatitude || !currentLongitude) {
+            showMessage('check-in-message', 'Không thể xác định vị trí. Vui lòng cho phép truy cập vị trí.', 'error');
+            return;
+        }
+
+        const notes = document.getElementById('check-in-notes').value;
+        
+        fetch('/api/employee/attendance/check-in', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                latitude: currentLatitude,
+                longitude: currentLongitude,
+                notes: notes
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMessage('check-in-message', data.message, 'success');
+                document.getElementById('check-in-notes').value = '';
+                loadTodayAttendance();
+                setTimeout(() => loadAttendanceHistory(), 500);
+            } else {
+                showMessage('check-in-message', data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showMessage('check-in-message', 'Có lỗi xảy ra. Vui lòng thử lại.', 'error');
+        });
+    }
+
+    // Handle check-out
+    function handleCheckOut() {
+        if (!currentLatitude || !currentLongitude) {
+            showMessage('check-out-message', 'Không thể xác định vị trí. Vui lòng cho phép truy cập vị trí.', 'error');
+            return;
+        }
+
+        const notes = document.getElementById('check-out-notes').value;
+        
+        fetch('/api/employee/attendance/check-out', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                latitude: currentLatitude,
+                longitude: currentLongitude,
+                notes: notes
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMessage('check-out-message', data.message, 'success');
+                document.getElementById('check-out-notes').value = '';
+                loadTodayAttendance();
+                setTimeout(() => loadAttendanceHistory(), 500);
+            } else {
+                showMessage('check-out-message', data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showMessage('check-out-message', 'Có lỗi xảy ra. Vui lòng thử lại.', 'error');
+        });
+    }
+
+    // Load attendance history
+    function loadAttendanceHistory() {
+        const month = new Date().getMonth() + 1;
+        const year = new Date().getFullYear();
+
+        fetch(`/api/employee/attendance/history?month=${month}&year=${year}`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'include'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayAttendanceHistory(data.attendances);
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+
+    // Display attendance history
+    function displayAttendanceHistory(attendances) {
+        const table = document.getElementById('history-table');
+        table.innerHTML = '';
+
+        if (attendances.length === 0) {
+            table.innerHTML = '<tr><td class="px-4 py-2 text-center" colspan="5">Không có dữ liệu</td></tr>';
+            return;
+        }
+
+        attendances.forEach(attendance => {
+            const checkInTime = attendance.check_in ? new Date(attendance.check_in).toLocaleTimeString('vi-VN') : '--:--:--';
+            const checkOutTime = attendance.check_out ? new Date(attendance.check_out).toLocaleTimeString('vi-VN') : '--:--:--';
+            
+            const statusColor = {
+                'present': 'bg-green-100 text-green-800',
+                'late': 'bg-yellow-100 text-yellow-800',
+                'absent': 'bg-red-100 text-red-800',
+                'leave': 'bg-blue-100 text-blue-800'
+            }[attendance.status] || 'bg-gray-100 text-gray-800';
+
+            const statusText = {
+                'present': 'Đúng Giờ',
+                'late': 'Trễ',
+                'absent': 'Vắng',
+                'leave': 'Nghỉ'
+            }[attendance.status] || attendance.status;
+
+            const row = document.createElement('tr');
+            row.className = 'border-t border-gray-200 hover:bg-gray-50';
+            row.innerHTML = `
+                <td class="px-4 py-2">${new Date(attendance.date).toLocaleDateString('vi-VN')}</td>
+                <td class="px-4 py-2">${checkInTime}</td>
+                <td class="px-4 py-2">${checkOutTime}</td>
+                <td class="px-4 py-2"><span class="px-2 py-1 rounded text-xs font-semibold ${statusColor}">${statusText}</span></td>
+                <td class="px-4 py-2 text-xs">${attendance.check_in_location || '---'}</td>
+            `;
+            table.appendChild(row);
+        });
+    }
+
+    // Show message helper
+    function showMessage(elementId, message, type) {
+        const element = document.getElementById(elementId);
+        element.textContent = message;
+        element.className = `mt-3 text-sm font-semibold ${type === 'success' ? 'text-green-600' : 'text-red-600'}`;
+    }
+
+    // Handle location error
+    function handleLocationError(error) {
+        console.error('Geolocation error:', error);
+        showMessage('check-in-message', 'Không thể lấy vị trí. Vui lòng kiểm tra cài đặt vị trí của trình duyệt.', 'error');
+    }
+
+    // Get auth token from localStorage or session
+    function getToken() {
+        // Cố gắng lấy từ localStorage
+        let token = localStorage.getItem('api_token');
+        if (token) return token;
+
+        // Hoặc từ meta tag nếu có
+        const metaToken = document.querySelector('meta[name="api-token"]');
+        if (metaToken) return metaToken.getAttribute('content');
+
+        // Hoặc từ cookie
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'XSRF-TOKEN' || name === 'api_token') {
+                return decodeURIComponent(value);
+            }
+        }
+
+        return '';
+    }
+</script>
+
+@endsection

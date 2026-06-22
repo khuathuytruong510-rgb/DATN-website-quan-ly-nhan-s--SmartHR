@@ -11,13 +11,100 @@ class Attendance extends Model
         'employee_id',
         'date',
         'check_in',
+        'check_in_latitude',
+        'check_in_longitude',
+        'check_in_location',
+        'check_in_ip_address',
+        'check_in_distance',
+        'check_in_notes',
         'check_out',
+        'check_out_latitude',
+        'check_out_longitude',
+        'check_out_location',
+        'check_out_ip_address',
+        'check_out_distance',
+        'check_out_notes',
+        'work_hours',
+        'late_minutes',
+        'early_leave_minutes',
+        'overtime_hours',
         'status',
         'notes',
+        'approved_by',
+        'approved_at',
+    ];
+
+    protected $casts = [
+        'date' => 'date',
+        'check_in' => 'datetime',
+        'check_out' => 'datetime',
+        'check_in_latitude' => 'float',
+        'check_in_longitude' => 'float',
+        'check_out_latitude' => 'float',
+        'check_out_longitude' => 'float',
+        'check_in_distance' => 'float',
+        'check_out_distance' => 'float',
+        'work_hours' => 'float',
+        'late_minutes' => 'integer',
+        'early_leave_minutes' => 'integer',
+        'overtime_hours' => 'float',
     ];
 
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    /**
+     * Get the status label in Vietnamese
+     */
+    public function getStatusLabelAttribute(): string
+    {
+        return match($this->status) {
+            'present' => 'Đi làm',
+            'late' => 'Đi muộn',
+            'leave_early' => 'Về sớm',
+            'late_and_leave_early' => 'Đi muộn & Về sớm',
+            'overtime' => 'Tăng ca',
+            'absent' => 'Vắng mặt',
+            default => $this->status,
+        };
+    }
+
+    /**
+     * Get formatted work hours with decimal separator
+     */
+    public function getFormattedWorkHoursAttribute(): string
+    {
+        return number_format($this->work_hours ?? 0, 2, '.', '');
+    }
+
+    /**
+     * Get formatted overtime hours with decimal separator
+     */
+    public function getFormattedOvertimeHoursAttribute(): string
+    {
+        return number_format($this->overtime_hours ?? 0, 2, '.', '');
+    }
+
+    /**
+     * Get check-in time formatted
+     */
+    public function getFormattedCheckInAttribute(): ?string
+    {
+        return $this->check_in?->format('H:i:s');
+    }
+
+    /**
+     * Get check-out time formatted
+     */
+    public function getFormattedCheckOutAttribute(): ?string
+    {
+        return $this->check_out?->format('H:i:s');
     }
 }
