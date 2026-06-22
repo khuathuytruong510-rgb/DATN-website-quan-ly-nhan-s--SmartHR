@@ -78,13 +78,38 @@
                 <div class="brand">SmartHR</div>
                 <p class="brand-subtitle">Quản lý nhân sự</p>
                 <nav class="nav">
-                    <a class="{{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}">Dashboard</a>
-                    <a class="{{ request()->routeIs('employees.*') ? 'active' : '' }}" href="{{ route('employees.index') }}">Nhân viên</a>
-                    <a class="{{ request()->routeIs('departments.*') ? 'active' : '' }}" href="{{ route('departments.index') }}">Phòng ban</a>
-                    <a class="{{ request()->routeIs('contracts.*') ? 'active' : '' }}" href="{{ route('contracts.index') }}">Hợp đồng</a>
-                    <a class="{{ request()->routeIs('attendance') || request()->routeIs('attendance.*') ? 'active' : '' }}" href="{{ route('attendance.index') }}">Chấm công</a>
-                    <a class="{{ request()->routeIs('payroll') || request()->routeIs('payroll.*') ? 'active' : '' }}" href="{{ route('payroll.index') }}">Lương</a>
-                    <a class="{{ request()->routeIs('leave_requests.index') || request()->routeIs('leave_requests.*') ? 'active' : '' }}" href="{{ route('leave_requests.index') }}">Nghỉ phép</a>
+                    @php $user = auth()->user(); @endphp
+                    @if ($user->is_admin || $user->is_hr)
+                        <a class="{{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}">Dashboard</a>
+                        <a class="{{ request()->routeIs('employees.*') ? 'active' : '' }}" href="{{ route('employees.index') }}">Nhân viên</a>
+                        <a class="{{ request()->routeIs('departments.*') ? 'active' : '' }}" href="{{ route('departments.index') }}">Phòng ban</a>
+                        <a class="{{ request()->routeIs('positions.*') ? 'active' : '' }}" href="{{ route('positions.index') }}">Chức vụ</a>
+                        <a class="{{ request()->routeIs('contracts.*') ? 'active' : '' }}" href="{{ route('contracts.index') }}">Hợp đồng</a>
+                        <a class="{{ request()->routeIs('attendance.*') ? 'active' : '' }}" href="{{ route('attendance.index') }}">Chấm công</a>
+                        <a class="{{ request()->routeIs('leave_requests.*') ? 'active' : '' }}" href="{{ route('leave_requests.index') }}">Nghỉ phép</a>
+                        <a class="{{ request()->routeIs('payroll.*') ? 'active' : '' }}" href="{{ route('payroll.index') }}">Lương</a>
+                        <a class="{{ request()->routeIs('notifications.*') ? 'active' : '' }}" href="{{ route('notifications.index') }}">Thông báo</a>
+                        @if ($user->is_admin)
+                            <a class="{{ request()->routeIs('accounts.*') ? 'active' : '' }}" href="{{ route('accounts.index') }}">Quản lý tài khoản</a>
+                            <a class="{{ request()->routeIs('permissions.*') ? 'active' : '' }}" href="{{ route('permissions.index') }}">Phân quyền</a>
+                            <a class="{{ request()->routeIs('system_logs.*') ? 'active' : '' }}" href="{{ route('system_logs.index') }}">Nhật ký hệ thống</a>
+                            <a class="{{ request()->routeIs('settings.*') ? 'active' : '' }}" href="{{ route('settings.index') }}">Cấu hình hệ thống</a>
+                        @endif
+                        @if ($user->is_hr)
+                            <a class="{{ request()->routeIs('recruitment.*') ? 'active' : '' }}" href="#">Tuyển dụng</a>
+                            <a class="{{ request()->routeIs('training.*') ? 'active' : '' }}" href="#">Đào tạo</a>
+                        @endif
+                    @else
+                        <a class="{{ request()->routeIs('me.dashboard') ? 'active' : '' }}" href="{{ route('me.dashboard') }}">Dashboard</a>
+                        <a class="{{ request()->routeIs('me.profile') || request()->routeIs('me.profile.*') ? 'active' : '' }}" href="{{ route('me.profile') }}">Hồ sơ</a>
+                        <a class="{{ request()->routeIs('me.attendance') || request()->routeIs('me.attendance.*') ? 'active' : '' }}" href="{{ route('me.attendance') }}">Chấm công</a>
+                        <a class="{{ request()->routeIs('me.leave_requests') || request()->routeIs('me.leave_requests.*') ? 'active' : '' }}" href="{{ route('me.leave_requests') }}">Nghỉ phép</a>
+                        <a class="{{ request()->routeIs('me.payrolls') ? 'active' : '' }}" href="{{ route('me.payrolls') }}">Lương</a>
+                        <a class="{{ request()->routeIs('me.contracts') ? 'active' : '' }}" href="{{ route('me.contracts') }}">Hợp đồng</a>
+                        <a class="{{ request()->routeIs('me.trainings') ? 'active' : '' }}" href="{{ route('me.trainings') }}">Đào tạo</a>
+                        <a class="{{ request()->routeIs('me.rewards') ? 'active' : '' }}" href="{{ route('me.rewards') }}">Thưởng / Kỷ luật</a>
+                        <a class="{{ request()->routeIs('me.notifications') ? 'active' : '' }}" href="{{ route('me.notifications') }}">Thông báo</a>
+                    @endif
                 </nav>
             </aside>
             <main class="main">
@@ -101,9 +126,12 @@
                         </form>
                     </div>
                 </header>
-                <section class="content">
+                <section id="app" class="content">
                     @if (session('success'))
-                        <div class="alert">{{ session('success') }}</div>
+                        <alert type="success">{{ session('success') }}</alert>
+                    @endif
+                    @if (session('error'))
+                        <alert type="error">{{ session('error') }}</alert>
                     @endif
                     @yield('content')
                 </section>
@@ -114,5 +142,6 @@
             @yield('content')
         </main>
     @endauth
+    @stack('scripts')
 </body>
 </html>
