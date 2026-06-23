@@ -1,8 +1,10 @@
 <?php
 
+
 use App\Http\Controllers\Web\EmployeeController;
 use App\Http\Controllers\Web\SmartHrController;
 use Illuminate\Support\Facades\Route;
+
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [SmartHrController::class, 'showLogin'])->name('login');
@@ -16,13 +18,19 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [SmartHrController::class, 'dashboard']);
     Route::post('/logout', [SmartHrController::class, 'logout'])->name('logout');
 
-    Route::middleware(\App\Http\Middleware\EnsureAdmin::class)->group(function () {
-        Route::get('/accounts', [SmartHrController::class, 'accounts'])->name('accounts.index');
-        Route::get('/permissions', [SmartHrController::class, 'permissions'])->name('permissions.index');
-        Route::put('/permissions/{user}', [SmartHrController::class, 'updatePermissions'])->name('permissions.update');
-        Route::get('/system-logs', [SmartHrController::class, 'systemLogs'])->name('system_logs.index');
-        Route::get('/settings', [SmartHrController::class, 'settings'])->name('settings.index');
-    });
+Route::middleware(\App\Http\Middleware\EnsureAdmin::class)->group(function () {
+    Route::get('/accounts', [SmartHrController::class, 'accounts'])->name('accounts.index');
+    Route::get('/accounts/create', [SmartHrController::class, 'createAccount'])->name('accounts.create');
+    Route::post('/accounts', [SmartHrController::class, 'storeAccount'])->name('accounts.store');
+    Route::get('/accounts/{user}/edit', [SmartHrController::class, 'editAccount'])->name('accounts.edit');
+    Route::put('/accounts/{user}', [SmartHrController::class, 'updateAccount'])->name('accounts.update');
+    Route::put('/accounts/{user}/toggle', [SmartHrController::class, 'toggleAccount'])->name('accounts.toggle');
+    Route::delete('/accounts/{user}', [SmartHrController::class, 'destroyAccount'])->name('accounts.destroy');
+    Route::get('/permissions', [SmartHrController::class, 'permissions'])->name('permissions.index');
+    Route::put('/permissions/{user}', [SmartHrController::class, 'updatePermissions'])->name('permissions.update');
+    Route::get('/system-logs', [SmartHrController::class, 'systemLogs'])->name('system_logs.index');
+    Route::get('/settings', [SmartHrController::class, 'settings'])->name('settings.index');
+});
 
     Route::get('/me', [EmployeeController::class, 'dashboard'])->name('me.dashboard')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/profile', [EmployeeController::class, 'profile'])->name('me.profile')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);

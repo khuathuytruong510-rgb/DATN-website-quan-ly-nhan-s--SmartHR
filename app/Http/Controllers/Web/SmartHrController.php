@@ -480,6 +480,107 @@ class SmartHrController extends Controller
 
         return redirect()->route('contracts.index')->with('success', 'Xóa hợp đồng thành công.');
     }
+    public function createAccount()
+    {
+        return view('accounts.create');
+    }
+
+    public function storeAccount(Request $request)
+    {
+        $request->validate([
+            'name' => 'required',
+            'email' => 'required|email|unique:users,email',
+            'password' => 'required|min:6',
+        ]);
+
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+            'role' => $request->role,
+            'is_active' => true,
+        ]);
+
+        if ($request->role === 'admin') {
+            $user->is_admin = true;
+        }
+
+        if ($request->role === 'hr') {
+            $user->is_hr = true;
+        }
+
+        $user->save();
+
+        return redirect()
+            ->route('accounts.index')
+            ->with('success', 'Tạo tài khoản thành công');
+    }
+
+    public function editAccount(User $user)
+    {
+        return view('accounts.edit', compact('user'));
+    }
+
+    public function updateAccount(Request $request, User $user)
+    {
+        $request->validate([
+            'name' => 'required',
+            'email' => 'required|email',
+        ]);
+
+        $user->name = $request->name;
+        $user->email = $request->email;
+        $user->role = $request->role;
+
+        $user->is_admin = false;
+        $user->is_hr = false;
+
+        if ($request->role === 'admin') {
+            $user->is_admin = true;
+        } elseif ($request->role === 'hr') {
+            $user->is_hr = true;
+        }
+
+        $user->save();
+        if ($user->id === auth()->id() && $request->role !== 'admin') {
+        return back()->with(
+        'error',
+        'Không thể tự hạ quyền tài khoản Admin đang đăng nhập.'
+    );
+}
+
+        return redirect()
+            ->route('accounts.index')
+            ->with('success', 'Cập nhật thành công');
+        
+    }
+    public function toggleAccount(User $user)
+    {
+        $user->is_active = !$user->is_active;
+        $user->save();
+
+        return back()->with(
+            'success',
+            'Đã cập nhật trạng thái tài khoản'
+        );
+    }
+
+    public function destroyAccount(User $user)
+    {
+        if ($user->id === auth()->id()) {
+            return back()->with(
+                'error',
+                'Không thể xóa chính mình'
+            );
+        }
+
+        $user->delete();
+
+        return back()->with(
+            'success',
+            'Đã xóa tài khoản'
+        );
+    }
 
     private function validateDepartment(Request $request): array
     {
