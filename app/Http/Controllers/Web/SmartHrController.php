@@ -483,7 +483,9 @@ class SmartHrController extends Controller
     }
     public function createAccount()
     {
-        return view('accounts.create');
+        $departments = Department::all();
+
+        return view('accounts.create', compact('departments'));
     }
 
     public function storeAccount(Request $request)
@@ -491,7 +493,8 @@ class SmartHrController extends Controller
         $request->validate([
             'name' => 'required',
             'email' => 'required|email|unique:users,email',
-            'password' => 'required|min:6',
+            'password' => 'required|min:6|confirmed',
+            'department_id' => 'required',
         ]);
 
         $user = User::create([
@@ -515,11 +518,12 @@ class SmartHrController extends Controller
         'name' => $request->name,
         'email' => $request->email,
         'position' => 'Nhân viên',
-        'department_id' => 1,
+        'department_id' => $request->department_id,
         'status' => 'active',
         'employee_code' => 'NV'.time(),
         'leave_balance' => 12,
     ]);
+        
 
         return redirect()
             ->route('accounts.index')

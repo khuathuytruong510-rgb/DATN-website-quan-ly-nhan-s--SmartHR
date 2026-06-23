@@ -19,6 +19,16 @@
         <input type="password"
                name="password"
                placeholder="Mật khẩu">
+        <input type="password" name="password_confirmation" placeholder="Xác nhận mật khẩu">
+
+
+        <select name="department_id">
+            @foreach($departments as $department)
+                <option value="{{ $department->id }}">
+                    {{ $department->name }}
+                </option>
+            @endforeach
+        </select>
 
         <select name="role">
             <option value="employee">Nhân viên</option>
