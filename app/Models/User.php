@@ -29,19 +29,4 @@ class User extends Authenticatable
         'is_admin' => 'boolean',
         'is_hr' => 'boolean',
     ];
-
-    public function employee(): HasOne
-    {
-        return $this->hasOne(Employee::class);
-    }
-
-    public function leaveRequestsApproved(): HasMany
-    {
-        return $this->hasMany(LeaveRequest::class, 'approved_by');
-    }
-
-    public function attendancesApproved(): HasMany
-    {
-        return $this->hasMany(Attendance::class, 'approved_by');
-    }
 }
