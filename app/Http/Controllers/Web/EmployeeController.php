@@ -35,6 +35,7 @@ class EmployeeController extends Controller
         ]);
     }
 
+
     public function attendanceIndex(Request $request)
     {
         $user = auth()->user();
