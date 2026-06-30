@@ -8,6 +8,7 @@ use App\Models\Contract;
 use App\Models\Payroll;
 use App\Models\Employee;
 use App\Models\LeaveRequest;
+use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\View\View;
@@ -191,6 +192,19 @@ class EmployeeController extends Controller
 
     public function notifications(): View
     {
-        return view('employee.notifications');
+        $user = auth()->user();
+
+        $notifications = Notification::where(function ($query) use ($user) {
+            $query->where('target', 'all');
+
+            if ($user->is_hr) {
+                $query->orWhere('target', 'employee');
+                $query->orWhere('target', 'hr');
+            } else {
+                $query->orWhere('target', 'employee');
+            }
+        })->latest()->paginate(10);
+
+        return view('employee.notifications', compact('notifications'));
     }
 }

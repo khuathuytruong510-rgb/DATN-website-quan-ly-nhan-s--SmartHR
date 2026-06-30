@@ -18,7 +18,7 @@
             <nav class="mt-6 px-4">
                 <ul class="space-y-2">
                     <li>
-                        <a href="{{ route('employee.attendance') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('employee.attendance*') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}">
+                        <a href="{{ route('me.attendance') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.attendance*') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}">
                             <span class="mr-3">📍</span> Chấm Công
                         </a>
                     </li>

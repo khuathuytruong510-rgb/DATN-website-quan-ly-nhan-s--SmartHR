@@ -120,6 +120,12 @@
                     </div>
                     <div class="userbox">
                         <strong>{{ auth()->user()->name }}</strong>
+                        @if(session()->has('impersonator_id'))
+                            <form method="POST" action="{{ route('impersonation.stop') }}">
+                                @csrf
+                                <button class="btn" type="submit">Quay lại admin</button>
+                            </form>
+                        @endif
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
                             <button class="btn" type="submit">Đăng xuất</button>

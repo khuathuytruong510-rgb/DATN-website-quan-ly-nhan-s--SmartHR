@@ -1,4 +1,4 @@
-<h1>Tạo đơn nghỉ phép</h1>
+<h1></h1>
 
 <form method="POST" action="{{ route('me.leave_requests.store') }}">
     @csrf

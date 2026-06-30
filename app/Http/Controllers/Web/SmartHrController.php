@@ -30,6 +30,13 @@ class SmartHrController extends Controller
             'password' => ['required', 'string'],
         ]);
 
+        $userRecord = User::where('email', $request->input('email'))->first();
+        if ($userRecord && $userRecord->is_locked) {
+            return back()
+                ->withErrors(['email' => 'Tài khoản này đã bị khoá. Vui lòng liên hệ quản trị.'])
+                ->onlyInput('email');
+        }
+
         if (! Auth::attempt($credentials, $request->boolean('remember'))) {
             return back()
                 ->withErrors(['email' => 'Email hoặc mật khẩu không đúng.'])
@@ -41,13 +48,16 @@ class SmartHrController extends Controller
         // Check if user is an employee
         $user = Auth::user();
         $employee = Employee::where('user_id', $user->id)->first();
-        if ($employee) {
-            // Redirect to employee attendance page
-            return redirect()->intended(route('employee.attendance'))
+        if ($user->is_hr) {
+            return redirect()->intended(route('dashboard'))
                 ->with('success', 'Đăng nhập thành công! Chào mừng ' . $user->name);
         }
 
-        // Otherwise, redirect to admin dashboard
+        if ($employee) {
+            return redirect()->intended(route('me.attendance'))
+                ->with('success', 'Đăng nhập thành công! Chào mừng ' . $user->name);
+        }
+
         return redirect()->intended(route('dashboard'))
             ->with('success', 'Đăng nhập thành công! Chào mừng ' . $user->name);
     }
@@ -120,6 +130,160 @@ class SmartHrController extends Controller
         return view('accounts.index', [
             'users' => User::latest()->paginate(10),
         ]);
+    }
+
+    public function createAccount(): View
+    {
+        return view('accounts.form', [
+            'user' => new User(),
+            'departments' => Department::orderBy('name')->get(),
+        ]);
+    }
+
+    public function storeAccount(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:6', 'confirmed'],
+            'role' => ['required', 'in:employee,hr,admin'],
+            'department_id' => ['required_if:role,employee,hr', 'nullable', 'exists:departments,id'],
+        ]);
+
+        $user = User::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
+            'is_admin' => $data['role'] === 'admin',
+            'is_hr' => $data['role'] === 'hr',
+        ]);
+
+        if ($data['role'] !== 'admin') {
+            Employee::create([
+                'user_id' => $user->id,
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'position' => $data['role'] === 'hr' ? 'HR' : 'Nhân viên',
+                'department_id' => $data['department_id'],
+                'status' => 'active',
+            ]);
+        }
+
+        return redirect()->route('accounts.index')->with('success', 'Tạo tài khoản thành công.');
+    }
+
+    public function editAccount(User $user): View
+    {
+        return view('accounts.form', [
+            'user' => $user,
+            'departments' => Department::orderBy('name')->get(),
+        ]);
+    }
+
+    public function updateAccount(Request $request, User $user): RedirectResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
+            'password' => ['nullable', 'string', 'min:6', 'confirmed'],
+            'role' => ['required', 'in:employee,hr,admin'],
+            'department_id' => ['required_if:role,employee,hr', 'nullable', 'exists:departments,id'],
+        ]);
+
+        $update = [
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'is_admin' => $data['role'] === 'admin',
+            'is_hr' => $data['role'] === 'hr',
+        ];
+
+        if (! empty($data['password'])) {
+            $update['password'] = Hash::make($data['password']);
+        }
+
+        $user->update($update);
+
+        if ($data['role'] === 'admin') {
+            $user->employee()->delete();
+        } else {
+            $user->employee()->updateOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'name' => $data['name'],
+                    'email' => $data['email'],
+                    'position' => $data['role'] === 'hr' ? 'HR' : 'Nhân viên',
+                    'department_id' => $data['department_id'],
+                    'status' => 'active',
+                ]
+            );
+        }
+
+        return redirect()->route('accounts.index')->with('success', 'Cập nhật tài khoản thành công.');
+    }
+
+    public function destroyAccount(User $user): RedirectResponse
+    {
+        $auth = Auth::user();
+        if ($auth->id === $user->id) {
+            return redirect()->route('accounts.index')->with('error', 'Bạn không thể xoá chính mình.');
+        }
+
+        $user->delete();
+
+        return redirect()->route('accounts.index')->with('success', 'Xoá tài khoản thành công.');
+    }
+
+    public function toggleLockAccount(User $user): RedirectResponse
+    {
+        $auth = Auth::user();
+        if ($auth->id === $user->id) {
+            return redirect()->route('accounts.index')->with('error', 'Bạn không thể khoá/mở khoá chính mình.');
+        }
+
+        $user->is_locked = ! $user->is_locked;
+        $user->save();
+
+        $msg = $user->is_locked ? 'Đã khoá tài khoản.' : 'Đã mở khoá tài khoản.';
+
+        return redirect()->route('accounts.index')->with('success', $msg);
+    }
+
+    public function impersonate(User $user): RedirectResponse
+    {
+        $admin = Auth::user();
+        if (! $admin || ! $admin->is_admin) {
+            abort(403);
+        }
+
+        if ($admin->id === $user->id) {
+            return redirect()->route('accounts.index')->with('error', 'Bạn không thể đăng nhập thay chính mình.');
+        }
+
+        if ($user->is_locked) {
+            return redirect()->route('accounts.index')->with('error', 'Không thể đăng nhập thay tài khoản đã bị khoá.');
+        }
+
+        session(['impersonator_id' => $admin->id]);
+        Auth::login($user);
+
+        return redirect()->route('dashboard')->with('success', 'Bạn đang xem hệ thống dưới quyền: ' . $user->name);
+    }
+
+    public function stopImpersonation(): RedirectResponse
+    {
+        $impersonatorId = session('impersonator_id');
+        if (! $impersonatorId) {
+            return redirect()->route('dashboard');
+        }
+
+        $admin = User::find($impersonatorId);
+        if ($admin) {
+            Auth::login($admin);
+        }
+
+        session()->forget('impersonator_id');
+
+        return redirect()->route('accounts.index')->with('success', 'Đã quay lại tài khoản quản trị.');
     }
 
     public function permissions(): View
@@ -418,7 +582,6 @@ class SmartHrController extends Controller
 
     public function approveLeaveRequest(LeaveRequest $leaveRequest): RedirectResponse
     {
-        // Check if user is authorized to approve leave requests (HR/Admin only)
         if (!$this->isHROrAdmin()) {
             abort(403, 'Unauthorized: Only HR and Admin can approve leave requests.');
         }
@@ -432,17 +595,21 @@ class SmartHrController extends Controller
         return redirect()->route('leave_requests.index')->with('success', 'Đã duyệt đơn nghỉ phép.');
     }
 
-    public function rejectLeaveRequest(\App\Models\LeaveRequest $leaveRequest): RedirectResponse
+    public function rejectLeaveRequest(Request $request, \App\Models\LeaveRequest $leaveRequest): RedirectResponse
     {
-        // Check if user is authorized to reject leave requests (HR/Admin only)
         if (!$this->isHROrAdmin()) {
             abort(403, 'Unauthorized: Only HR and Admin can reject leave requests.');
         }
+
+        $data = $request->validate([
+            'rejection_reason' => ['required', 'string'],
+        ]);
 
         $leaveRequest->update([
             'status' => 'rejected',
             'approved_by' => Auth::id(),
             'approved_at' => now(),
+            'rejection_reason' => $data['rejection_reason'],
         ]);
 
         return redirect()->route('leave_requests.index')->with('success', 'Đã từ chối đơn nghỉ phép.');
@@ -450,6 +617,10 @@ class SmartHrController extends Controller
 
     public function destroyLeaveRequest(\App\Models\LeaveRequest $leaveRequest): RedirectResponse
     {
+        if (!$this->isAdmin()) {
+            abort(403, 'Unauthorized: Only Admin can delete leave requests.');
+        }
+
         $leaveRequest->delete();
 
         return redirect()->route('leave_requests.index')->with('success', 'Xóa đơn nghỉ phép thành công.');
@@ -561,15 +732,18 @@ class SmartHrController extends Controller
      * Check if the authenticated user is HR or Admin
      * This is a simple check - can be replaced with proper Role/Permission system
      */
+    private function isAdmin(): bool
+    {
+        return Auth::user()?->is_admin === true;
+    }
+
+    private function isHr(): bool
+    {
+        return Auth::user()?->is_hr === true;
+    }
+
     private function isHROrAdmin(): bool
     {
-        $user = Auth::user();
-
-        // TODO: Implement proper role checking
-        // For now, we check if the user does NOT have an associated employee record
-        // (Admins/HR don't have employee records, only employees do)
-        $isEmployee = Employee::where('user_id', $user->id)->exists();
-
-        return !$isEmployee; // If not an employee, they're HR/Admin
+        return $this->isAdmin() || $this->isHr();
     }
 }

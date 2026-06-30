@@ -75,6 +75,13 @@
                 <span style="color: #64748b; font-size: 13px;">Tổng lương</span>
                 <p style="margin: 4px 0 0; font-weight: 800; font-size: 24px; color: #2563eb;">{{ number_format($payroll->total_salary, 0, '.', ',') }} VNĐ</p>
             </div>
+
+            <form action="{{ route('payroll.sendMail', $payroll->id) }}" method="POST">
+                @csrf
+                <button type="submit" onclick="return confirm('Gửi bảng lương này qua email?')">
+                    📧 Gửi email bảng lương
+                </button>
+            </form>
         </div>
     </div>
 

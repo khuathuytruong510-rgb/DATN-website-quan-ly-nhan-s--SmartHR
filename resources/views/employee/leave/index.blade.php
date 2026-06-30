@@ -10,4 +10,4 @@
     </ul>
 @endif
 
-<p><a href="{{ route('me.leave_requests.create') }}">Tạo đơn mới</a></p>
+<p><a href="{{ route('me.leave_requests.create') }}"></a></p>

@@ -9,7 +9,8 @@
             <p class="muted">Danh sách và quản lý tài khoản người dùng hệ thống.</p>
         </div>
         <div>
-            <a class="btn primary" href="{{ route('permissions.index') }}">Quản lý phân quyền</a>
+            <a class="btn primary" href="{{ route('accounts.create') }}">Tạo tài khoản</a>
+            <a class="btn" href="{{ route('permissions.index') }}">Quản lý phân quyền</a>
         </div>
     </div>
 
@@ -24,6 +25,7 @@
                         <th>Email</th>
                         <th>Vai trò</th>
                         <th>Ngày tạo</th>
+                        <th>Hành động</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -43,6 +45,19 @@
                                 @endif
                             </td>
                             <td>{{ $user->created_at?->format('d/m/Y') ?? '-' }}</td>
+                            <td>
+                                <a class="btn" href="{{ route('accounts.edit', $user) }}">Sửa</a>
+                                
+                                <form action="{{ route('accounts.destroy', $user) }}" method="POST" style="display:inline">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button class="btn" type="submit" onclick="return confirm('Bạn có chắc muốn xoá tài khoản này?')">Xoá</button>
+                                </form>
+                                <form action="{{ route('accounts.toggle_lock', $user) }}" method="POST" style="display:inline">
+                                    @csrf
+                                    <button class="btn" type="submit">{{ $user->is_locked ? 'Mở khoá' : 'Khoá' }}</button>
+                                </form>
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>

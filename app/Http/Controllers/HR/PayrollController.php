@@ -6,6 +6,7 @@ use App\Http\Controllers\ApiController;
 use App\Models\Payroll;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use App\Services\PayrollEmailService;
 
 class PayrollController extends ApiController
 {
@@ -60,33 +61,51 @@ class PayrollController extends ApiController
     }
 
     public function update(Request $request, $id): \Illuminate\Http\JsonResponse
-    {
-        $this->currentUser($request);
-        $payroll = Payroll::findOrFail($id);
+{
+    $this->currentUser($request);
+    $payroll = Payroll::findOrFail($id);
 
-        $validator = Validator::make($request->all(), [
-            'employee_id' => 'sometimes|required|exists:employees,id',
-            'month' => 'sometimes|required|date_format:Y-m',
-            'base_salary' => 'sometimes|required|numeric|min:0',
-            'allowance' => 'nullable|numeric|min:0',
-            'deduction' => 'nullable|numeric|min:0',
-            'status' => 'nullable|in:pending,approved,paid',
-        ]);
+    $validator = Validator::make($request->all(), [
+        'employee_id' => 'sometimes|required|exists:employees,id',
+        'month' => 'sometimes|required|date_format:Y-m',
+        'base_salary' => 'sometimes|required|numeric|min:0',
+        'allowance' => 'nullable|numeric|min:0',
+        'deduction' => 'nullable|numeric|min:0',
+        'status' => 'nullable|in:pending,approved,paid',
+    ]);
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        $data = $validator->validated();
-        if (isset($data['base_salary']) || isset($data['allowance']) || isset($data['deduction'])) {
-            $data['total_salary'] = ($data['base_salary'] ?? $payroll->base_salary) + 
-                                   ($data['allowance'] ?? $payroll->allowance) - 
-                                   ($data['deduction'] ?? $payroll->deduction);
-        }
-        
-        $payroll->update($data);
-        return response()->json($payroll);
+    if ($validator->fails()) {
+        return response()->json(['errors' => $validator->errors()], 422);
     }
+
+    $data = $validator->validated();
+
+    if (isset($data['base_salary']) || isset($data['allowance']) || isset($data['deduction'])) {
+        $data['total_salary'] =
+            ($data['base_salary'] ?? $payroll->base_salary) +
+            ($data['allowance'] ?? $payroll->allowance) -
+            ($data['deduction'] ?? $payroll->deduction);
+    }
+
+    $oldStatus = $payroll->status;
+
+    if (
+    isset($data['status']) &&
+    $data['status'] === 'paid' &&
+    $oldStatus !== 'paid'
+) {
+    $data['paid_at'] = now();
+}
+
+    $payroll->update($data);
+    $payroll->load('employee');
+
+    if ($oldStatus != "paid" && $payroll->status == "paid") {
+        app(PayrollEmailService::class)->send($payroll);
+    }
+
+    return response()->json($payroll);
+}
 
     public function destroy(Request $request, $id): \Illuminate\Http\JsonResponse
     {
@@ -97,3 +116,7 @@ class PayrollController extends ApiController
         return response()->json(null, 204);
     }
 }
+
+
+   
+

@@ -1,9 +1,39 @@
 <?php
 
 use App\Http\Controllers\Web\EmployeeController;
+use App\Http\Controllers\Web\NotificationController;
 use App\Http\Controllers\Web\SmartHrController;
 use App\Http\Controllers\Web\EmployeeAttendanceController;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use App\Mail\PayrollMail;
+use App\Models\Payroll;
+use Illuminate\Support\Facades\Mail;
+use App\Http\Controllers\Web\PayrollMailController;
+
+Route::post('/payroll/{payroll}/send-mail', [PayrollMailController::class, 'send'])
+    ->name('payroll.sendMail');
+
+Route::get('/test-mail', function () {
+    $payroll = Payroll::with('employee')->first();
+
+    if (!$payroll) {
+        return "❌ Không có dữ liệu payroll trong database";
+    }
+
+    Mail::to('your@gmail.com')
+        ->send(new PayrollMail($payroll));
+
+    return 'Email đã gửi!';
+});
+
+Route::get('/', function () {
+    if (Auth::check()) {
+        return redirect()->route('dashboard');
+    }
+
+    return redirect()->route('login');
+});
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [SmartHrController::class, 'showLogin'])->name('login');
@@ -13,18 +43,31 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
+    Route::get('/dashboard', [SmartHrController::class, 'dashboard'])->name('dashboard');
+
     Route::post('/logout', [SmartHrController::class, 'logout'])->name('logout');
 
     Route::middleware(\App\Http\Middleware\EnsureAdmin::class)->group(function () {
         Route::get('/accounts', [SmartHrController::class, 'accounts'])->name('accounts.index');
+        Route::get('/accounts/create', [SmartHrController::class, 'createAccount'])->name('accounts.create');
+        Route::post('/accounts', [SmartHrController::class, 'storeAccount'])->name('accounts.store');
+        Route::get('/accounts/{user}/edit', [SmartHrController::class, 'editAccount'])->name('accounts.edit');
+        Route::put('/accounts/{user}', [SmartHrController::class, 'updateAccount'])->name('accounts.update');
+        Route::delete('/accounts/{user}', [SmartHrController::class, 'destroyAccount'])->name('accounts.destroy');
+        Route::post('/accounts/{user}/toggle-lock', [SmartHrController::class, 'toggleLockAccount'])->name('accounts.toggle_lock');
+        Route::post('/accounts/{user}/impersonate', [SmartHrController::class, 'impersonate'])->name('accounts.impersonate');
         Route::get('/permissions', [SmartHrController::class, 'permissions'])->name('permissions.index');
         Route::put('/permissions/{user}', [SmartHrController::class, 'updatePermissions'])->name('permissions.update');
         Route::get('/system-logs', [SmartHrController::class, 'systemLogs'])->name('system_logs.index');
         Route::get('/settings', [SmartHrController::class, 'settings'])->name('settings.index');
     });
 
+    // Stop impersonation (any authenticated user can stop if impersonating)
+    Route::post('/impersonation/stop', [SmartHrController::class, 'stopImpersonation'])->name('impersonation.stop');
+
     Route::get('/me', [EmployeeController::class, 'dashboard'])->name('me.dashboard')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/profile', [EmployeeController::class, 'profile'])->name('me.profile')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    
     Route::get('/me/profile/edit', [EmployeeController::class, 'editProfile'])->name('me.profile.edit')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::put('/me/profile', [EmployeeController::class, 'updateProfile'])->name('me.profile.update')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/trainings', [EmployeeController::class, 'trainings'])->name('me.trainings')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
@@ -41,7 +84,9 @@ Route::middleware('auth')->group(function () {
 
     Route::middleware(\App\Http\Middleware\EnsureAdminOrHr::class)->group(function () {
         Route::get('/positions', [SmartHrController::class, 'positions'])->name('positions.index');
-        Route::get('/notifications', [SmartHrController::class, 'notifications'])->name('notifications.index');
+        Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+        Route::get('/notifications/create', [NotificationController::class, 'create'])->name('notifications.create');
+        Route::post('/notifications', [NotificationController::class, 'store'])->name('notifications.store');
 
         Route::get('/departments', [SmartHrController::class, 'departments'])->name('departments.index');
         Route::get('/departments/create', [SmartHrController::class, 'createDepartment'])->name('departments.create');
@@ -90,5 +135,7 @@ Route::middleware('auth')->group(function () {
         Route::delete('/leave-requests/{leaveRequest}', [SmartHrController::class, 'destroyLeaveRequest'])->name('leave_requests.destroy');
     });
 });
+
+require __DIR__ . '/attendance-web.php';
 
 
