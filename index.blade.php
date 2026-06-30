@@ -4,64 +4,91 @@
 
 <div class="container">
 
-    <h2>Bảng Lương</h2>
+    <div class="d-flex justify-content-between mb-3">
 
-    <form action="{{ route('salary.generate') }}"
-          method="POST">
+        <h3>Bảng lương nhân viên</h3>
 
-        @csrf
+        <form action="{{ route('payroll.generate') }}" method="POST">
+            @csrf
 
-        <button class="btn btn-primary">
-            Tính lương tháng này
-        </button>
+            <button class="btn btn-primary">
+                Tính lương tháng này
+            </button>
 
-    </form>
+        </form>
 
-    <br>
+    </div>
 
-    <table class="table table-bordered">
+    <table class="table table-bordered table-hover">
 
         <thead>
-            <tr>
-                <th>Nhân viên</th>
-                <th>Chức vụ</th>
-                <th>Ngày công</th>
-                <th>Lương/ngày</th>
-                <th>Phụ cấp</th>
-                <th>Tổng lương</th>
-            </tr>
+
+        <tr>
+
+            <th>Nhân viên</th>
+
+            <th>Tháng</th>
+
+            <th>Lương cơ bản</th>
+
+            <th>Ngày công</th>
+
+            <th>Lương ngày công</th>
+
+            <th>Tăng ca</th>
+
+            <th>Phụ cấp</th>
+
+            <th>Thưởng</th>
+
+            <th>Bảo hiểm</th>
+
+            <th>Thuế</th>
+
+            <th>Thực nhận</th>
+
+        </tr>
+
         </thead>
 
         <tbody>
 
-        @foreach($salaries as $salary)
+        @foreach($payrolls as $payroll)
 
             <tr>
 
-                <td>
-                    {{ $salary->employee->name }}
-                </td>
+                <td>{{ $payroll->employee->name }}</td>
+
+                <td>{{ $payroll->month }}/{{ $payroll->year }}</td>
+
+                <td>{{ number_format($payroll->base_salary) }}</td>
 
                 <td>
-                    {{ $salary->employee->position }}
+                    {{ $payroll->working_days }}
+                    /
+                    {{ $payroll->required_working_days }}
                 </td>
 
-                <td>
-                    {{ $salary->working_days }}
-                </td>
+                <td>{{ number_format($payroll->working_salary) }}</td>
+
+                <td>{{ number_format($payroll->overtime_salary) }}</td>
+
+                <td>{{ number_format($payroll->allowance) }}</td>
+
+                <td>{{ number_format($payroll->bonus) }}</td>
+
+                <td>{{ number_format($payroll->insurance) }}</td>
+
+                <td>{{ number_format($payroll->tax) }}</td>
 
                 <td>
-                    {{ number_format($salary->daily_rate) }}
-                </td>
 
-                <td>
-                    {{ number_format($salary->allowance) }}
-                </td>
+                    <strong class="text-success">
 
-                <td>
-                    <strong>
-                        {{ number_format($salary->total_salary) }}
+                        {{ number_format($payroll->total_salary) }}
+
                     </strong>
+
                 </td>
 
             </tr>

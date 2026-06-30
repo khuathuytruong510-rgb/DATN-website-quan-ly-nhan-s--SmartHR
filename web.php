@@ -1,7 +1,7 @@
 <?php
 
 use App\Http\Controllers\Employee\AttendanceController;
-use App\Http\Controllers\HR\SalaryController;
+use App\Http\Controllers\HR\PayrollController;
 use App\Http\Controllers\Web\EmployeeController;
 use App\Http\Controllers\Web\SmartHrController;
 use Illuminate\Support\Facades\Route;
@@ -92,17 +92,33 @@ Route::middleware('auth')->group(function () {
         Route::post('/leave-requests/{leaveRequest}/reject', [SmartHrController::class, 'rejectLeaveRequest'])->name('leave_requests.reject');
         Route::delete('/leave-requests/{leaveRequest}', [SmartHrController::class, 'destroyLeaveRequest'])->name('leave_requests.destroy');
     });
-    Route::get(
-        '/hr/salary',
-        [SalaryController::class, 'index']
-    )->name('salary.index');
+    Route::middleware(\App\Http\Middleware\EnsureAdminOrHr::class)->group(function () {
 
-    Route::post(
-        '/hr/salary/generate',
-        [SalaryController::class, 'generate']
-    )->name('salary.generate');
-    
-});
+        Route::get('/payroll', [PayrollController::class, 'index'])
+            ->name('payroll.index');
+
+        Route::post('/payroll/generate', [PayrollController::class, 'generate'])
+            ->name('payroll.generate');
+
+    });
+        Route::get('/payroll', [PayrollController::class, 'index'])
+            ->name('payroll.index');
+
+        Route::post('/payroll/generate', [PayrollController::class, 'generate'])
+            ->name('payroll.generate');
+
+        Route::get('/payroll/{payroll}', [PayrollController::class, 'show'])
+            ->name('payroll.show');
+
+        Route::post('/payroll/{payroll}/approve', [PayrollController::class, 'approve'])
+            ->name('payroll.approve');
+
+        Route::post('/payroll/{payroll}/paid', [PayrollController::class, 'paid'])
+            ->name('payroll.paid');
+
+        Route::delete('/payroll/{payroll}', [PayrollController::class, 'destroy'])
+            ->name('payroll.destroy');
+    });
 
 Route::middleware(['auth'])
     ->prefix('api/employee/attendance')
