@@ -121,7 +121,32 @@ class SmartHrController extends Controller
 
     public function positions(): View
     {
-        $positions = Employee::select('position')->distinct()->orderBy('position')->pluck('position');
+        $positions = [
+            [
+                'name' => 'HR Manager',
+                'department' => 'Nhân sự',
+                'description' => 'Quản lý phòng nhân sự',
+                'status' => 'Hoạt động',
+            ],
+            [
+                'name' => 'HR Executive',
+                'department' => 'Nhân sự',
+                'description' => 'Phụ trách tuyển dụng, hồ sơ',
+                'status' => 'Hoạt động',
+            ],
+            [
+                'name' => 'Finance Officer',
+                'department' => 'Kế toán',
+                'description' => 'Quản lý tài chính',
+                'status' => 'Hoạt động',
+            ],
+            [
+                'name' => 'Senior Developer',
+                'department' => 'IT',
+                'description' => 'Phát triển hệ thống',
+                'status' => 'Hoạt động',
+            ],
+        ];
 
         return view('positions.index', compact('positions'));
     }
