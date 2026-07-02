@@ -27,6 +27,9 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/logout', [SmartHrController::class, 'logout'])->name('logout');
 
+    Route::get('/admin', [SmartHrController::class, 'dashboard'])
+        ->name('admin.dashboard');
+
     Route::middleware(\App\Http\Middleware\EnsureAdmin::class)->group(function () {
         Route::get('/accounts', [SmartHrController::class, 'accounts'])->name('accounts.index');
         Route::get('/accounts/create', [SmartHrController::class, 'createAccount'])->name('accounts.create');
