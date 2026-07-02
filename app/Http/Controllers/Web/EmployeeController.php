@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
+use App\Models\Benefit;
 use App\Models\Contract;
-use App\Models\Payroll;
 use App\Models\Employee;
+use App\Models\EmployeeEvaluation;
 use App\Models\LeaveRequest;
+use App\Models\Notification;
+use App\Models\Payroll;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\View\View;
@@ -97,6 +100,30 @@ class EmployeeController extends Controller
         return view('employee.payroll.index', ['payrolls' => $payrolls]);
     }
 
+    public function evaluations(): View
+    {
+        $user = auth()->user();
+        $employee = Employee::where('email', $user->email)->firstOrFail();
+
+        $evaluations = EmployeeEvaluation::where('employee_id', $employee->id)
+            ->latest()
+            ->get();
+
+        return view('employee.evaluations', compact('evaluations'));
+    }
+
+    public function benefits(): View
+    {
+        $user = auth()->user();
+        $employee = Employee::where('email', $user->email)->firstOrFail();
+
+        $benefits = Benefit::where('employee_id', $employee->id)
+            ->latest()
+            ->get();
+
+        return view('employee.benefits', compact('benefits'));
+    }
+
     public function department()
     {
         $user = auth()->user();
@@ -128,7 +155,7 @@ class EmployeeController extends Controller
         $data = $request->validate([
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
-            'type' => ['required', 'string'],
+            'type' => ['required', 'in:annual,sick,personal,unpaid'],
             'reason' => ['nullable', 'string'],
         ]);
 
@@ -191,6 +218,19 @@ class EmployeeController extends Controller
 
     public function notifications(): View
     {
-        return view('employee.notifications');
+        $user = auth()->user();
+
+        $notifications = Notification::where(function ($query) use ($user) {
+            $query->where('target', 'all');
+
+            if ($user->is_hr) {
+                $query->orWhere('target', 'employee');
+                $query->orWhere('target', 'hr');
+            } else {
+                $query->orWhere('target', 'employee');
+            }
+        })->latest()->paginate(10);
+
+        return view('employee.notifications', compact('notifications'));
     }
 }

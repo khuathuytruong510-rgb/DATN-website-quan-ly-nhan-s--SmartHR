@@ -7,14 +7,20 @@ use App\Models\Attendance;
 use App\Models\Contract;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\EmployeeBenefit;
+use App\Models\EmployeeEvaluation;
+use App\Models\Benefit;
 use App\Models\LeaveRequest;
 use App\Models\Payroll;
+use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SmartHrController extends Controller
 {
@@ -30,6 +36,13 @@ class SmartHrController extends Controller
             'password' => ['required', 'string'],
         ]);
 
+        $userRecord = User::where('email', $request->input('email'))->first();
+        if ($userRecord && $userRecord->is_locked) {
+            return back()
+                ->withErrors(['email' => 'Tài khoản này đã bị khoá. Vui lòng liên hệ quản trị.'])
+                ->onlyInput('email');
+        }
+
         if (! Auth::attempt($credentials, $request->boolean('remember'))) {
             return back()
                 ->withErrors(['email' => 'Email hoặc mật khẩu không đúng.'])
@@ -41,13 +54,16 @@ class SmartHrController extends Controller
         // Check if user is an employee
         $user = Auth::user();
         $employee = Employee::where('user_id', $user->id)->first();
-        if ($employee) {
-            // Redirect to employee attendance page
-            return redirect()->intended(route('employee.attendance'))
+        if ($user->is_hr) {
+            return redirect()->intended(route('dashboard'))
                 ->with('success', 'Đăng nhập thành công! Chào mừng ' . $user->name);
         }
 
-        // Otherwise, redirect to admin dashboard
+        if ($employee) {
+            return redirect()->intended(route('me.attendance'))
+                ->with('success', 'Đăng nhập thành công! Chào mừng ' . $user->name);
+        }
+
         return redirect()->intended(route('dashboard'))
             ->with('success', 'Đăng nhập thành công! Chào mừng ' . $user->name);
     }
@@ -120,6 +136,165 @@ class SmartHrController extends Controller
         return view('accounts.index', [
             'users' => User::latest()->paginate(10),
         ]);
+    }
+
+    public function createAccount(): View
+    {
+        return view('accounts.form', [
+            'user' => new User(),
+            'departments' => Department::orderBy('name')->get(),
+        ]);
+    }
+
+    public function storeAccount(Request $request): RedirectResponse
+    {
+        $emailRules = ['required', 'email', 'max:255', 'unique:users,email'];
+        if ($request->input('role') !== 'admin') {
+            $emailRules[] = 'unique:employees,email';
+        }
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => $emailRules,
+            'password' => ['required', 'string', 'min:6', 'confirmed'],
+            'role' => ['required', 'in:employee,hr,admin'],
+            'department_id' => ['required_if:role,employee,hr', 'nullable', 'exists:departments,id'],
+        ]);
+
+        $user = User::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
+            'is_admin' => $data['role'] === 'admin',
+            'is_hr' => $data['role'] === 'hr',
+        ]);
+
+        if ($data['role'] !== 'admin') {
+            Employee::create([
+                'user_id' => $user->id,
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'position' => $data['role'] === 'hr' ? 'HR' : 'Nhân viên',
+                'department_id' => $data['department_id'],
+                'status' => 'active',
+            ]);
+        }
+
+        return redirect()->route('accounts.index')->with('success', 'Tạo tài khoản thành công.');
+    }
+
+    public function editAccount(User $user): View
+    {
+        return view('accounts.form', [
+            'user' => $user,
+            'departments' => Department::orderBy('name')->get(),
+        ]);
+    }
+
+    public function updateAccount(Request $request, User $user): RedirectResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
+            'password' => ['nullable', 'string', 'min:6', 'confirmed'],
+            'role' => ['required', 'in:employee,hr,admin'],
+            'department_id' => ['required_if:role,employee,hr', 'nullable', 'exists:departments,id'],
+        ]);
+
+        $update = [
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'is_admin' => $data['role'] === 'admin',
+            'is_hr' => $data['role'] === 'hr',
+        ];
+
+        if (! empty($data['password'])) {
+            $update['password'] = Hash::make($data['password']);
+        }
+
+        $user->update($update);
+
+        if ($data['role'] === 'admin') {
+            $user->employee()->delete();
+        } else {
+            $user->employee()->updateOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'name' => $data['name'],
+                    'email' => $data['email'],
+                    'position' => $data['role'] === 'hr' ? 'HR' : 'Nhân viên',
+                    'department_id' => $data['department_id'],
+                    'status' => 'active',
+                ]
+            );
+        }
+
+        return redirect()->route('accounts.index')->with('success', 'Cập nhật tài khoản thành công.');
+    }
+
+    public function destroyAccount(User $user): RedirectResponse
+    {
+        $auth = Auth::user();
+        if ($auth->id === $user->id) {
+            return redirect()->route('accounts.index')->with('error', 'Bạn không thể xoá chính mình.');
+        }
+
+        $user->delete();
+
+        return redirect()->route('accounts.index')->with('success', 'Xoá tài khoản thành công.');
+    }
+
+    public function toggleLockAccount(User $user): RedirectResponse
+    {
+        $auth = Auth::user();
+        if ($auth->id === $user->id) {
+            return redirect()->route('accounts.index')->with('error', 'Bạn không thể khoá/mở khoá chính mình.');
+        }
+
+        $user->is_locked = ! $user->is_locked;
+        $user->save();
+
+        $msg = $user->is_locked ? 'Đã khoá tài khoản.' : 'Đã mở khoá tài khoản.';
+
+        return redirect()->route('accounts.index')->with('success', $msg);
+    }
+
+    public function impersonate(User $user): RedirectResponse
+    {
+        $admin = Auth::user();
+        if (! $admin || ! $admin->is_admin) {
+            abort(403);
+        }
+
+        if ($admin->id === $user->id) {
+            return redirect()->route('accounts.index')->with('error', 'Bạn không thể đăng nhập thay chính mình.');
+        }
+
+        if ($user->is_locked) {
+            return redirect()->route('accounts.index')->with('error', 'Không thể đăng nhập thay tài khoản đã bị khoá.');
+        }
+
+        session(['impersonator_id' => $admin->id]);
+        Auth::login($user);
+
+        return redirect()->route('dashboard')->with('success', 'Bạn đang xem hệ thống dưới quyền: ' . $user->name);
+    }
+
+    public function stopImpersonation(): RedirectResponse
+    {
+        $impersonatorId = session('impersonator_id');
+        if (! $impersonatorId) {
+            return redirect()->route('dashboard');
+        }
+
+        $admin = User::find($impersonatorId);
+        if ($admin) {
+            Auth::login($admin);
+        }
+
+        session()->forget('impersonator_id');
+
+        return redirect()->route('accounts.index')->with('success', 'Đã quay lại tài khoản quản trị.');
     }
 
     public function permissions(): View
@@ -334,6 +509,374 @@ class SmartHrController extends Controller
         return redirect()->route('payroll.index')->with('success', 'Tạo bản ghi lương thành công.');
     }
 
+    public function evaluations(): View
+    {
+        return view('hr.evaluations.index', [
+            'evaluations' => EmployeeEvaluation::with(['employee', 'evaluator'])->latest()->paginate(10),
+        ]);
+    }
+
+    public function createEvaluation(): View
+    {
+        return view('hr.evaluations.form', [
+            'evaluation' => new EmployeeEvaluation(),
+            'employees' => Employee::orderBy('name')->get(),
+        ]);
+    }
+
+    public function storeEvaluation(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'employee_id' => ['required', 'exists:employees,id'],
+            'month' => ['required', 'date_format:Y-m', Rule::unique('employee_evaluations')->where(function ($query) use ($request) {
+                return $query->where('employee_id', $request->input('employee_id'));
+            })],
+            'rating' => ['required', 'integer', 'between:1,5'],
+            'punctuality' => ['required', 'integer', 'between:0,10'],
+            'task_completion' => ['required', 'integer', 'between:0,30'],
+            'quality' => ['required', 'integer', 'between:0,20'],
+            'technical_skill' => ['required', 'integer', 'between:0,10'],
+            'responsibility' => ['required', 'integer', 'between:0,10'],
+            'teamwork' => ['required', 'integer', 'between:0,10'],
+            'attitude' => ['required', 'integer', 'between:0,10'],
+            'summary' => ['nullable', 'string'],
+            'comments' => ['nullable', 'string'],
+        ]);
+
+        $data['evaluator_id'] = Auth::id();
+        $data['score_total'] = $this->calculateEvaluationTotal($data);
+        $data['classification'] = $this->classifyEvaluationScore($data['score_total']);
+        $data['status'] = 'pending';
+        $data['approved_by'] = null;
+        $data['approved_at'] = null;
+
+        EmployeeEvaluation::create($data);
+
+        return redirect()->route('evaluations.index')->with('success', 'Tạo đánh giá nhân viên thành công.');
+    }
+
+    public function editEvaluation(EmployeeEvaluation $evaluation): View
+    {
+        return view('hr.evaluations.form', [
+            'evaluation' => $evaluation,
+            'employees' => Employee::orderBy('name')->get(),
+        ]);
+    }
+
+    public function updateEvaluation(Request $request, EmployeeEvaluation $evaluation): RedirectResponse
+    {
+        $data = $request->validate([
+            'employee_id' => ['required', 'exists:employees,id'],
+            'month' => ['required', 'date_format:Y-m', Rule::unique('employee_evaluations')->where(function ($query) use ($request, $evaluation) {
+                return $query->where('employee_id', $request->input('employee_id'))->where('id', '!=', $evaluation->id);
+            })],
+            'rating' => ['required', 'integer', 'between:1,5'],
+            'punctuality' => ['required', 'integer', 'between:0,10'],
+            'task_completion' => ['required', 'integer', 'between:0,30'],
+            'quality' => ['required', 'integer', 'between:0,20'],
+            'technical_skill' => ['required', 'integer', 'between:0,10'],
+            'responsibility' => ['required', 'integer', 'between:0,10'],
+            'teamwork' => ['required', 'integer', 'between:0,10'],
+            'attitude' => ['required', 'integer', 'between:0,10'],
+            'summary' => ['nullable', 'string'],
+            'comments' => ['nullable', 'string'],
+        ]);
+
+        $data['score_total'] = $this->calculateEvaluationTotal($data);
+        $data['classification'] = $this->classifyEvaluationScore($data['score_total']);
+        $data['status'] = 'pending';
+        $data['approved_by'] = null;
+        $data['approved_at'] = null;
+
+        $evaluation->update($data);
+
+        return redirect()->route('evaluations.index')->with('success', 'Cập nhật đánh giá nhân viên thành công.');
+    }
+
+    public function destroyEvaluation(EmployeeEvaluation $evaluation): RedirectResponse
+    {
+        $evaluation->delete();
+
+        return redirect()->route('evaluations.index')->with('success', 'Xóa đánh giá nhân viên thành công.');
+    }
+
+    public function showEvaluation(EmployeeEvaluation $evaluation): View
+    {
+        return view('hr.evaluations.show', [
+            'evaluation' => $evaluation->load(['employee.department', 'evaluator', 'approvedBy']),
+        ]);
+    }
+
+    public function approveEvaluation(EmployeeEvaluation $evaluation): RedirectResponse
+    {
+        $evaluation->update([
+            'status' => 'approved',
+            'approved_by' => Auth::id(),
+            'approved_at' => now(),
+        ]);
+
+        return redirect()->route('evaluations.index')->with('success', 'Đã duyệt đánh giá thành công.');
+    }
+
+    public function benefits(Request $request): View
+    {
+        $query = Benefit::with(['employee', 'creator']);
+
+        if ($request->filled('search')) {
+            $query->where(function ($q) use ($request) {
+                $q->where('title', 'like', '%' . $request->search . '%')
+                  ->orWhere('code', 'like', '%' . $request->search . '%')
+                  ->orWhere('description', 'like', '%' . $request->search . '%')
+                  ->orWhereHas('employee', function ($q) use ($request) {
+                      $q->where('name', 'like', '%' . $request->search . '%');
+                  });
+            });
+        }
+
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+
+        return view('hr.benefits.index', [
+            'benefits' => $query->latest()->paginate(10)->withQueryString(),
+            'filterTypes' => ['allowance' => 'Phụ cấp', 'insurance' => 'Bảo hiểm', 'bonus' => 'Thưởng', 'other' => 'Khác'],
+        ]);
+    }
+
+    public function exportBenefits(Request $request): StreamedResponse
+    {
+        $query = Benefit::with(['employee']);
+
+        if ($request->filled('search')) {
+            $query->where(function ($q) use ($request) {
+                $q->where('title', 'like', '%' . $request->search . '%')
+                  ->orWhere('code', 'like', '%' . $request->search . '%')
+                  ->orWhere('description', 'like', '%' . $request->search . '%')
+                  ->orWhereHas('employee', function ($q) use ($request) {
+                      $q->where('name', 'like', '%' . $request->search . '%');
+                  });
+            });
+        }
+
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+
+        $benefits = $query->latest()->get();
+
+        $filename = 'phuc_loi_' . now()->format('Ymd_His') . '.csv';
+
+        $columns = ['STT', 'Mã phúc lợi', 'Nhân viên', 'Tiêu đề', 'Loại', 'Áp dụng cho', 'Điều kiện', 'Đơn vị tính', 'Số tiền', 'Trạng thái phê duyệt', 'Trạng thái ứng dụng', 'Ngày hiệu lực', 'Ngày hết hạn'];
+
+        $callback = function () use ($benefits, $columns) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, $columns);
+
+            foreach ($benefits as $index => $benefit) {
+                fputcsv($file, [
+                    $index + 1,
+                    $benefit->code,
+                    optional($benefit->employee)->name,
+                    $benefit->title,
+                    $benefit->type,
+                    $benefit->applies_to,
+                    $benefit->condition,
+                    $benefit->unit,
+                    $benefit->amount,
+                    $benefit->approval_status,
+                    $benefit->application_status,
+                    optional($benefit->effective_date)->format('Y-m-d'),
+                    optional($benefit->expiry_date)->format('Y-m-d'),
+                ]);
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'no-store, no-cache',
+        ]);
+    }
+
+    public function createBenefit(): View
+    {
+        return view('hr.benefits.form', [
+            'benefit' => new Benefit(),
+            'employees' => Employee::orderBy('name')->get(),
+            'types' => ['allowance' => 'Phụ cấp', 'insurance' => 'Bảo hiểm', 'bonus' => 'Thưởng', 'other' => 'Khác'],
+            'applicationStatuses' => ['active' => 'Đang áp dụng', 'inactive' => 'Không áp dụng'],
+            'approvalStatuses' => ['pending' => 'Chờ phê duyệt', 'approved' => 'Đã phê duyệt', 'rejected' => 'Từ chối'],
+            'statuses' => ['pending' => 'Chờ xử lý', 'approved' => 'Đã duyệt', 'rejected' => 'Từ chối'],
+        ]);
+    }
+
+    public function storeBenefit(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'employee_id' => ['required', 'exists:employees,id'],
+            'code' => ['required', 'string', 'max:50', 'unique:benefits,code'],
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'type' => ['required', 'in:allowance,insurance,bonus,other'],
+            'amount' => ['nullable', 'numeric', 'min:0'],
+            'unit' => ['nullable', 'string', 'max:50'],
+            'applies_to' => ['nullable', 'string', 'max:255'],
+            'condition' => ['nullable', 'string'],
+            'effective_date' => ['nullable', 'date'],
+            'expiry_date' => ['nullable', 'date', 'after_or_equal:effective_date'],
+            'application_status' => ['required', 'in:active,inactive'],
+            'status' => ['required', 'in:pending,approved,rejected'],
+            'approval_status' => ['required', 'in:pending,approved,rejected'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        $data['created_by'] = Auth::id();
+
+        Benefit::create($data);
+
+        return redirect()->route('benefits.index')->with('success', 'Tạo phúc lợi thành công.');
+    }
+
+    public function showBenefit(Benefit $benefit): View
+    {
+        return view('hr.benefits.show', [
+            'benefit' => $benefit->load(['employee', 'creator', 'approvedBy']),
+        ]);
+    }
+
+    public function editBenefit(Benefit $benefit): View
+    {
+        return view('hr.benefits.form', [
+            'benefit' => $benefit,
+            'employees' => Employee::orderBy('name')->get(),
+            'types' => ['allowance' => 'Phụ cấp', 'insurance' => 'Bảo hiểm', 'bonus' => 'Thưởng', 'other' => 'Khác'],
+            'applicationStatuses' => ['active' => 'Đang áp dụng', 'inactive' => 'Không áp dụng'],
+            'approvalStatuses' => ['pending' => 'Chờ phê duyệt', 'approved' => 'Đã phê duyệt', 'rejected' => 'Từ chối'],
+            'statuses' => ['pending' => 'Chờ xử lý', 'approved' => 'Đã duyệt', 'rejected' => 'Từ chối'],
+        ]);
+    }
+
+    public function updateBenefit(Request $request, Benefit $benefit): RedirectResponse
+    {
+        $data = $request->validate([
+            'employee_id' => ['required', 'exists:employees,id'],
+            'code' => ['required', 'string', 'max:50', 'unique:benefits,code,' . $benefit->id],
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'type' => ['required', 'in:allowance,insurance,bonus,other'],
+            'amount' => ['nullable', 'numeric', 'min:0'],
+            'unit' => ['nullable', 'string', 'max:50'],
+            'applies_to' => ['nullable', 'string', 'max:255'],
+            'condition' => ['nullable', 'string'],
+            'effective_date' => ['nullable', 'date'],
+            'expiry_date' => ['nullable', 'date', 'after_or_equal:effective_date'],
+            'application_status' => ['required', 'in:active,inactive'],
+            'status' => ['required', 'in:pending,approved,rejected'],
+            'approval_status' => ['required', 'in:pending,approved,rejected'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        $benefit->update($data);
+
+        return redirect()->route('benefits.index')->with('success', 'Cập nhật phúc lợi thành công.');
+    }
+
+    public function approveBenefit(Benefit $benefit): RedirectResponse
+    {
+        $benefit->update([
+            'status' => 'approved',
+            'approved_by' => Auth::id(),
+            'approved_at' => now(),
+        ]);
+
+        return redirect()->route('benefits.index')->with('success', 'Đã duyệt phúc lợi thành công.');
+    }
+
+    public function destroyBenefit(Benefit $benefit): RedirectResponse
+    {
+        $benefit->delete();
+
+        return redirect()->route('benefits.index')->with('success', 'Xóa phúc lợi thành công.');
+    }
+
+    public function benefitAssignments(Request $request): View
+    {
+        $query = EmployeeBenefit::with(['employee', 'benefit']);
+
+        if ($request->filled('search')) {
+            $query->whereHas('employee', function ($q) use ($request) {
+                $q->where('name', 'like', '%' . $request->search . '%');
+            })->orWhereHas('benefit', function ($q) use ($request) {
+                $q->where('title', 'like', '%' . $request->search . '%');
+            });
+        }
+
+        return view('hr.benefits.assignments.index', [
+            'assignments' => $query->latest()->paginate(10)->withQueryString(),
+            'statuses' => ['active' => 'Đang áp dụng', 'received' => 'Đã nhận', 'unused' => 'Chưa sử dụng'],
+        ]);
+    }
+
+    public function createBenefitAssignment(): View
+    {
+        return view('hr.benefits.assignments.form', [
+            'assignment' => new EmployeeBenefit(),
+            'employees' => Employee::orderBy('name')->get(),
+            'benefits' => Benefit::orderBy('title')->get(),
+            'statuses' => ['active' => 'Đang áp dụng', 'received' => 'Đã nhận', 'unused' => 'Chưa sử dụng'],
+        ]);
+    }
+
+    public function storeBenefitAssignment(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'employee_id' => ['required', 'exists:employees,id'],
+            'benefit_id' => ['required', 'exists:benefits,id'],
+            'applied_at' => ['required', 'date'],
+            'status' => ['required', 'in:active,received,unused'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        EmployeeBenefit::create($data);
+
+        return redirect()->route('benefits.assignments.index')->with('success', 'Gán phúc lợi cho nhân viên thành công.');
+    }
+
+    public function editBenefitAssignment(EmployeeBenefit $assignment): View
+    {
+        return view('hr.benefits.assignments.form', [
+            'assignment' => $assignment,
+            'employees' => Employee::orderBy('name')->get(),
+            'benefits' => Benefit::orderBy('title')->get(),
+            'statuses' => ['active' => 'Đang áp dụng', 'received' => 'Đã nhận', 'unused' => 'Chưa sử dụng'],
+        ]);
+    }
+
+    public function updateBenefitAssignment(Request $request, EmployeeBenefit $assignment): RedirectResponse
+    {
+        $data = $request->validate([
+            'employee_id' => ['required', 'exists:employees,id'],
+            'benefit_id' => ['required', 'exists:benefits,id'],
+            'applied_at' => ['required', 'date'],
+            'status' => ['required', 'in:active,received,unused'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        $assignment->update($data);
+
+        return redirect()->route('benefits.assignments.index')->with('success', 'Cập nhật gán phúc lợi thành công.');
+    }
+
+    public function destroyBenefitAssignment(EmployeeBenefit $assignment): RedirectResponse
+    {
+        $assignment->delete();
+
+        return redirect()->route('benefits.assignments.index')->with('success', 'Xóa gán phúc lợi thành công.');
+    }
+
     public function showPayroll(Payroll $payroll): View
     {
         return view('hr.payroll.show', compact('payroll'));
@@ -418,7 +961,6 @@ class SmartHrController extends Controller
 
     public function approveLeaveRequest(LeaveRequest $leaveRequest): RedirectResponse
     {
-        // Check if user is authorized to approve leave requests (HR/Admin only)
         if (!$this->isHROrAdmin()) {
             abort(403, 'Unauthorized: Only HR and Admin can approve leave requests.');
         }
@@ -432,17 +974,21 @@ class SmartHrController extends Controller
         return redirect()->route('leave_requests.index')->with('success', 'Đã duyệt đơn nghỉ phép.');
     }
 
-    public function rejectLeaveRequest(\App\Models\LeaveRequest $leaveRequest): RedirectResponse
+    public function rejectLeaveRequest(Request $request, \App\Models\LeaveRequest $leaveRequest): RedirectResponse
     {
-        // Check if user is authorized to reject leave requests (HR/Admin only)
         if (!$this->isHROrAdmin()) {
             abort(403, 'Unauthorized: Only HR and Admin can reject leave requests.');
         }
+
+        $data = $request->validate([
+            'rejection_reason' => ['required', 'string'],
+        ]);
 
         $leaveRequest->update([
             'status' => 'rejected',
             'approved_by' => Auth::id(),
             'approved_at' => now(),
+            'rejection_reason' => $data['rejection_reason'],
         ]);
 
         return redirect()->route('leave_requests.index')->with('success', 'Đã từ chối đơn nghỉ phép.');
@@ -450,9 +996,43 @@ class SmartHrController extends Controller
 
     public function destroyLeaveRequest(\App\Models\LeaveRequest $leaveRequest): RedirectResponse
     {
+        if (!$this->isAdmin()) {
+            abort(403, 'Unauthorized: Only Admin can delete leave requests.');
+        }
+
         $leaveRequest->delete();
 
         return redirect()->route('leave_requests.index')->with('success', 'Xóa đơn nghỉ phép thành công.');
+    }
+
+    private function calculateEvaluationTotal(array $data): int
+    {
+        return (
+            ($data['punctuality'] ?? 0)
+            + ($data['task_completion'] ?? 0)
+            + ($data['quality'] ?? 0)
+            + ($data['technical_skill'] ?? 0)
+            + ($data['responsibility'] ?? 0)
+            + ($data['teamwork'] ?? 0)
+            + ($data['attitude'] ?? 0)
+        );
+    }
+
+    private function classifyEvaluationScore(int $scoreTotal): string
+    {
+        if ($scoreTotal >= 85) {
+            return 'Xuất sắc';
+        }
+
+        if ($scoreTotal >= 70) {
+            return 'Tốt';
+        }
+
+        if ($scoreTotal >= 50) {
+            return 'Trung bình';
+        }
+
+        return 'Yếu';
     }
 
     public function showEmployee(Employee $employee): View
@@ -561,15 +1141,18 @@ class SmartHrController extends Controller
      * Check if the authenticated user is HR or Admin
      * This is a simple check - can be replaced with proper Role/Permission system
      */
+    private function isAdmin(): bool
+    {
+        return Auth::user()?->is_admin === true;
+    }
+
+    private function isHr(): bool
+    {
+        return Auth::user()?->is_hr === true;
+    }
+
     private function isHROrAdmin(): bool
     {
-        $user = Auth::user();
-
-        // TODO: Implement proper role checking
-        // For now, we check if the user does NOT have an associated employee record
-        // (Admins/HR don't have employee records, only employees do)
-        $isEmployee = Employee::where('user_id', $user->id)->exists();
-
-        return !$isEmployee; // If not an employee, they're HR/Admin
+        return $this->isAdmin() || $this->isHr();
     }
 }

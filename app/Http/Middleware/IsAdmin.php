@@ -27,7 +27,7 @@ class IsAdmin
         
         if ($employee) {
             // User is an employee, redirect to employee page
-            return redirect()->route('employee.attendance')
+            return redirect()->route('me.attendance')
                 ->with('error', 'Bạn không có quyền truy cập trang này. Vui lòng sử dụng trang nhân viên.');
         }
 

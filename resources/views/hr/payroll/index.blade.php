@@ -7,7 +7,6 @@
             <h1>Danh sách Lương</h1>
             <p class="muted">Quản lý lương nhân viên</p>
         </div>
-        <a href="{{ route('payroll.create') }}" class="btn primary">+ Thêm lương mới</a>
     </div>
 
     @if (session('success'))
@@ -52,7 +51,6 @@
                             <td>
                                 <div class="actions" style="gap: 6px;">
                                     <a href="{{ route('payroll.show', $p) }}" class="btn" style="padding: 6px 10px; font-size: 12px;">Xem</a>
-                                    <a href="{{ route('payroll.edit', $p) }}" class="btn" style="padding: 6px 10px; font-size: 12px;">Sửa</a>
                                     <form method="POST" action="{{ route('payroll.destroy', $p) }}" style="display: inline;" onsubmit="return confirm('Bạn có chắc muốn xóa bản ghi này?');">
                                         @csrf
                                         @method('DELETE')

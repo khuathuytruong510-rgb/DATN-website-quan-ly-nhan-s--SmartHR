@@ -18,6 +18,7 @@ class LeaveRequest extends Model
         'status',
         'approved_by',
         'approved_at',
+        'rejection_reason',
     ];
 
     protected $dates = ['start_date', 'end_date', 'approved_at'];
