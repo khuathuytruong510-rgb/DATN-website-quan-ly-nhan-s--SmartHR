@@ -55,6 +55,7 @@
 </div>
 
 @if($leaveRequests->count())
+    @php $currentUser = Auth::user(); @endphp
     <div class="card">
         <table>
             <thead>
@@ -95,24 +96,34 @@
                                     Người duyệt: {{ optional($leave->approver)->name ?? 'N/A' }} • {{ \Carbon\Carbon::parse($leave->approved_at)->format('d/m/Y H:i') }}
                                 </div>
                             @endif
+                            @if($leave->status === 'rejected' && $leave->rejection_reason)
+                                <div style="margin-top:6px;font-size:12px;color:var(--muted);">
+                                    Lý do từ chối: {{ $leave->rejection_reason }}
+                                </div>
+                            @endif
                         </td>
                         <td>
                             <div class="actions">
                                 @if($leave->status === 'pending')
                                     <form method="POST" action="{{ route('leave_requests.approve', $leave) }}" style="display:inline">
                                         @csrf
-                                        <button class="btn" type="submit">Duyệt</button>
+                                        <button class="btn" type="submit">
+                                            {{ $currentUser->is_admin ? 'Duyệt' : 'Xác nhận' }}
+                                        </button>
                                     </form>
-                                    <form method="POST" action="{{ route('leave_requests.reject', $leave) }}" style="display:inline">
+                                    <form method="POST" action="{{ route('leave_requests.reject', $leave) }}" style="display:inline" onsubmit="return submitRejectReason(this)">
                                         @csrf
+                                        <input type="hidden" name="rejection_reason" value="">
                                         <button class="btn" type="submit">Từ chối</button>
                                     </form>
                                 @endif
-                                <form method="POST" action="{{ route('leave_requests.destroy', $leave) }}" style="display:inline" onsubmit="return confirm('Xóa đơn nghỉ phép này?')">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button class="btn danger" type="submit">Xóa</button>
-                                </form>
+                                @if($currentUser->is_admin)
+                                    <form method="POST" action="{{ route('leave_requests.destroy', $leave) }}" style="display:inline" onsubmit="return confirm('Xóa đơn nghỉ phép này?')">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button class="btn danger" type="submit">Xóa</button>
+                                    </form>
+                                @endif
                             </div>
                         </td>
                     </tr>
@@ -129,5 +140,19 @@
         📋 Không có đơn nghỉ phép nào
     </div>
 @endif
+
+<script>
+    function submitRejectReason(form) {
+        var reason = prompt('Vui lòng nhập lý do từ chối:');
+
+        if (!reason || !reason.trim()) {
+            alert('Bạn phải nhập lý do từ chối.');
+            return false;
+        }
+
+        form.querySelector('input[name="rejection_reason"]').value = reason.trim();
+        return true;
+    }
+</script>
 
 @endsection

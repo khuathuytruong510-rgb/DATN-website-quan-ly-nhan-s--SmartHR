@@ -86,6 +86,7 @@
                         <a class="{{ request()->routeIs('positions.*') ? 'active' : '' }}" href="{{ route('positions.index') }}">Chức vụ</a>
                         <a class="{{ request()->routeIs('contracts.*') ? 'active' : '' }}" href="{{ route('contracts.index') }}">Hợp đồng</a>
                         <a class="{{ request()->routeIs('attendance.*') ? 'active' : '' }}" href="{{ route('attendance.index') }}">Chấm công</a>
+                        <a class="{{ request()->routeIs('evaluations.*') ? 'active' : '' }}" href="{{ route('evaluations.index') }}">Đánh giá</a>
                         <a class="{{ request()->routeIs('leave_requests.*') ? 'active' : '' }}" href="{{ route('leave_requests.index') }}">Nghỉ phép</a>
                         <a class="{{ request()->routeIs('payroll.*') ? 'active' : '' }}" href="{{ route('payroll.index') }}">Lương</a>
                         <a class="{{ request()->routeIs('notifications.*') ? 'active' : '' }}" href="{{ route('notifications.index') }}">Thông báo</a>
@@ -98,15 +99,18 @@
                         @if ($user->is_hr)
                             <a class="{{ request()->routeIs('recruitment.*') ? 'active' : '' }}" href="#">Tuyển dụng</a>
                             <a class="{{ request()->routeIs('training.*') ? 'active' : '' }}" href="#">Đào tạo</a>
+                            <a class="{{ request()->routeIs('benefits.*') ? 'active' : '' }}" href="{{ route('benefits.index') }}">Phúc lợi</a>
                         @endif
                     @else
                         <a class="{{ request()->routeIs('me.dashboard') ? 'active' : '' }}" href="{{ route('me.dashboard') }}">Dashboard</a>
                         <a class="{{ request()->routeIs('me.profile') || request()->routeIs('me.profile.*') ? 'active' : '' }}" href="{{ route('me.profile') }}">Hồ sơ</a>
                         <a class="{{ request()->routeIs('me.attendance') || request()->routeIs('me.attendance.*') ? 'active' : '' }}" href="{{ route('me.attendance') }}">Chấm công</a>
+                        <a class="{{ request()->routeIs('me.evaluations') ? 'active' : '' }}" href="{{ route('me.evaluations') }}">Đánh giá</a>
                         <a class="{{ request()->routeIs('me.leave_requests') || request()->routeIs('me.leave_requests.*') ? 'active' : '' }}" href="{{ route('me.leave_requests') }}">Nghỉ phép</a>
                         <a class="{{ request()->routeIs('me.payrolls') ? 'active' : '' }}" href="{{ route('me.payrolls') }}">Lương</a>
                         <a class="{{ request()->routeIs('me.contracts') ? 'active' : '' }}" href="{{ route('me.contracts') }}">Hợp đồng</a>
                         <a class="{{ request()->routeIs('me.trainings') ? 'active' : '' }}" href="{{ route('me.trainings') }}">Đào tạo</a>
+                        <a class="{{ request()->routeIs('me.benefits') ? 'active' : '' }}" href="{{ route('me.benefits') }}">Phúc lợi</a>
                         <a class="{{ request()->routeIs('me.rewards') ? 'active' : '' }}" href="{{ route('me.rewards') }}">Thưởng / Kỷ luật</a>
                         <a class="{{ request()->routeIs('me.notifications') ? 'active' : '' }}" href="{{ route('me.notifications') }}">Thông báo</a>
                     @endif
@@ -120,6 +124,12 @@
                     </div>
                     <div class="userbox">
                         <strong>{{ auth()->user()->name }}</strong>
+                        @if(session()->has('impersonator_id'))
+                            <form method="POST" action="{{ route('impersonation.stop') }}">
+                                @csrf
+                                <button class="btn" type="submit">Quay lại admin</button>
+                            </form>
+                        @endif
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
                             <button class="btn" type="submit">Đăng xuất</button>
