@@ -11,14 +11,38 @@
     </div>
 
     <div class="card">
-        @if ($positions->isEmpty())
+        @if (empty($positions))
             <div class="empty">Không có chức vụ nào được lưu.</div>
         @else
-            <ul style="margin: 0; padding-left: 16px;">
-                @foreach ($positions as $position)
-                    <li>{{ $position }}</li>
-                @endforeach
-            </ul>
+            <div class="table-responsive">
+                <table class="table" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">STT</th>
+                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Tên chức vụ</th>
+                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Phòng ban</th>
+                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Mô tả</th>
+                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Trạng thái</th>
+                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($positions as $index => $position)
+                            <tr>
+                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $index + 1 }}</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $position['name'] }}</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $position['department'] }}</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $position['description'] }}</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $position['status'] }}</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
+                                    <a href="#" class="btn btn-link">Sửa</a> /
+                                    <a href="#" class="btn btn-link">Xóa</a>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
         @endif
     </div>
 @endsection
