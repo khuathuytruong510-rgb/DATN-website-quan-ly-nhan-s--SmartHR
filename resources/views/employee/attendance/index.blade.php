@@ -128,6 +128,24 @@
     let officeLongitude;
     let allowedDistance;
     let todayAttendance = null;
+    let locationWatchId = null;
+    let locationAvailable = false;
+
+    function setCheckButtonsEnabled(enabled) {
+        const checkInBtn = document.getElementById('check-in-btn');
+        const checkOutBtn = document.getElementById('check-out-btn');
+
+        checkInBtn.disabled = !enabled;
+        checkOutBtn.disabled = !enabled || !!todayAttendance?.check_out;
+
+        if (enabled) {
+            checkInBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            checkOutBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        } else {
+            checkInBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            checkOutBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+    }
 
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
@@ -256,24 +274,34 @@
         if (navigator.geolocation) {
             // Get current position
             navigator.geolocation.getCurrentPosition(
-                position => updateMapWithUserLocation(position),
+                position => updateMapWithUserLocation(position, false),
                 error => {
                     handleLocationError(error);
-                    // Use fallback test location (Hanoi)
+                    // Use fallback test location (Hanoi) for map display only
                     useTestLocation();
                 },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
 
             // Watch position for continuous updates
-            navigator.geolocation.watchPosition(
-                position => updateMapWithUserLocation(position),
-                error => console.error('Location watch error:', error),
+            locationWatchId = navigator.geolocation.watchPosition(
+                position => updateMapWithUserLocation(position, false),
+                error => {
+                    console.error('Location watch error:', error);
+                    if (!locationAvailable) {
+                        handleLocationError(error);
+                    }
+                    if (error.code === error.PERMISSION_DENIED && locationWatchId !== null) {
+                        navigator.geolocation.clearWatch(locationWatchId);
+                        locationWatchId = null;
+                    }
+                },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
         } else {
             showMessage('check-in-message', 'Trình duyệt không hỗ trợ Geolocation', 'error');
             useTestLocation();
+            setCheckButtonsEnabled(false);
         }
     }
 
@@ -286,15 +314,16 @@
                 accuracy: 100
             }
         };
-        updateMapWithUserLocation(testPosition);
+        updateMapWithUserLocation(testPosition, true);
         console.log('Using test location for development');
     }
 
     // Update map with user location
-    function updateMapWithUserLocation(position) {
+    function updateMapWithUserLocation(position, isFake = false) {
         currentLatitude = position.coords.latitude;
         currentLongitude = position.coords.longitude;
         const accuracy = position.coords.accuracy;
+        locationAvailable = !isFake;
 
         // Update or create user marker
         if (userMarker) {
@@ -499,7 +528,28 @@
     // Handle location error
     function handleLocationError(error) {
         console.error('Geolocation error:', error);
-        showMessage('check-in-message', 'Không thể lấy vị trí. Vui lòng kiểm tra cài đặt vị trí của trình duyệt.', 'error');
+        locationAvailable = false;
+        setCheckButtonsEnabled(false);
+
+        if (locationWatchId !== null) {
+            navigator.geolocation.clearWatch(locationWatchId);
+            locationWatchId = null;
+        }
+
+        let message = 'Không thể lấy vị trí. Vui lòng kiểm tra cài đặt vị trí của trình duyệt.';
+        switch (error.code) {
+            case error.PERMISSION_DENIED:
+                message = 'Bạn đã từ chối quyền truy cập vị trí. Vui lòng bật quyền vị trí để chấm công.';
+                break;
+            case error.POSITION_UNAVAILABLE:
+                message = 'Không thể lấy vị trí. Vui lòng kiểm tra kết nối mạng và GPS.';
+                break;
+            case error.TIMEOUT:
+                message = 'Quá trình lấy vị trí đã hết thời gian chờ. Vui lòng thử lại.';
+                break;
+        }
+
+        showMessage('check-in-message', message, 'error');
     }
 
     // Get auth token from localStorage or session

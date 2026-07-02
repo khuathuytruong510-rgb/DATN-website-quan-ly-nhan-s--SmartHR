@@ -17,7 +17,7 @@ class EnsureNotAdminOrHr
     {
         $user = auth()->user();
 
-        if ($user && ($user->is_admin || $user->is_hr)) {
+        if ($user && $user->is_admin) {
             return redirect()->route('dashboard');
         }
 

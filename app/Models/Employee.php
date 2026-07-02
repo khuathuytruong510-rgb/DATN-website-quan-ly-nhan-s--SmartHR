@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Benefit;
+use App\Models\EmployeeBenefit;
+use App\Models\EmployeeEvaluation;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -59,5 +62,20 @@ class Employee extends Model
     public function leaveRequests(): HasMany
     {
         return $this->hasMany(LeaveRequest::class);
+    }
+
+    public function evaluations(): HasMany
+    {
+        return $this->hasMany(EmployeeEvaluation::class);
+    }
+
+    public function benefits(): HasMany
+    {
+        return $this->hasMany(Benefit::class);
+    }
+
+    public function employeeBenefits(): HasMany
+    {
+        return $this->hasMany(EmployeeBenefit::class);
     }
 }

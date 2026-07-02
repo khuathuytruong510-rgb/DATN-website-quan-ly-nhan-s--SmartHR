@@ -11,8 +11,8 @@ class Notification extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id',
-        'type',
+        'sender_id',
+        'target',
         'title',
         'message',
         'data',
@@ -26,9 +26,9 @@ class Notification extends Model
         'read_at' => 'datetime',
     ];
 
-    public function user(): BelongsTo
+    public function sender(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'sender_id');
     }
 
     public function markAsRead(): void
