@@ -1,0 +1,162 @@
+<?php
+
+use App\Http\Controllers\Web\EmployeeController;
+use App\Http\Controllers\Web\NotificationController;
+use App\Http\Controllers\Web\SmartHrController;
+use App\Http\Controllers\Web\EmployeeAttendanceController;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/', function () {
+    if (Auth::check()) {
+        return redirect()->route('dashboard');
+    }
+
+    return redirect()->route('login');
+});
+
+Route::middleware('guest')->group(function () {
+    Route::get('/login', [SmartHrController::class, 'showLogin'])->name('login');
+    Route::post('/login', [SmartHrController::class, 'login'])->name('login.store');
+    Route::get('/register', [SmartHrController::class, 'showRegister'])->name('register');
+    Route::post('/register', [SmartHrController::class, 'register'])->name('register.store');
+});
+// Nhân viên xác nhận bảng lương
+Route::get('/payroll/confirm/{token}', [SmartHrController::class, 'confirmPayroll'])
+    ->name('payroll.confirm');
+Route::middleware('auth')->group(function () {
+    Route::get('/dashboard', [SmartHrController::class, 'dashboard'])->name('dashboard');
+
+    Route::post('/logout', [SmartHrController::class, 'logout'])->name('logout');
+
+    Route::get('/admin', [SmartHrController::class, 'dashboard'])
+        ->name('admin.dashboard');
+
+    Route::middleware(\App\Http\Middleware\EnsureAdmin::class)->group(function () {
+        Route::get('/accounts', [SmartHrController::class, 'accounts'])->name('accounts.index');
+        Route::get('/accounts/create', [SmartHrController::class, 'createAccount'])->name('accounts.create');
+        Route::post('/accounts', [SmartHrController::class, 'storeAccount'])->name('accounts.store');
+        Route::get('/accounts/{user}/edit', [SmartHrController::class, 'editAccount'])->name('accounts.edit');
+        Route::put('/accounts/{user}', [SmartHrController::class, 'updateAccount'])->name('accounts.update');
+        Route::delete('/accounts/{user}', [SmartHrController::class, 'destroyAccount'])->name('accounts.destroy');
+        Route::post('/accounts/{user}/toggle-lock', [SmartHrController::class, 'toggleLockAccount'])->name('accounts.toggle_lock');
+        Route::post('/accounts/{user}/impersonate', [SmartHrController::class, 'impersonate'])->name('accounts.impersonate');
+        Route::get('/permissions', [SmartHrController::class, 'permissions'])->name('permissions.index');
+        Route::put('/permissions/{user}', [SmartHrController::class, 'updatePermissions'])->name('permissions.update');
+        Route::get('/system-logs', [SmartHrController::class, 'systemLogs'])->name('system_logs.index');
+        Route::get('/settings', [SmartHrController::class, 'settings'])->name('settings.index');
+    });
+
+    // Stop impersonation (any authenticated user can stop if impersonating)
+    Route::post('/impersonation/stop', [SmartHrController::class, 'stopImpersonation'])->name('impersonation.stop');
+
+    Route::get('/me', [EmployeeController::class, 'dashboard'])->name('me.dashboard')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/profile', [EmployeeController::class, 'profile'])->name('me.profile')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    
+    Route::get('/me/profile/edit', [EmployeeController::class, 'editProfile'])->name('me.profile.edit')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::put('/me/profile', [EmployeeController::class, 'updateProfile'])->name('me.profile.update')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/trainings', [EmployeeController::class, 'trainings'])->name('me.trainings')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/rewards', [EmployeeController::class, 'rewards'])->name('me.rewards')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/attendance', [EmployeeController::class, 'attendanceIndex'])->name('me.attendance')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/attendance/create', [EmployeeController::class, 'attendanceCreate'])->name('me.attendance.create')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::post('/me/attendance', [EmployeeController::class, 'attendanceStore'])->name('me.attendance.store')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/contracts', [EmployeeController::class, 'contracts'])->name('me.contracts')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/payroll', [EmployeeController::class, 'payrolls'])->name('me.payrolls')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/contracts', [EmployeeController::class, 'contracts'])->name('me.contracts')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/evaluations', [EmployeeController::class, 'evaluations'])->name('me.evaluations')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/benefits', [EmployeeController::class, 'benefits'])->name('me.benefits')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/leave-requests', [EmployeeController::class, 'leaveIndex'])->name('me.leave_requests')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/leave-requests/create', [EmployeeController::class, 'leaveCreate'])->name('me.leave_requests.create')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::post('/me/leave-requests', [EmployeeController::class, 'leaveStore'])->name('me.leave_requests.store')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/notifications', [EmployeeController::class, 'notifications'])->name('me.notifications')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+
+    Route::middleware(\App\Http\Middleware\EnsureAdminOrHr::class)->group(function () {
+        Route::get('/positions', [SmartHrController::class, 'positions'])->name('positions.index');
+        Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+        Route::get('/notifications/create', [NotificationController::class, 'create'])->name('notifications.create');
+        Route::post('/notifications', [NotificationController::class, 'store'])->name('notifications.store');
+
+        Route::get('/departments', [SmartHrController::class, 'departments'])->name('departments.index');
+        Route::get('/departments/create', [SmartHrController::class, 'createDepartment'])->name('departments.create');
+        Route::post('/departments', [SmartHrController::class, 'storeDepartment'])->name('departments.store');
+        Route::get('/departments/{department}/edit', [SmartHrController::class, 'editDepartment'])->name('departments.edit');
+        Route::get('/departments/{department}', [SmartHrController::class, 'showDepartment'])->name('departments.show');
+        Route::put('/departments/{department}', [SmartHrController::class, 'updateDepartment'])->name('departments.update');
+        Route::delete('/departments/{department}', [SmartHrController::class, 'destroyDepartment'])->name('departments.destroy');
+
+        Route::get('/employees', [SmartHrController::class, 'employees'])->name('employees.index');
+        Route::get('/employees/create', [SmartHrController::class, 'createEmployee'])->name('employees.create');
+        Route::post('/employees', [SmartHrController::class, 'storeEmployee'])->name('employees.store');
+        Route::get('/employees/{employee}/edit', [SmartHrController::class, 'editEmployee'])->name('employees.edit');
+        Route::get('/employees/{employee}', [SmartHrController::class, 'showEmployee'])->name('employees.show');
+        Route::put('/employees/{employee}', [SmartHrController::class, 'updateEmployee'])->name('employees.update');
+        Route::delete('/employees/{employee}', [SmartHrController::class, 'destroyEmployee'])->name('employees.destroy');
+
+        Route::get('/contracts', [SmartHrController::class, 'contracts'])->name('contracts.index');
+        Route::get('/contracts/create', [SmartHrController::class, 'createContract'])->name('contracts.create');
+        Route::post('/contracts', [SmartHrController::class, 'storeContract'])->name('contracts.store');
+        Route::get('/contracts/{contract}/edit', [SmartHrController::class, 'editContract'])->name('contracts.edit');
+        Route::get('/contracts/{contract}', [SmartHrController::class, 'showContract'])->name('contracts.show');
+        Route::put('/contracts/{contract}', [SmartHrController::class, 'updateContract'])->name('contracts.update');
+        Route::delete('/contracts/{contract}', [SmartHrController::class, 'destroyContract'])->name('contracts.destroy');
+
+        Route::get('/attendance', [SmartHrController::class, 'attendance'])->name('attendance.index');
+        Route::get('/attendance/create', [SmartHrController::class, 'createAttendance'])->name('attendance.create');
+        Route::post('/attendance', [SmartHrController::class, 'storeAttendance'])->name('attendance.store');
+        Route::get('/attendance/{attendance}/edit', [SmartHrController::class, 'editAttendance'])->name('attendance.edit');
+        Route::put('/attendance/{attendance}', [SmartHrController::class, 'updateAttendance'])->name('attendance.update');
+        Route::delete('/attendance/{attendance}', [SmartHrController::class, 'destroyAttendance'])->name('attendance.destroy');
+        
+        Route::get('/payroll', [SmartHrController::class, 'payroll'])->name('payroll.index');
+        Route::get('/payroll/create', [SmartHrController::class, 'createPayroll'])->name('payroll.create');
+        Route::post('/payroll', [SmartHrController::class, 'storePayroll'])->name('payroll.store');
+        Route::get('/payroll/{payroll}', [SmartHrController::class, 'showPayroll'])->name('payroll.show');
+        Route::get('/payroll/{payroll}/edit', [SmartHrController::class, 'editPayroll'])->name('payroll.edit');
+        Route::put('/payroll/{payroll}', [SmartHrController::class, 'updatePayroll'])->name('payroll.update');
+        Route::delete('/payroll/{payroll}', [SmartHrController::class, 'destroyPayroll'])->name('payroll.destroy');
+        // Gửi email xác nhận bảng lương
+Route::post('/payroll/{payroll}/send', [SmartHrController::class, 'sendPayroll'])
+    ->name('payroll.send');
+
+
+
+// Thanh toán lương
+Route::post('/payroll/{payroll}/pay', [SmartHrController::class, 'payPayroll'])
+    ->name('payroll.pay');
+
+        Route::get('/evaluations', [SmartHrController::class, 'evaluations'])->name('evaluations.index');
+        Route::get('/evaluations/create', [SmartHrController::class, 'createEvaluation'])->name('evaluations.create');
+        Route::post('/evaluations', [SmartHrController::class, 'storeEvaluation'])->name('evaluations.store');
+        Route::get('/evaluations/{evaluation}', [SmartHrController::class, 'showEvaluation'])->name('evaluations.show');
+        Route::get('/evaluations/{evaluation}/edit', [SmartHrController::class, 'editEvaluation'])->name('evaluations.edit');
+        Route::put('/evaluations/{evaluation}', [SmartHrController::class, 'updateEvaluation'])->name('evaluations.update');
+        Route::post('/evaluations/{evaluation}/approve', [SmartHrController::class, 'approveEvaluation'])->name('evaluations.approve');
+        Route::delete('/evaluations/{evaluation}', [SmartHrController::class, 'destroyEvaluation'])->name('evaluations.destroy');
+        
+        Route::get('/benefits', [SmartHrController::class, 'benefits'])->name('benefits.index');
+        Route::get('/benefits/export', [SmartHrController::class, 'exportBenefits'])->name('benefits.export');
+        Route::get('/benefits/create', [SmartHrController::class, 'createBenefit'])->name('benefits.create');
+        Route::post('/benefits', [SmartHrController::class, 'storeBenefit'])->name('benefits.store');
+        Route::get('/benefits/assignments', [SmartHrController::class, 'benefitAssignments'])->name('benefits.assignments.index');
+        Route::get('/benefits/assignments/create', [SmartHrController::class, 'createBenefitAssignment'])->name('benefits.assignments.create');
+        Route::post('/benefits/assignments', [SmartHrController::class, 'storeBenefitAssignment'])->name('benefits.assignments.store');
+        Route::get('/benefits/assignments/{assignment}/edit', [SmartHrController::class, 'editBenefitAssignment'])->name('benefits.assignments.edit');
+        Route::put('/benefits/assignments/{assignment}', [SmartHrController::class, 'updateBenefitAssignment'])->name('benefits.assignments.update');
+        Route::delete('/benefits/assignments/{assignment}', [SmartHrController::class, 'destroyBenefitAssignment'])->name('benefits.assignments.destroy');
+        Route::get('/benefits/{benefit}', [SmartHrController::class, 'showBenefit'])->name('benefits.show');
+        Route::get('/benefits/{benefit}/edit', [SmartHrController::class, 'editBenefit'])->name('benefits.edit');
+        Route::put('/benefits/{benefit}', [SmartHrController::class, 'updateBenefit'])->name('benefits.update');
+        Route::post('/benefits/{benefit}/approve', [SmartHrController::class, 'approveBenefit'])->name('benefits.approve');
+        Route::delete('/benefits/{benefit}', [SmartHrController::class, 'destroyBenefit'])->name('benefits.destroy');
+        
+        Route::get('/leave-requests', [SmartHrController::class, 'leaveRequests'])->name('leave_requests.index');
+        Route::get('/leave-requests/create', [SmartHrController::class, 'createLeaveRequest'])->name('leave_requests.create');
+        Route::post('/leave-requests', [SmartHrController::class, 'storeLeaveRequest'])->name('leave_requests.store');
+        Route::post('/leave-requests/{leaveRequest}/approve', [SmartHrController::class, 'approveLeaveRequest'])->name('leave_requests.approve');
+        Route::post('/leave-requests/{leaveRequest}/reject', [SmartHrController::class, 'rejectLeaveRequest'])->name('leave_requests.reject');
+        Route::delete('/leave-requests/{leaveRequest}', [SmartHrController::class, 'destroyLeaveRequest'])->name('leave_requests.destroy');
+    });
+});
+
+require __DIR__ . '/attendance-web.php';
+
