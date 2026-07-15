@@ -11,7 +11,7 @@ class EnsureAdminOrHr
     {
         $user = auth()->user();
 
-        if (! $user || (! $user->is_admin && ! $user->is_hr)) {
+        if (! $user || (! $user->is_admin && ! $user->is_hr && ! $user->is_accountant)) {
             abort(403);
         }
 

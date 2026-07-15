@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Carbon\Carbon;
 
 class Attendance extends Model
 {
@@ -36,8 +37,6 @@ class Attendance extends Model
 
     protected $casts = [
         'date' => 'date',
-        'check_in' => 'datetime',
-        'check_out' => 'datetime',
         'check_in_latitude' => 'float',
         'check_in_longitude' => 'float',
         'check_out_latitude' => 'float',
@@ -49,6 +48,52 @@ class Attendance extends Model
         'early_leave_minutes' => 'integer',
         'overtime_hours' => 'float',
     ];
+
+    public function getCheckInAttribute($value)
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $date = $this->date instanceof Carbon
+            ? $this->date->format('Y-m-d')
+            : (string) $this->date;
+
+        return Carbon::createFromFormat('Y-m-d H:i:s', "{$date} {$value}");
+    }
+
+    public function getCheckOutAttribute($value)
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $date = $this->date instanceof Carbon
+            ? $this->date->format('Y-m-d')
+            : (string) $this->date;
+
+        return Carbon::createFromFormat('Y-m-d H:i:s', "{$date} {$value}");
+    }
+
+    public function setCheckInAttribute($value)
+    {
+        if ($value instanceof Carbon) {
+            $this->attributes['check_in'] = $value->format('H:i:s');
+            return;
+        }
+
+        $this->attributes['check_in'] = $value;
+    }
+
+    public function setCheckOutAttribute($value)
+    {
+        if ($value instanceof Carbon) {
+            $this->attributes['check_out'] = $value->format('H:i:s');
+            return;
+        }
+
+        $this->attributes['check_out'] = $value;
+    }
 
     public function employee(): BelongsTo
     {

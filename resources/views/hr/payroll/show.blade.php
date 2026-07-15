@@ -8,13 +8,26 @@
             <p class="muted">Thông tin lương nhân viên</p>
         </div>
         <div class="actions">
-            <a href="{{ route('payroll.edit', $payroll) }}" class="btn primary">Chỉnh sửa</a>
-            <form method="POST" action="{{ route('payroll.destroy', $payroll) }}" style="display: inline;" onsubmit="return confirm('Bạn có chắc muốn xóa bản ghi này?');">
-                @csrf
-                @method('DELETE')
-                <button type="submit" class="btn danger">Xóa</button>
-            </form>
-            <a href="{{ route('payroll.index') }}" class="btn">Quay lại</a>
+                <a href="{{ route('payroll.edit', $payroll) }}" class="btn primary">Chỉnh sửa</a>
+                <a href="{{ route('payroll.salary_history', $payroll) }}" class="btn">Xem lịch sử lương</a>
+                <form method="POST" action="{{ route('payroll.send_confirmation', $payroll) }}" style="display: inline;">
+                    @csrf
+                    <button type="submit" class="btn" style="background: #f8fafc;">Gửi email xác nhận</button>
+                </form>
+                @if($payroll->status !== 'paid')
+                    @if($payroll->confirmation_status === 'confirmed')
+                        <form method="POST" action="{{ route('payroll.approve', $payroll) }}" style="display: inline;">
+                            @csrf
+                            <button type="submit" class="btn" style="background: #e0f2fe;">Sẵn sàng thanh toán</button>
+                        </form>
+                    @endif
+                    @if($payroll->status === 'approved')
+                        <form method="POST" action="{{ route('payroll.mark_paid', $payroll) }}" style="display: inline;">
+                            @csrf
+                            <button type="submit" class="btn primary">Đánh dấu đã thanh toán</button>
+                        </form>
+                    @endif
+                @endif
         </div>
     </div>
 
@@ -38,11 +51,53 @@
                     @if($payroll->status === 'pending')
                         <span class="badge pending">Chờ duyệt</span>
                     @elseif($payroll->status === 'approved')
-                        <span class="badge" style="background: #dbeafe; color: #0369a1;">Đã duyệt</span>
+                        <span class="badge" style="background: #dbeafe; color: #0369a1;">Sẵn sàng thanh toán</span>
                     @elseif($payroll->status === 'paid')
                         <span class="badge" style="background: #dcfce7; color: #166534;">Đã thanh toán</span>
                     @endif
                 </p>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <span style="color: #64748b; font-size: 13px;">Trạng thái xác nhận</span>
+                <p style="margin: 4px 0 0;">
+                    @if($payroll->confirmation_status === 'confirmed')
+                        <span class="badge bg-success">Đã xác nhận</span>
+                    @elseif($payroll->confirmation_status === 'issue_reported')
+                        <span class="badge bg-warning text-dark">Đã báo cáo lỗi</span>
+                    @else
+                        <span class="badge bg-secondary">Chưa xác nhận</span>
+                    @endif
+                </p>
+                @if($payroll->confirmation_deadline)
+                    <div style="color: #64748b; font-size: 13px; margin-top: 4px;">Hạn xác nhận: {{ $payroll->confirmation_deadline->format('d/m/Y') }}</div>
+                @endif
+            </div>
+
+            @if($payroll->issue_report)
+                <div style="margin-bottom: 16px;">
+                    <span style="color: #64748b; font-size: 13px;">Báo cáo sự cố</span>
+                    <p style="margin: 4px 0 0; white-space: pre-wrap;">{{ $payroll->issue_report }}</p>
+                    @if($payroll->issue_reported_at)
+                        <div style="color: #64748b; font-size: 13px; margin-top: 4px;">Đã gửi: {{ $payroll->issue_reported_at->format('d/m/Y H:i') }}</div>
+                    @endif
+                </div>
+            @endif
+
+            <div style="margin-bottom: 16px;">
+                <span style="color: #64748b; font-size: 13px;">Trạng thái email</span>
+                <p style="margin: 4px 0 0;">
+                    @if($payroll->email_status === 'sent')
+                        <span class="badge bg-success">Đã gửi</span>
+                    @elseif($payroll->email_status === 'failed')
+                        <span class="badge bg-danger">Lỗi gửi</span>
+                    @else
+                        <span class="badge bg-secondary">Chưa gửi</span>
+                    @endif
+                </p>
+                @if($payroll->sent_at)
+                    <div style="color: #64748b; font-size: 13px; margin-top: 4px;">Gửi lúc: {{ $payroll->sent_at->format('d/m/Y H:i') }}</div>
+                @endif
             </div>
 
             @if($payroll->paid_at)

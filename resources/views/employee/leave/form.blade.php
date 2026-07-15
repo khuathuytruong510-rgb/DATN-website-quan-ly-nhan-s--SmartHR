@@ -3,6 +3,11 @@
 @section('title', 'Tạo đơn nghỉ phép')
 
 @section('content')
+@section('breadcrumb')
+<li><a href="{{ route('me.dashboard') }}">Dashboard</a></li>
+<li><a href="{{ route('me.leave_requests') }}">Đơn xin nghỉ</a></li>
+<li>Tạo đơn</li>
+@endsection
     <div class="page-head">
         <div>
             <h1>Tạo đơn nghỉ phép</h1>

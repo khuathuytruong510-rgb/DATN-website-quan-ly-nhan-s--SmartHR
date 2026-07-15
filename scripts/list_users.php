@@ -5,7 +5,7 @@ $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
 $kernel->bootstrap();
 
 use App\Models\User;
-$users = User::select('id','name','email','is_admin','is_hr','is_locked')->get()->toArray();
+$users = User::select('id','name','email','is_admin','is_hr','is_accountant','is_locked')->get()->toArray();
 print_r($users);
 
 echo PHP_EOL;
