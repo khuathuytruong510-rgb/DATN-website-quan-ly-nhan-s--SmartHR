@@ -6,7 +6,7 @@
     <div class="page-head">
         <div>
             <h1>Phân quyền</h1>
-            <p class="muted">Gán vai trò Admin hoặc HR cho người dùng.</p>
+            <p class="muted">Gán vai trò Admin, HR hoặc Kế toán cho người dùng.</p>
         </div>
         <div>
             <a class="btn link" href="{{ route('accounts.index') }}">Xem danh sách tài khoản</a>
@@ -24,6 +24,7 @@
                         <th>Email</th>
                         <th>Admin</th>
                         <th>HR</th>
+                        <th>Kế toán</th>
                         <th>Hành động</th>
                     </tr>
                 </thead>
@@ -34,6 +35,7 @@
                             <td>{{ $user->email }}</td>
                             <td>{{ $user->is_admin ? 'Có' : 'Không' }}</td>
                             <td>{{ $user->is_hr ? 'Có' : 'Không' }}</td>
+                            <td>{{ $user->is_accountant ? 'Có' : 'Không' }}</td>
                             <td>
                                 <form method="POST" action="{{ route('permissions.update', $user) }}" style="display:inline-flex; gap: 8px; align-items:center;">
                                     @csrf
@@ -45,6 +47,10 @@
                                     <label style="display:inline-flex; align-items:center; gap: 6px;">
                                         <input type="checkbox" name="is_hr" value="1" {{ $user->is_hr ? 'checked' : '' }}>
                                         HR
+                                    </label>
+                                    <label style="display:inline-flex; align-items:center; gap: 6px;">
+                                        <input type="checkbox" name="is_accountant" value="1" {{ $user->is_accountant ? 'checked' : '' }}>
+                                        Kế toán
                                     </label>
                                     <button class="btn primary" type="submit">Lưu</button>
                                 </form>

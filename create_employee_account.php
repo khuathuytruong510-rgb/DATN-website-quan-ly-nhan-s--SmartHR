@@ -25,6 +25,7 @@ $user = User::firstOrCreate(
 $user->update([
     'is_admin' => false,
     'is_hr' => false,
+    'is_accountant' => false,
     'is_locked' => false,
 ]);
 

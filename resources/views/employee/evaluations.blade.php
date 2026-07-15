@@ -3,6 +3,10 @@
 @section('title', 'Đánh giá của tôi')
 
 @section('content')
+@section('breadcrumb')
+<li><a href="{{ route('me.dashboard') }}">Dashboard</a></li>
+<li>Đánh giá</li>
+@endsection
 <div class="content">
     <div class="page-head">
         <div>

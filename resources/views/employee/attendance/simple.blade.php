@@ -99,10 +99,10 @@
 
             <!-- Quick Links -->
             <div class="mt-4 text-center">
-                <a href="{{ route('employee.attendance.history') }}" class="btn btn-outline-primary btn-sm me-2">
+                <a href="{{ route('me.attendance') }}" class="btn btn-outline-primary btn-sm me-2">
                     <i class="fas fa-history"></i> Lịch Sử
                 </a>
-                <a href="{{ route('employee.attendance.statistics') }}" class="btn btn-outline-info btn-sm">
+                <a href="{{ route('me.attendance') }}" class="btn btn-outline-info btn-sm">
                     <i class="fas fa-chart-line"></i> Thống Kê
                 </a>
             </div>

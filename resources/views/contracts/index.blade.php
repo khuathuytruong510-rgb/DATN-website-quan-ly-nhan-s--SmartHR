@@ -1,13 +1,12 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="page-head">
-    <div>
-        <h1>Hợp đồng</h1>
-        <p class="muted">Danh sách hợp đồng lao động và chi tiết điều khoản.</p>
-    </div>
-    <a class="btn primary" href="{{ route('contracts.create') }}">Tạo hợp đồng</a>
-</div>
+@include('components.module_header', [
+    'title' => 'Hợp đồng',
+    'subtitle' => 'Danh sách hợp đồng lao động và chi tiết điều khoản.',
+    'buttonText' => 'Tạo hợp đồng',
+    'buttonRoute' => route('contracts.create'),
+])
 
 <div class="card">
     @if($contracts->count())

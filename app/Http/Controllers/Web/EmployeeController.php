@@ -43,6 +43,14 @@ class EmployeeController extends Controller
         $user = auth()->user();
         $employee = Employee::where('email', $user->email)->firstOrFail();
 
+        if ($request->expectsJson()) {
+            $attendances = Attendance::where('employee_id', $employee->id)->latest()->get();
+
+            return response()->json([
+                'attendances' => $attendances,
+            ], 200);
+        }
+
         $attendances = Attendance::where('employee_id', $employee->id)->latest()->paginate(10);
 
         return view('employee.attendance.index', [
@@ -75,9 +83,45 @@ class EmployeeController extends Controller
 
         $data['employee_id'] = $employee->id;
 
-        Attendance::create($data);
+        $attendance = Attendance::create($data);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'attendance' => $attendance,
+            ], 201);
+        }
 
         return redirect()->route('me.attendance')->with('success', 'Ghi chấm công thành công.');
+    }
+
+    public function attendanceUpdate(Request $request, Attendance $attendance)
+    {
+        $user = auth()->user();
+        $employee = Employee::where('email', $user->email)->firstOrFail();
+
+        if ($attendance->employee_id !== $employee->id) {
+            abort(403);
+        }
+
+        $data = $request->validate([
+            'date' => ['required', 'date'],
+            'check_in' => ['nullable', 'date_format:H:i:s'],
+            'check_out' => ['nullable', 'date_format:H:i:s'],
+            'status' => ['required', 'in:present,late,leave,absent'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        $attendance->update($data);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'attendance' => $attendance,
+            ], 200);
+        }
+
+        return redirect()->route('me.attendance')->with('success', 'Cập nhật chấm công thành công.');
     }
 
     public function contracts()
@@ -130,6 +174,14 @@ class EmployeeController extends Controller
         $employee = Employee::where('email', $user->email)->with('department')->firstOrFail();
 
         return view('employee.department', ['department' => $employee->department, 'employee' => $employee]);
+    }
+
+    public function schedule()
+    {
+        $user = auth()->user();
+        $employee = Employee::where('email', $user->email)->firstOrFail();
+
+        return view('employee.schedule.index', ['employee' => $employee]);
     }
 
     public function leaveIndex()
@@ -214,6 +266,45 @@ class EmployeeController extends Controller
         $employee->update($data);
 
         return redirect()->route('me.profile')->with('success', 'Cập nhật hồ sơ thành công.');
+    }
+
+    /**
+     * Show change password form for employee
+     */
+    public function showChangePassword()
+    {
+        return view('employee.change-password');
+    }
+
+    /**
+     * Update employee user's password
+     */
+    public function updatePassword(Request $request)
+    {
+        $user = auth()->user();
+
+        $data = $request->validate([
+            'current_password' => ['required'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        if (!\Illuminate\Support\Facades\Hash::check($data['current_password'], $user->password)) {
+            return redirect()->back()->with('error', 'Mật khẩu hiện tại không đúng.');
+        }
+
+        $user->password = \Illuminate\Support\Facades\Hash::make($data['password']);
+        $user->save();
+
+        // Log activity
+        if (class_exists('\App\Models\ActivityLog')) {
+            \App\Models\ActivityLog::create([
+                'user_id' => $user->id,
+                'action' => 'change_password',
+                'meta' => 'User changed password',
+            ]);
+        }
+
+        return redirect()->route('me.profile')->with('success', 'Đổi mật khẩu thành công.');
     }
 
     public function notifications(): View

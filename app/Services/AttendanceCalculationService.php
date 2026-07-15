@@ -9,6 +9,7 @@ use Illuminate\Support\Collection;
 class AttendanceCalculationService
 {
     // Standard work hours configuration
+    private const WORKING_HOURS_PER_DAY = 8;
     private const STANDARD_CHECK_IN = '08:00';
     private const STANDARD_CHECK_OUT = '17:30';
     private const BREAK_TIME_START = '12:00';
@@ -45,7 +46,7 @@ class AttendanceCalculationService
         $workHours = $this->calculateWorkHours($attendance->check_in, $attendance->check_out);
         $lateMinutes = $this->calculateLateMinutes($attendance->check_in);
         $earlyLeaveMinutes = $this->calculateEarlyLeaveMinutes($attendance->check_out);
-        $overtimeHours = $this->calculateOvertimeHours($attendance->check_out);
+        $overtimeHours = $this->calculateOvertimeHours($workHours);
 
         $status = $this->determineStatus($lateMinutes, $earlyLeaveMinutes, $overtimeHours);
 
@@ -66,14 +67,13 @@ class AttendanceCalculationService
      */
     private function calculateWorkHours(Carbon $checkIn, Carbon $checkOut): float
     {
-        $totalMinutes = $checkOut->diffInMinutes($checkIn);
-        
-        // Check if break time overlaps with the work period
+        $totalMinutes = (int) floor(($checkOut->getTimestamp() - $checkIn->getTimestamp()) / 60);
+
         $breakTimeInMinutes = $this->calculateBreakTimeOverlap($checkIn, $checkOut);
-        
-        $workMinutes = $totalMinutes - $breakTimeInMinutes;
-        
-        return $workMinutes / 60; // Convert to hours
+
+        $workMinutes = max(0, $totalMinutes - $breakTimeInMinutes);
+
+        return max(0, $workMinutes / 60); // Convert to hours
     }
 
     /**
@@ -84,16 +84,14 @@ class AttendanceCalculationService
         $breakStart = $checkIn->clone()->setTimeFromTimeString(self::BREAK_TIME_START);
         $breakEnd = $checkIn->clone()->setTimeFromTimeString(self::BREAK_TIME_END);
 
-        // If check-out is before break starts or check-in is after break ends
         if ($checkOut->lessThanOrEqualTo($breakStart) || $checkIn->greaterThanOrEqualTo($breakEnd)) {
             return 0;
         }
 
-        // Calculate overlapping break period
-        $effectiveBreakStart = Carbon::maxStrict($checkIn, $breakStart);
-        $effectiveBreakEnd = Carbon::minStrict($checkOut, $breakEnd);
+        $effectiveBreakStart = $checkIn->greaterThan($breakStart) ? $checkIn : $breakStart;
+        $effectiveBreakEnd = $checkOut->lessThan($breakEnd) ? $checkOut : $breakEnd;
 
-        $breakMinutes = $effectiveBreakEnd->diffInMinutes($effectiveBreakStart);
+        $breakMinutes = (int) floor(($effectiveBreakEnd->getTimestamp() - $effectiveBreakStart->getTimestamp()) / 60);
 
         return max(0, $breakMinutes);
     }
@@ -109,7 +107,7 @@ class AttendanceCalculationService
     {
         $standardCheckInTime = $checkIn->clone()->setTimeFromTimeString(self::STANDARD_CHECK_IN);
 
-        $lateMinutes = $checkIn->diffInMinutes($standardCheckInTime);
+        $lateMinutes = (int) floor(($checkIn->getTimestamp() - $standardCheckInTime->getTimestamp()) / 60);
 
         return max(0, $lateMinutes);
     }
@@ -125,7 +123,7 @@ class AttendanceCalculationService
     {
         $standardCheckOutTime = $checkOut->clone()->setTimeFromTimeString(self::STANDARD_CHECK_OUT);
 
-        $earlyMinutes = $standardCheckOutTime->diffInMinutes($checkOut);
+        $earlyMinutes = (int) floor(($standardCheckOutTime->getTimestamp() - $checkOut->getTimestamp()) / 60);
 
         return max(0, $earlyMinutes);
     }
@@ -137,15 +135,11 @@ class AttendanceCalculationService
      * If negative, return 0
      * Example: check_out at 19:30, standard is 17:30 => overtime 2 hours
      */
-    private function calculateOvertimeHours(Carbon $checkOut): float
+    private function calculateOvertimeHours(float $workHours): float
     {
-        $standardCheckOutTime = $checkOut->clone()->setTimeFromTimeString(self::STANDARD_CHECK_OUT);
+        $overtimeHours = max(0, $workHours - self::WORKING_HOURS_PER_DAY);
 
-        $overtimeMinutes = $checkOut->diffInMinutes($standardCheckOutTime);
-
-        $overtimeMinutes = max(0, $overtimeMinutes);
-
-        return $overtimeMinutes / 60; // Convert to hours
+        return round($overtimeHours, 2);
     }
 
     /**

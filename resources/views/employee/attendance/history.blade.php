@@ -3,6 +3,10 @@
 @section('title', 'Lịch Sử Chấm Công')
 
 @section('content')
+@section('breadcrumb')
+<li><a href="{{ route('me.dashboard') }}">Dashboard</a></li>
+<li>Lịch sử chấm công</li>
+@endsection
 <div class="container-fluid py-4">
     <div class="row mb-4">
         <div class="col-md-12">
@@ -85,8 +89,6 @@
 </div>
 
 <script>
-const API_BASE = '/api/employee/attendance';
-
 document.addEventListener('DOMContentLoaded', function() {
     const today = new Date();
     document.getElementById('monthSelect').value = today.getMonth() + 1;
@@ -103,7 +105,7 @@ async function loadAttendanceHistory() {
     const year = document.getElementById('yearSelect').value;
 
     try {
-        const response = await fetch(`${API_BASE}/history?month=${month}&year=${year}`);
+        const response = await fetch(`/api/employee/attendance/history?month=${month}&year=${year}`);
         const data = await response.json();
 
         if (data.success && data.attendances) {

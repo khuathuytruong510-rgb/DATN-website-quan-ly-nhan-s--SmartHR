@@ -110,44 +110,114 @@ export default {
       showForm: false,
       editingId: null,
       submitting: false,
+      loading: false,
+      errors: null,
       form: {
         name: '',
         email: '',
         position: '',
         department_id: ''
-      }
+      },
+      csrfToken: document.querySelector('meta[name="csrf-token"]').content
     };
   },
   mounted() {
     this.employees = this.initialEmployees;
+    this.loadEmployees();
   },
   methods: {
+    async loadEmployees() {
+      this.loading = true;
+      try {
+        const response = await fetch('/employees', {
+          headers: {
+            Accept: 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Không thể tải danh sách nhân viên');
+        }
+
+        const data = await response.json();
+        this.employees = data.data || data.employees || [];
+      } catch (error) {
+        console.error(error);
+      } finally {
+        this.loading = false;
+      }
+    },
     editEmployee(emp) {
       this.editingId = emp.id;
       this.form = {
         name: emp.name,
         email: emp.email,
         position: emp.position,
-        department_id: emp.department_id
+        department_id: emp.department_id || ''
       };
+      this.errors = null;
       this.showForm = true;
     },
     viewEmployee(emp) {
       window.location.href = `/employees/${emp.id}`;
     },
     async deleteEmployee(id) {
-      if (confirm('Bạn chắc chắn muốn xóa?')) {
-        this.$emit('delete', id);
+      if (!confirm('Bạn chắc chắn muốn xóa?')) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/employees/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'X-CSRF-TOKEN': this.csrfToken,
+            Accept: 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Xóa nhân viên thất bại');
+        }
+
+        await this.loadEmployees();
+      } catch (error) {
+        console.error(error);
       }
     },
     async submitForm() {
       this.submitting = true;
+      this.errors = null;
+
+      const url = this.editingId ? `/employees/${this.editingId}` : '/employees';
+      const method = this.editingId ? 'PUT' : 'POST';
+
       try {
-        this.$emit('submit', {
-          id: this.editingId,
-          ...this.form
+        const response = await fetch(url, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': this.csrfToken,
+            Accept: 'application/json'
+          },
+          body: JSON.stringify(this.form)
         });
-        this.closeForm();
+
+        if (response.ok) {
+          await this.loadEmployees();
+          this.closeForm();
+          return;
+        }
+
+        if (response.status === 422) {
+          const result = await response.json();
+          this.errors = result.errors || { general: 'Dữ liệu không hợp lệ' };
+          return;
+        }
+
+        throw new Error('Lưu nhân viên thất bại');
+      } catch (error) {
+        console.error(error);
+        this.errors = { general: error.message };
       } finally {
         this.submitting = false;
       }
@@ -155,6 +225,7 @@ export default {
     closeForm() {
       this.showForm = false;
       this.editingId = null;
+      this.errors = null;
       this.form = {
         name: '',
         email: '',
@@ -163,7 +234,7 @@ export default {
       };
     }
   }
-}
+};
 </script>
 
 <style scoped>
