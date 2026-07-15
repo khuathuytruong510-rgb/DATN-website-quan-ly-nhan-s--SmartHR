@@ -13,22 +13,28 @@ class Contract extends Model
         'employee_id',
         'title',
         'salary',
+        'contract_code',
+        'contract_type',
+        'sign_date',
         'base_salary',
         'allowance',
-        'probation_salary',
+        'bonus',
+        'payment_method',
+        'status',
+        'contract_status',
+        'terms',
+        'signer_id',
+        'notes',
+        'document_path',
+        'document_name',
         'start_date',
         'end_date',
-        'status',
-        'company_representative',
-        'signer',
-        'notes',
-        'pdf_file',
-        'scan_file',
     ];
 
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
+        'sign_date' => 'date',
     ];
 
     public function employee()
