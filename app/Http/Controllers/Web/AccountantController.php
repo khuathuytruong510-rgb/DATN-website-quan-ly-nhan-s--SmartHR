@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\Payroll;
+use App\Models\Employee;
+use App\Models\LeaveRequest;
 use App\Mail\PayrollMail;
+use App\Mail\PayrollConfirmationMail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Auth;
@@ -124,9 +127,22 @@ class AccountantController extends Controller
             if ($p->locked) continue;
             $employee = $p->employee;
             if (! $employee || ! filter_var($employee->email, FILTER_VALIDATE_EMAIL)) { $failed++; continue; }
+
+            $updateData = [
+                'sent_at' => now(),
+                'sent_by' => Auth::id(),
+                'email_status' => 'sent',
+                'confirmation_deadline' => now()->addDays(7),
+            ];
+
+            if ($p->confirmation_status !== 'confirmed') {
+                $updateData['confirmation_status'] = 'pending';
+            }
+
+            $p->update($updateData);
+
             try {
-                Mail::to($employee->email)->send(new PayrollMail($p));
-                $p->update(['sent_at' => now(), 'sent_by' => Auth::id(), 'email_status' => 'sent']);
+                Mail::to($employee->email)->send(new PayrollConfirmationMail($p->fresh()));
                 ActivityLog::create(['user_id' => Auth::id(), 'action' => 'send_payroll', 'meta' => 'payroll:' . $p->id]);
                 $sent++;
             } catch (\Throwable $e) {
@@ -138,10 +154,33 @@ class AccountantController extends Controller
         return redirect()->route('accountant.payroll.index')->with('success', "Đã gửi {$sent} bảng lương. {$failed} thất bại.");
     }
 
-    // Placeholder routes for actions (will implement per-module)
     public function payrollGenerate(): View
     {
         return view('accountant.payroll.generate');
+    }
+
+    public function generatePayroll(Request $request)
+    {
+        $monthInput = $request->input('month', now()->format('Y-m'));
+
+        if (! preg_match('/^\d{4}-\d{2}$/', $monthInput)) {
+            return redirect()->route('accountant.payroll.generate')->with('error', 'Định dạng tháng không hợp lệ.');
+        }
+
+        [$year, $month] = explode('-', $monthInput);
+        $year = (int) $year;
+        $month = (int) $month;
+
+        $service = new PayrollService();
+        $employees = \App\Models\Employee::where('status', 'active')->get();
+        $count = 0;
+
+        foreach ($employees as $employee) {
+            $service->calculate($employee, $month, $year);
+            $count++;
+        }
+
+        return redirect()->route('accountant.payroll.generate')->with('success', "Đã tính lương cho {$count} nhân viên cho {$monthInput}.");
     }
 
     public function payrollSend(): View
@@ -152,6 +191,80 @@ class AccountantController extends Controller
     public function payrollFeedback(): View
     {
         return view('accountant.payroll.feedback');
+    }
+
+    public function leaveRequests(Request $request): View
+    {
+        $query = LeaveRequest::with('employee', 'approver')->latest();
+
+        if ($status = $request->input('status')) {
+            $query->where('status', $status);
+        }
+
+        if ($type = $request->input('type')) {
+            $query->where('type', $type);
+        }
+
+        return view('accountant.leave_requests', [
+            'leaveRequests' => $query->paginate(10)->withQueryString(),
+        ]);
+    }
+
+    public function createLeaveRequest(): View
+    {
+        return view('accountant.leave_requests.create', [
+            'leaveRequest' => new LeaveRequest([
+                'status' => 'pending',
+                'start_date' => now()->toDateString(),
+                'end_date' => now()->addDays(1)->toDateString(),
+            ]),
+            'employees' => Employee::orderBy('name')->get(),
+        ]);
+    }
+
+    public function storeLeaveRequest(Request $request)
+    {
+        $data = $request->validate([
+            'employee_id' => ['required', 'exists:employees,id'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'type' => ['required', 'in:sick,personal,annual,unpaid,maternity'],
+            'reason' => ['nullable', 'string'],
+        ]);
+
+        $data['days'] = \Carbon\Carbon::parse($data['end_date'])->diffInDays(\Carbon\Carbon::parse($data['start_date'])) + 1;
+        $data['status'] = 'pending';
+
+        LeaveRequest::create($data);
+
+        return redirect()->route('accountant.leave_requests')->with('success', 'Đã tạo đơn nghỉ phép thành công.');
+    }
+
+    public function approveLeaveRequest(LeaveRequest $leaveRequest)
+    {
+        $leaveRequest->update([
+            'status' => 'approved',
+            'approved_by' => Auth::id(),
+            'approved_at' => now(),
+        ]);
+
+        return redirect()->route('accountant.leave_requests')->with('success', 'Đã duyệt đơn nghỉ phép.');
+    }
+
+    public function rejectLeaveRequest(Request $request, LeaveRequest $leaveRequest)
+    {
+        $data = $request->validate([
+            'rejection_reason' => ['required', 'string'],
+        ]);
+
+        $leaveRequest->update([
+            'status' => 'rejected',
+            'approved_by' => Auth::id(),
+            'approved_at' => now(),
+            'rejection_reason' => $data['rejection_reason'],
+        ]);
+
+        return redirect()->route('accountant.leave_requests')->with('success', 'Đã từ chối đơn nghỉ phép.');
     }
 
     public function allowances(): View

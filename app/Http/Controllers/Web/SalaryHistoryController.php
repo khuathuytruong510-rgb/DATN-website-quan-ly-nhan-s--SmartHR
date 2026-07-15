@@ -69,7 +69,12 @@ class SalaryHistoryController extends Controller
     public function meIndex()
     {
         $user = auth()->user();
-        $employee = $user ? \App\Models\Employee::where('user_id', $user->id)->first() : null;
+        $employee = null;
+
+        if ($user) {
+            $employee = \App\Models\Employee::where('user_id', $user->id)->first()
+                ?? \App\Models\Employee::where('email', $user->email)->first();
+        }
 
         $histories = collect();
         if ($employee) {
