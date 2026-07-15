@@ -127,11 +127,17 @@ class EmployeeController extends Controller
     public function contracts()
     {
         $user = auth()->user();
-        $employee = Employee::where('email', $user->email)->firstOrFail();
+        $employee = Employee::where('email', $user->email)->first();
 
-        $contracts = Contract::where('employee_id', $employee->id)->latest()->get();
+        $contracts = collect();
+        if ($employee) {
+            $contracts = Contract::where('employee_id', $employee->id)
+                ->with('employee.department')
+                ->latest()
+                ->get();
+        }
 
-        return view('employee.contracts.index', ['contracts' => $contracts]);
+        return view('employee.contracts.index', ['contracts' => $contracts, 'employee' => $employee]);
     }
 
     public function payrolls()
