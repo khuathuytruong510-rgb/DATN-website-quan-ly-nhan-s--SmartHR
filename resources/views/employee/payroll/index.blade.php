@@ -94,18 +94,42 @@
                                 @endif
                             </div>
 
-                            <div style="margin-top:12px; display:flex; gap:8px;">
+                            <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
                                 @if($p->status !== 'paid' && $p->confirmation_status !== 'confirmed')
                                     <form method="POST" action="{{ route('me.payroll.confirm', $p) }}">
                                         @csrf
-                                        <button class="btn primary" type="submit">Xác nhận bảng lương</button>
+                                        <button class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition" type="submit">Xác nhận bảng lương</button>
                                     </form>
 
-                                    <button class="btn" data-bs-toggle="modal" data-bs-target="#reportModal-{{ $p->id }}">Báo cáo sai sót</button>
+                                    <details class="rounded-lg border border-gray-200 bg-white" style="width:auto;">
+                                        <summary class="px-4 py-2 cursor-pointer text-gray-700 hover:bg-gray-100 rounded-lg">Báo cáo sai sót</summary>
+                                        <div class="p-4">
+                                            <form method="POST" action="{{ route('me.payroll.report_issue', $p) }}" enctype="multipart/form-data">
+                                                @csrf
+                                                <div class="mb-4">
+                                                    <label class="block text-sm font-semibold mb-2">Loại lỗi</label>
+                                                    <select name="issue_type" class="w-full rounded-lg border border-gray-300 px-3 py-2">
+                                                        <option value="amount">Số tiền</option>
+                                                        <option value="attendance">Ngày công/OT</option>
+                                                        <option value="other">Khác</option>
+                                                    </select>
+                                                </div>
+                                                <div class="mb-4">
+                                                    <label class="block text-sm font-semibold mb-2">Mô tả</label>
+                                                    <textarea name="issue_report" class="w-full rounded-lg border border-gray-300 px-3 py-2" rows="4" required></textarea>
+                                                </div>
+                                                <div class="mb-4">
+                                                    <label class="block text-sm font-semibold mb-2">Đính kèm (tùy chọn)</label>
+                                                    <input type="file" name="attachment" class="w-full rounded-lg border border-gray-300 px-3 py-2" />
+                                                </div>
+                                                <button class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition" type="submit">Gửi báo cáo</button>
+                                            </form>
+                                        </div>
+                                    </details>
 
-                                    <a class="btn" href="#">Tải PDF</a>
+                                    <a class="px-4 py-2 bg-gray-100 text-gray-900 rounded-lg hover:bg-gray-200 transition" href="#">Tải PDF</a>
                                 @else
-                                    <a class="btn" href="#">Xem PDF</a>
+                                    <a class="px-4 py-2 bg-gray-100 text-gray-900 rounded-lg hover:bg-gray-200 transition" href="#">Xem PDF</a>
                                 @endif
                             </div>
                         </div>
@@ -127,43 +151,6 @@
                                 </div>
                             </div>
                         </aside>
-                    </div>
-
-                    <!-- Report Modal -->
-                    <div class="modal fade" id="reportModal-{{ $p->id }}" tabindex="-1" aria-hidden="true">
-                        <div class="modal-dialog modal-dialog-centered">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title">Báo cáo sai sót - {{ $p->display_month }}</h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                </div>
-                                <form method="POST" action="{{ route('me.payroll.report_issue', $p) }}" enctype="multipart/form-data">
-                                    @csrf
-                                    <div class="modal-body">
-                                        <div class="field">
-                                            <label>Loại lỗi</label>
-                                            <select name="issue_type" class="form-control">
-                                                <option value="amount">Số tiền</option>
-                                                <option value="attendance">Ngày công/OT</option>
-                                                <option value="other">Khác</option>
-                                            </select>
-                                        </div>
-                                        <div class="field">
-                                            <label>Mô tả</label>
-                                            <textarea name="issue_report" class="form-control" rows="4" required></textarea>
-                                        </div>
-                                        <div class="field">
-                                            <label>Đính kèm (tùy chọn)</label>
-                                            <input type="file" name="attachment" class="form-control">
-                                        </div>
-                                    </div>
-                                    <div class="modal-footer">
-                                        <button type="button" class="btn" data-bs-dismiss="modal">Huỷ</button>
-                                        <button type="submit" class="btn primary">Gửi</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
                     </div>
                 @endforeach
             </div>
