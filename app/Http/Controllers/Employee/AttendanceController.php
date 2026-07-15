@@ -52,8 +52,8 @@ class AttendanceController extends Controller
         $employee = Employee::where('user_id', $user->id)->firstOrFail();
 
         $request->validate([
-            'latitude' => 'required|numeric',
-            'longitude' => 'required|numeric',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
             'notes' => 'nullable|string|max:500',
         ]);
 
@@ -71,26 +71,33 @@ class AttendanceController extends Controller
             ], 400);
         }
 
-        // Calculate distance from office
-        $distance = $this->calculateDistance(
-            $request->latitude,
-            $request->longitude,
-            self::OFFICE_LATITUDE,
-            self::OFFICE_LONGITUDE
-        );
+        $latitude = $request->input('latitude');
+        $longitude = $request->input('longitude');
+        $locationMissing = is_null($latitude) || is_null($longitude);
 
-        // Check if within allowed distance
-        if ($distance > self::ALLOWED_DISTANCE_METERS) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Bạn đang cách văn phòng ' . round($distance, 0) . ' mét. Không thể chấm công.',
-                'distance' => round($distance, 2),
-                'allowed_distance' => self::ALLOWED_DISTANCE_METERS,
-            ], 400);
+        $distance = null;
+        if (!$locationMissing) {
+            // Calculate distance from office
+            $distance = $this->calculateDistance(
+                $latitude,
+                $longitude,
+                self::OFFICE_LATITUDE,
+                self::OFFICE_LONGITUDE
+            );
+
+            // Check if within allowed distance
+            if ($distance > self::ALLOWED_DISTANCE_METERS) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bạn đang cách văn phòng ' . round($distance, 0) . ' mét. Không thể chấm công.',
+                    'distance' => round($distance, 2),
+                    'allowed_distance' => self::ALLOWED_DISTANCE_METERS,
+                ], 400);
+            }
         }
 
         // Get location name from coordinates (reverse geocoding)
-        $locationName = $this->getLocationName($request->latitude, $request->longitude);
+        $locationName = $locationMissing ? null : $this->getLocationName($latitude, $longitude);
         $ipAddress = $request->ip();
 
         // Create or update attendance record
@@ -105,12 +112,13 @@ class AttendanceController extends Controller
 
         $attendance->update([
             'check_in' => Carbon::now(),
-            'check_in_latitude' => $request->latitude,
-            'check_in_longitude' => $request->longitude,
+            'check_in_latitude' => $latitude,
+            'check_in_longitude' => $longitude,
             'check_in_location' => $locationName,
             'check_in_ip_address' => $ipAddress,
-            'check_in_distance' => round($distance, 2),
+            'check_in_distance' => $distance ? round($distance, 2) : null,
             'check_in_notes' => $request->notes,
+            'check_in_location_missing' => $locationMissing,
             'status' => $this->determineStatus($today),
         ]);
 
@@ -131,8 +139,8 @@ class AttendanceController extends Controller
         $employee = Employee::where('user_id', $user->id)->firstOrFail();
 
         $request->validate([
-            'latitude' => 'required|numeric',
-            'longitude' => 'required|numeric',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
             'notes' => 'nullable|string|max:500',
         ]);
 
@@ -156,26 +164,34 @@ class AttendanceController extends Controller
             ], 400);
         }
 
-        // Calculate distance from office
-        $distance = $this->calculateDistance(
-            $request->latitude,
-            $request->longitude,
-            self::OFFICE_LATITUDE,
-            self::OFFICE_LONGITUDE
-        );
+        $latitude = $request->input('latitude');
+        $longitude = $request->input('longitude');
+        $locationMissing = is_null($latitude) || is_null($longitude);
+
+        $distance = null;
+        if (!$locationMissing) {
+            // Calculate distance from office
+            $distance = $this->calculateDistance(
+                $latitude,
+                $longitude,
+                self::OFFICE_LATITUDE,
+                self::OFFICE_LONGITUDE
+            );
+        }
 
         // Get location name from coordinates
-        $locationName = $this->getLocationName($request->latitude, $request->longitude);
+        $locationName = $locationMissing ? null : $this->getLocationName($latitude, $longitude);
         $ipAddress = $request->ip();
 
         $attendance->update([
             'check_out' => Carbon::now(),
-            'check_out_latitude' => $request->latitude,
-            'check_out_longitude' => $request->longitude,
+            'check_out_latitude' => $latitude,
+            'check_out_longitude' => $longitude,
             'check_out_location' => $locationName,
             'check_out_ip_address' => $ipAddress,
-            'check_out_distance' => round($distance, 2),
+            'check_out_distance' => $distance ? round($distance, 2) : null,
             'check_out_notes' => $request->notes,
+            'check_out_location_missing' => $locationMissing,
         ]);
 
         // Calculate all metrics after check-out

@@ -33,6 +33,7 @@ class DatabaseSeeder extends Seeder
             'avatar' => '/images/avatars/truong.svg',
             'is_admin' => true,
             'is_hr' => false,
+            'is_accountant' => false,
         ]);
 
         // Departments (idempotent)
@@ -73,6 +74,9 @@ class DatabaseSeeder extends Seeder
             'name' => 'Nguyễn Văn An',
             'password' => Hash::make('123456'),
             'api_token' => Str::random(60),
+            'is_admin' => false,
+            'is_hr' => false,
+            'is_accountant' => false,
         ]);
 
         $employeeUser2 = User::updateOrCreate([
@@ -81,6 +85,9 @@ class DatabaseSeeder extends Seeder
             'name' => 'Trần Thị Bích',
             'password' => Hash::make('123456'),
             'api_token' => Str::random(60),
+            'is_admin' => false,
+            'is_hr' => false,
+            'is_accountant' => false,
         ]);
 
         $employeeUser3 = User::updateOrCreate([
@@ -89,6 +96,9 @@ class DatabaseSeeder extends Seeder
             'name' => 'Lê Văn Cường',
             'password' => Hash::make('123456'),
             'api_token' => Str::random(60),
+            'is_admin' => false,
+            'is_hr' => false,
+            'is_accountant' => false,
         ]);
 
         // Employees (idempotent by email)
@@ -272,6 +282,27 @@ class DatabaseSeeder extends Seeder
             'days' => 2,
             'type' => 'sick',
             'reason' => 'Khám sức khỏe',
+            'status' => 'pending',
+        ]);
+
+        // Sample overtime requests
+        \App\Models\OvertimeRequest::updateOrCreate([
+            'employee_id' => $employee2->id,
+            'date' => '2026-06-12',
+        ], [
+            'start_time' => '18:00',
+            'end_time' => '20:00',
+            'reason' => 'Hoàn thành dự án gấp',
+            'status' => 'approved',
+        ]);
+
+        \App\Models\OvertimeRequest::updateOrCreate([
+            'employee_id' => $employee4->id,
+            'date' => '2026-06-15',
+        ], [
+            'start_time' => '17:30',
+            'end_time' => '19:00',
+            'reason' => 'Hỗ trợ khách hàng',
             'status' => 'pending',
         ]);
     }

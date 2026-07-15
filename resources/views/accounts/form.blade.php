@@ -45,9 +45,10 @@
             <div class="field">
                 <label for="role">Vai trò</label>
                 <select id="role" name="role" required>
-                    <option value="employee" {{ old('role', isset($user) ? ($user->is_admin ? 'admin' : ($user->is_hr ? 'hr' : 'employee')) : 'employee') === 'employee' ? 'selected' : '' }}>Nhân viên</option>
-                    <option value="hr" {{ old('role', isset($user) ? ($user->is_hr ? 'hr' : ($user->is_admin ? 'admin' : 'employee')) : 'employee') === 'hr' ? 'selected' : '' }}>HR</option>
-                    <option value="admin" {{ old('role', isset($user) ? ($user->is_admin ? 'admin' : ($user->is_hr ? 'hr' : 'employee')) : 'employee') === 'admin' ? 'selected' : '' }}>Admin</option>
+                    <option value="employee" {{ old('role', isset($user) ? ($user->is_admin ? 'admin' : ($user->is_hr ? 'hr' : ($user->is_accountant ? 'accountant' : 'employee'))) : 'employee') === 'employee' ? 'selected' : '' }}>Nhân viên</option>
+                    <option value="hr" {{ old('role', isset($user) ? ($user->is_hr ? 'hr' : ($user->is_admin ? 'admin' : ($user->is_accountant ? 'accountant' : 'employee'))) : 'employee') === 'hr' ? 'selected' : '' }}>HR</option>
+                    <option value="accountant" {{ old('role', isset($user) ? ($user->is_accountant ? 'accountant' : ($user->is_admin ? 'admin' : ($user->is_hr ? 'hr' : 'employee'))) : 'employee') === 'accountant' ? 'selected' : '' }}>Kế toán</option>
+                    <option value="admin" {{ old('role', isset($user) ? ($user->is_admin ? 'admin' : ($user->is_hr ? 'hr' : ($user->is_accountant ? 'accountant' : 'employee'))) : 'employee') === 'admin' ? 'selected' : '' }}>Admin</option>
                 </select>
                 @error('role')<span class="error">{{ $message }}</span>@enderror
             </div>

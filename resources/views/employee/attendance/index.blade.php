@@ -1,6 +1,10 @@
 @extends('layouts.employee')
 
 @section('content')
+@section('breadcrumb')
+<li><a href="{{ route('me.dashboard') }}">Dashboard</a></li>
+<li>Chấm công</li>
+@endsection
 <div class="container mx-auto px-4 py-8">
     <div class="max-w-4xl mx-auto">
         <!-- CSRF Token Meta -->
@@ -88,6 +92,34 @@
             </div>
         </div>
 
+        <!-- Manual Location / Fallback Controls -->
+        <div id="location-fallback" class="mb-6 hidden">
+            <div class="bg-gray-50 border-l-4 border-gray-300 p-4 rounded">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-sm text-gray-700">Không thể truy cập vị trí của bạn.</p>
+                        <p class="text-sm text-gray-600">Bạn có thể bật vị trí trong trình duyệt hoặc nhập tọa độ thủ công / chấm công không cần vị trí.</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="manual-loc-btn" class="btn" onclick="showManualLocationForm()">Nhập tọa độ</button>
+                        <button id="skip-loc-btn" class="btn" onclick="allowWithoutLocation()">Chấm công không cần vị trí</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="manual-loc-form" class="mt-3 hidden">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <input id="manual-lat" type="text" placeholder="Latitude" class="px-3 py-2 border rounded" />
+                    <input id="manual-lon" type="text" placeholder="Longitude" class="px-3 py-2 border rounded" />
+                    <div class="flex gap-2">
+                        <button class="btn primary" onclick="submitManualCheckIn()">Chấm Vào (Tọa độ)</button>
+                        <button class="btn" onclick="submitManualCheckOut()">Chấm Ra (Tọa độ)</button>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">Lưu ý: tọa độ sai có thể gây từ chối chấm công.</p>
+            </div>
+        </div>
+
         <!-- Attendance History -->
         <div class="bg-white rounded-lg shadow-md p-6">
             <h2 class="text-xl font-bold text-gray-800 mb-4">Lịch Sử Chấm Công</h2>
@@ -113,9 +145,9 @@
     </div>
 </div>
 
-<!-- Leaflet Map Library -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<!-- Leaflet Map Library (local copy) -->
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
+<script src="/vendor/leaflet/leaflet.js"></script>
 
 <script>
     // Global variables
@@ -271,19 +303,85 @@
 
     // Start location tracking
     function startLocationTracking() {
-        if (navigator.geolocation) {
-            // Get current position
+        if (!navigator.geolocation) {
+            showMessage('check-in-message', 'Trình duyệt không hỗ trợ Geolocation', 'error');
+            useTestLocation();
+            setCheckButtonsEnabled(false);
+            return;
+        }
+
+        // If Permissions API available, check geolocation permission state first
+        if (navigator.permissions && navigator.permissions.query) {
+            navigator.permissions.query({ name: 'geolocation' }).then(function (permissionStatus) {
+                if (permissionStatus.state === 'denied') {
+                    // User has previously denied; avoid prompting and show fallback
+                    const err = { code: 1, message: 'User denied Geolocation' };
+                    handleLocationError(err);
+                    useTestLocation();
+                    return;
+                }
+
+                // Otherwise request current position and watch
+                navigator.geolocation.getCurrentPosition(
+                    position => updateMapWithUserLocation(position, false),
+                    error => {
+                        handleLocationError(error);
+                        useTestLocation();
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+
+                locationWatchId = navigator.geolocation.watchPosition(
+                    position => updateMapWithUserLocation(position, false),
+                    error => {
+                        console.error('Location watch error:', error);
+                        if (!locationAvailable) {
+                            handleLocationError(error);
+                        }
+                        if (error.code === error.PERMISSION_DENIED && locationWatchId !== null) {
+                            navigator.geolocation.clearWatch(locationWatchId);
+                            locationWatchId = null;
+                        }
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            }).catch(function () {
+                // If permissions query fails, fall back to normal behaviour
+                navigator.geolocation.getCurrentPosition(
+                    position => updateMapWithUserLocation(position, false),
+                    error => {
+                        handleLocationError(error);
+                        useTestLocation();
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+
+                locationWatchId = navigator.geolocation.watchPosition(
+                    position => updateMapWithUserLocation(position, false),
+                    error => {
+                        console.error('Location watch error:', error);
+                        if (!locationAvailable) {
+                            handleLocationError(error);
+                        }
+                        if (error.code === error.PERMISSION_DENIED && locationWatchId !== null) {
+                            navigator.geolocation.clearWatch(locationWatchId);
+                            locationWatchId = null;
+                        }
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            });
+        } else {
+            // No Permissions API: proceed as before
             navigator.geolocation.getCurrentPosition(
                 position => updateMapWithUserLocation(position, false),
                 error => {
                     handleLocationError(error);
-                    // Use fallback test location (Hanoi) for map display only
                     useTestLocation();
                 },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
 
-            // Watch position for continuous updates
             locationWatchId = navigator.geolocation.watchPosition(
                 position => updateMapWithUserLocation(position, false),
                 error => {
@@ -298,10 +396,6 @@
                 },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
-        } else {
-            showMessage('check-in-message', 'Trình duyệt không hỗ trợ Geolocation', 'error');
-            useTestLocation();
-            setCheckButtonsEnabled(false);
         }
     }
 
@@ -377,9 +471,22 @@
 
     // Handle check-in
     function handleCheckIn() {
+        // If no GPS but user allowed skip or provided manual coords, allow submission with null coords
+        if ((!currentLatitude || !currentLongitude) && !document.getElementById('manual-loc-form')?.classList.contains('hidden')) {
+            // attempt to use manual fields if provided
+            const latVal = parseFloat(document.getElementById('manual-lat').value);
+            const lonVal = parseFloat(document.getElementById('manual-lon').value);
+            if (!isNaN(latVal) && !isNaN(lonVal)) {
+                currentLatitude = latVal; currentLongitude = lonVal;
+            }
+        }
+
         if (!currentLatitude || !currentLongitude) {
-            showMessage('check-in-message', 'Không thể xác định vị trí. Vui lòng cho phép truy cập vị trí.', 'error');
-            return;
+            // allow submit with null coords if buttons are enabled (user opted to skip)
+            if (document.getElementById('check-in-btn').disabled) {
+                showMessage('check-in-message', 'Không thể xác định vị trí. Vui lòng cho phép truy cập vị trí.', 'error');
+                return;
+            }
         }
 
         const notes = document.getElementById('check-in-notes').value;
@@ -393,8 +500,8 @@
             },
             credentials: 'include',
             body: JSON.stringify({
-                latitude: currentLatitude,
-                longitude: currentLongitude,
+                latitude: currentLatitude || null,
+                longitude: currentLongitude || null,
                 notes: notes
             })
         })
@@ -417,9 +524,19 @@
 
     // Handle check-out
     function handleCheckOut() {
+        if ((!currentLatitude || !currentLongitude) && !document.getElementById('manual-loc-form')?.classList.contains('hidden')) {
+            const latVal = parseFloat(document.getElementById('manual-lat').value);
+            const lonVal = parseFloat(document.getElementById('manual-lon').value);
+            if (!isNaN(latVal) && !isNaN(lonVal)) {
+                currentLatitude = latVal; currentLongitude = lonVal;
+            }
+        }
+
         if (!currentLatitude || !currentLongitude) {
-            showMessage('check-out-message', 'Không thể xác định vị trí. Vui lòng cho phép truy cập vị trí.', 'error');
-            return;
+            if (document.getElementById('check-out-btn').disabled) {
+                showMessage('check-out-message', 'Không thể xác định vị trí. Vui lòng cho phép truy cập vị trí.', 'error');
+                return;
+            }
         }
 
         const notes = document.getElementById('check-out-notes').value;
@@ -433,8 +550,8 @@
             },
             credentials: 'include',
             body: JSON.stringify({
-                latitude: currentLatitude,
-                longitude: currentLongitude,
+                latitude: currentLatitude || null,
+                longitude: currentLongitude || null,
                 notes: notes
             })
         })
@@ -550,6 +667,104 @@
         }
 
         showMessage('check-in-message', message, 'error');
+        // Show fallback controls for manual entry / skip
+        const fallback = document.getElementById('location-fallback');
+        if (fallback) fallback.classList.remove('hidden');
+    }
+
+    // Show manual location form
+    function showManualLocationForm() {
+        const form = document.getElementById('manual-loc-form');
+        if (form) form.classList.toggle('hidden');
+    }
+
+    // Allow check-in/out without location after user confirmation
+    function allowWithoutLocation() {
+        if (!confirm('Bạn có chắc muốn chấm công mà không gửi vị trí? Điều này có thể yêu cầu xác minh thêm từ HR.')) return;
+        // Enable buttons and set a flag so server can record missing location
+        locationAvailable = false;
+        setCheckButtonsEnabled(true);
+        // mark UI to indicate missing location
+        showMessage('check-in-message', 'Đã cho phép chấm công không cần vị trí. Vui lòng ghi chú lý do nếu cần.', 'success');
+    }
+
+    // Submit manual coordinates as check-in
+    function submitManualCheckIn() {
+        const lat = parseFloat(document.getElementById('manual-lat').value);
+        const lon = parseFloat(document.getElementById('manual-lon').value);
+        if (!lat || !lon || isNaN(lat) || isNaN(lon)) {
+            alert('Vui lòng nhập tọa độ hợp lệ.');
+            return;
+        }
+        // temporarily set current coords and perform check-in
+        currentLatitude = lat;
+        currentLongitude = lon;
+        performCheckInFromUI();
+    }
+
+    function submitManualCheckOut() {
+        const lat = parseFloat(document.getElementById('manual-lat').value);
+        const lon = parseFloat(document.getElementById('manual-lon').value);
+        if (!lat || !lon || isNaN(lat) || isNaN(lon)) {
+            alert('Vui lòng nhập tọa độ hợp lệ.');
+            return;
+        }
+        currentLatitude = lat;
+        currentLongitude = lon;
+        performCheckOutFromUI();
+    }
+
+    // Wrapper functions to call existing performCheckIn/Out but catch errors
+    function performCheckInFromUI() {
+        const notes = document.getElementById('check-in-notes').value;
+        fetch('/api/employee/attendance/check-in', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+            },
+            credentials: 'include',
+            body: JSON.stringify({ latitude: currentLatitude, longitude: currentLongitude, notes })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showMessage('check-in-message', data.message, 'success');
+                document.getElementById('check-in-notes').value = '';
+                loadTodayAttendance();
+                setTimeout(() => loadAttendanceHistory(), 500);
+            } else {
+                showMessage('check-in-message', data.message || 'Lỗi khi chấm công', 'error');
+            }
+        })
+        .catch(e => { console.error(e); showMessage('check-in-message', 'Có lỗi xảy ra', 'error'); });
+    }
+
+    function performCheckOutFromUI() {
+        const notes = document.getElementById('check-out-notes').value;
+        fetch('/api/employee/attendance/check-out', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+            },
+            credentials: 'include',
+            body: JSON.stringify({ latitude: currentLatitude, longitude: currentLongitude, notes })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showMessage('check-out-message', data.message, 'success');
+                document.getElementById('check-out-notes').value = '';
+                loadTodayAttendance();
+                setTimeout(() => loadAttendanceHistory(), 500);
+            } else {
+                showMessage('check-out-message', data.message || 'Lỗi khi chấm công', 'error');
+            }
+        })
+        .catch(e => { console.error(e); showMessage('check-out-message', 'Có lỗi xảy ra', 'error'); });
     }
 
     // Get auth token from localStorage or session
@@ -574,18 +789,6 @@
         return '';
     }
 </script>
+</script>
 
 @endsection
-<h1>Chấm công của tôi</h1>
-
-@if($attendances->isEmpty())
-    <p>Chưa có bản ghi chấm công.</p>
-@else
-    <ul>
-    @foreach($attendances as $a)
-        <li>{{ $a->date }} — {{ $a->status }} — {{ $a->check_in ?? '-' }} / {{ $a->check_out ?? '-' }}</li>
-    @endforeach
-    </ul>
-@endif
-
-<p><a href="{{ route('me.attendance.create') }}">Thêm chấm công</a></p>

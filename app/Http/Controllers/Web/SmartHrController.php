@@ -21,6 +21,9 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use App\Mail\PayrollConfirmationMail;
+use App\Services\PayrollCalculationService;
+use Illuminate\Support\Facades\Mail;
 
 class SmartHrController extends Controller
 {
@@ -51,10 +54,10 @@ class SmartHrController extends Controller
 
         $request->session()->regenerate();
 
-        // Check if user is an employee
+        // Check if user is an employee or a privileged staff
         $user = Auth::user();
         $employee = Employee::where('user_id', $user->id)->first();
-        if ($user->is_hr) {
+        if ($user->is_admin || $user->is_hr || $user->is_accountant) {
             return redirect()->intended(route('dashboard'))
                 ->with('success', 'Đăng nhập thành công! Chào mừng ' . $user->name);
         }
@@ -106,7 +109,7 @@ class SmartHrController extends Controller
     {
         $user = auth()->user();
 
-        if ($user->is_admin || $user->is_hr) {
+        if ($user->is_admin || $user->is_hr || $user->is_accountant) {
             return view('admin.dashboard', [
                 'departmentCount' => Department::count(),
                 'employeeCount' => Employee::count(),
@@ -182,8 +185,8 @@ class SmartHrController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => $emailRules,
             'password' => ['required', 'string', 'min:6', 'confirmed'],
-            'role' => ['required', 'in:employee,hr,admin'],
-            'department_id' => ['required_if:role,employee,hr', 'nullable', 'exists:departments,id'],
+            'role' => ['required', 'in:employee,hr,admin,accountant'],
+            'department_id' => ['required_if:role,employee,hr,accountant', 'nullable', 'exists:departments,id'],
         ]);
 
         $user = User::create([
@@ -192,6 +195,7 @@ class SmartHrController extends Controller
             'password' => Hash::make($data['password']),
             'is_admin' => $data['role'] === 'admin',
             'is_hr' => $data['role'] === 'hr',
+            'is_accountant' => $data['role'] === 'accountant',
         ]);
 
         if ($data['role'] !== 'admin') {
@@ -199,7 +203,7 @@ class SmartHrController extends Controller
                 'user_id' => $user->id,
                 'name' => $data['name'],
                 'email' => $data['email'],
-                'position' => $data['role'] === 'hr' ? 'HR' : 'Nhân viên',
+                'position' => $data['role'] === 'hr' ? 'HR' : ($data['role'] === 'accountant' ? 'Kế toán' : 'Nhân viên'),
                 'department_id' => $data['department_id'],
                 'status' => 'active',
             ]);
@@ -222,8 +226,8 @@ class SmartHrController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
             'password' => ['nullable', 'string', 'min:6', 'confirmed'],
-            'role' => ['required', 'in:employee,hr,admin'],
-            'department_id' => ['required_if:role,employee,hr', 'nullable', 'exists:departments,id'],
+            'role' => ['required', 'in:employee,hr,admin,accountant'],
+            'department_id' => ['required_if:role,employee,hr,accountant', 'nullable', 'exists:departments,id'],
         ]);
 
         $update = [
@@ -231,6 +235,7 @@ class SmartHrController extends Controller
             'email' => $data['email'],
             'is_admin' => $data['role'] === 'admin',
             'is_hr' => $data['role'] === 'hr',
+            'is_accountant' => $data['role'] === 'accountant',
         ];
 
         if (! empty($data['password'])) {
@@ -247,7 +252,7 @@ class SmartHrController extends Controller
                 [
                     'name' => $data['name'],
                     'email' => $data['email'],
-                    'position' => $data['role'] === 'hr' ? 'HR' : 'Nhân viên',
+                    'position' => $data['role'] === 'hr' ? 'HR' : ($data['role'] === 'accountant' ? 'Kế toán' : 'Nhân viên'),
                     'department_id' => $data['department_id'],
                     'status' => 'active',
                 ]
@@ -334,6 +339,7 @@ class SmartHrController extends Controller
         $user->update([
             'is_admin' => $request->boolean('is_admin'),
             'is_hr' => $request->boolean('is_hr'),
+            'is_accountant' => $request->boolean('is_accountant'),
         ]);
 
         return redirect()->route('permissions.index')->with('success', 'Cập nhật phân quyền người dùng thành công.');
@@ -393,8 +399,16 @@ class SmartHrController extends Controller
         return redirect()->route('departments.index')->with('success', 'Xóa phòng ban thành công.');
     }
 
-    public function employees(): View
+    public function employees(Request $request)
     {
+        if ($request->expectsJson()) {
+            $employees = Employee::with('department')->latest()->get();
+
+            return response()->json([
+                'employees' => $employees,
+            ]);
+        }
+
         return view('employees.index', [
             'employees' => Employee::with('department')->latest()->paginate(10),
         ]);
@@ -408,10 +422,17 @@ class SmartHrController extends Controller
         ]);
     }
 
-    public function storeEmployee(Request $request): RedirectResponse
+    public function storeEmployee(Request $request)
     {
         $employee = Employee::create($this->validateEmployee($request));
         $this->syncDepartmentCount($employee->department_id);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'employee' => $employee->load('department'),
+            ], 201);
+        }
 
         return redirect()->route('employees.index')->with('success', 'Tạo nhân viên thành công.');
     }
@@ -424,7 +445,7 @@ class SmartHrController extends Controller
         ]);
     }
 
-    public function updateEmployee(Request $request, Employee $employee): RedirectResponse
+    public function updateEmployee(Request $request, Employee $employee)
     {
         $oldDepartmentId = $employee->department_id;
         $employee->update($this->validateEmployee($request, $employee->id));
@@ -432,14 +453,25 @@ class SmartHrController extends Controller
         $this->syncDepartmentCount($oldDepartmentId);
         $this->syncDepartmentCount($employee->department_id);
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'employee' => $employee->load('department'),
+            ], 200);
+        }
+
         return redirect()->route('employees.index')->with('success', 'Cập nhật nhân viên thành công.');
     }
 
-    public function destroyEmployee(Employee $employee): RedirectResponse
+    public function destroyEmployee(Employee $employee)
     {
         $departmentId = $employee->department_id;
         $employee->delete();
         $this->syncDepartmentCount($departmentId);
+
+        if (request()->expectsJson()) {
+            return response()->json(['success' => true], 200);
+        }
 
         return redirect()->route('employees.index')->with('success', 'Xóa nhân viên thành công.');
     }
@@ -500,8 +532,14 @@ class SmartHrController extends Controller
 
     public function payroll(): View
     {
+        $selectedMonth = request('month', now()->format('Y-m'));
+
         return view('hr.payroll.index', [
-            'payrolls' => Payroll::with('employee')->latest()->paginate(10),
+            'payrolls' => Payroll::with('employee')
+                ->when($selectedMonth, fn($query, $month) => $query->where('month', $month))
+                ->latest()
+                ->get(),
+            'selectedMonth' => $selectedMonth,
         ]);
     }
 
@@ -526,12 +564,37 @@ class SmartHrController extends Controller
 
         $data['allowance'] = $data['allowance'] ?? 0;
         $data['deduction'] = $data['deduction'] ?? 0;
-        $data['total_salary'] = $data['base_salary'] + $data['allowance'] - $data['deduction'];
         $data['status'] = $data['status'] ?? 'pending';
+        $data['total_salary'] = $data['base_salary'];
 
         Payroll::create($data);
 
         return redirect()->route('payroll.index')->with('success', 'Tạo bản ghi lương thành công.');
+    }
+
+    public function generatePayroll(Request $request): RedirectResponse
+    {
+        $monthInput = $request->input('month', now()->format('Y-m'));
+
+        if (! preg_match('/^\d{4}-\d{2}$/', $monthInput)) {
+            return redirect()->route('payroll.index')->with('error', 'Định dạng tháng không hợp lệ.');
+        }
+
+        [$year, $month] = explode('-', $monthInput);
+        $year = (int) $year;
+        $month = (int) $month;
+
+        $service = new PayrollCalculationService();
+        $employees = Employee::where('status', 'active')->get();
+        $count = 0;
+
+        foreach ($employees as $employee) {
+            $service->calculate($employee, $month, $year);
+            $count++;
+        }
+
+        return redirect()->route('payroll.index', ['month' => $monthInput])
+            ->with('success', "Đã tính lương cho {$count} nhân viên cho {$monthInput}.");
     }
 
     public function evaluations(): View
@@ -907,6 +970,81 @@ class SmartHrController extends Controller
         return view('hr.payroll.show', compact('payroll'));
     }
 
+    public function sendPayrollConfirmationEmail(Payroll $payroll): RedirectResponse
+    {
+        $employee = $payroll->employee;
+
+        if (! $employee || ! filter_var($employee->email, FILTER_VALIDATE_EMAIL)) {
+            return redirect()->route('payroll.show', $payroll)
+                ->with('error', 'Không thể gửi email xác nhận lương: nhân viên chưa có email hợp lệ.');
+        }
+
+        $updateData = [
+            'sent_at' => now(),
+            'sent_by' => Auth::id(),
+            'email_status' => 'sent',
+            'confirmation_deadline' => now()->addDays(7),
+        ];
+
+        if ($payroll->confirmation_status !== 'confirmed') {
+            $updateData['confirmation_status'] = 'pending';
+        }
+
+        $payroll->update($updateData);
+
+        try {
+            Mail::to($employee->email)
+                ->send(new PayrollConfirmationMail($payroll->fresh()));
+        } catch (\Throwable $exception) {
+            $payroll->update(['email_status' => 'failed']);
+
+            return redirect()->route('payroll.show', $payroll)
+                ->with('error', 'Gửi email thất bại: ' . $exception->getMessage());
+        }
+
+        return redirect()->route('payroll.show', $payroll)
+            ->with('success', 'Đã gửi email xác nhận lương đến ' . $employee->email);
+    }
+
+    public function approvePayroll(Payroll $payroll): RedirectResponse
+    {
+        if ($payroll->status === 'paid') {
+            return redirect()->route('payroll.show', $payroll)
+                ->with('info', 'Phiếu lương đã được thanh toán.');
+        }
+
+        if ($payroll->confirmation_status !== 'confirmed') {
+            return redirect()->route('payroll.show', $payroll)
+                ->with('error', 'Chỉ có thể chuyển trạng thái sẵn sàng thanh toán sau khi nhân viên xác nhận.');
+        }
+
+        $payroll->update(['status' => 'approved']);
+
+        return redirect()->route('payroll.show', $payroll)
+            ->with('success', 'Đã đánh dấu phiếu lương là sẵn sàng thanh toán.');
+    }
+
+    public function markPaid(Payroll $payroll): RedirectResponse
+    {
+        if ($payroll->status === 'paid') {
+            return redirect()->route('payroll.show', $payroll)
+                ->with('info', 'Phiếu lương đã được thanh toán.');
+        }
+
+        if ($payroll->status !== 'approved') {
+            return redirect()->route('payroll.show', $payroll)
+                ->with('error', 'Chỉ có thể đánh dấu đã thanh toán sau khi phiếu lương được chuyển sang trạng thái sẵn sàng thanh toán.');
+        }
+
+        $payroll->update([
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+
+        return redirect()->route('payroll.show', $payroll)
+            ->with('success', 'Đã đánh dấu phiếu lương là đã thanh toán.');
+    }
+
     public function editPayroll(Payroll $payroll): View
     {
         return view('hr.payroll.form', [
@@ -1082,7 +1220,36 @@ class SmartHrController extends Controller
 
     public function showContract(Contract $contract): View
     {
-        return view('contracts.show', compact('contract'));
+        // Eager load related employee and department
+        $contract->loadMissing(['employee.department']);
+
+        // Latest payroll for the employee (if any)
+        $payroll = null;
+        if ($contract->employee) {
+            $payroll = $contract->employee->payrolls()->latest()->first();
+        }
+
+        // Employee benefits (with benefit details)
+        $benefits = collect();
+        if ($contract->employee) {
+            $benefits = $contract->employee->employeeBenefits()->with('benefit')->get();
+        }
+
+        // Days remaining until end_date (0 if already expired or no end_date)
+        $daysRemaining = null;
+        if ($contract->end_date) {
+            $daysRemaining = max(0, now()->diffInDays($contract->end_date));
+        }
+
+        // Status badge class (uses classes declared in layout)
+        $statusBadge = 'badge';
+        if ($contract->status === 'expired' || $contract->end_date && $contract->end_date->isPast()) {
+            $statusBadge = 'badge expired';
+        } elseif ($contract->status === 'pending') {
+            $statusBadge = 'badge pending';
+        }
+
+        return view('contracts.show', compact('contract', 'payroll', 'benefits', 'daysRemaining', 'statusBadge'));
     }
 
     public function editContract(Contract $contract): View

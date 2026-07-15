@@ -95,48 +95,113 @@ export default {
       form: {
         date: '',
         check_in: '',
-        check_out: ''
+        check_out: '',
+        status: 'present',
+        notes: ''
       },
-      editingId: null
+      editingId: null,
+      submitting: false,
+      loading: false,
+      errors: null,
+      csrfToken: document.querySelector('meta[name="csrf-token"]').content
     };
   },
   mounted() {
     this.attendances = this.initialAttendances;
+    this.loadAttendances();
   },
   methods: {
+    async loadAttendances() {
+      this.loading = true;
+      try {
+        const response = await fetch('/me/attendance', {
+          headers: {
+            Accept: 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Không thể tải dữ liệu chấm công');
+        }
+
+        const result = await response.json();
+        this.attendances = result.attendances || result.data || [];
+      } catch (error) {
+        console.error(error);
+      } finally {
+        this.loading = false;
+      }
+    },
     formatDate(date) {
       return new Date(date).toLocaleDateString('vi-VN');
     },
     getStatusVariant(status) {
-      return status === 'present' ? 'success' : 'warning';
+      return status === 'present' ? 'success' : status === 'late' ? 'warning' : status === 'leave' ? 'info' : 'danger';
     },
     editAttendance(attendance) {
       this.editingId = attendance.id;
       this.form = {
         date: attendance.date,
         check_in: attendance.check_in,
-        check_out: attendance.check_out
+        check_out: attendance.check_out,
+        status: attendance.status || 'present',
+        notes: attendance.notes || ''
       };
+      this.errors = null;
       this.showCreateModal = true;
     },
-    submitAttendance() {
-      this.$emit('submit', {
-        id: this.editingId,
-        ...this.form
-      });
-      this.resetForm();
-      this.showCreateModal = false;
+    async submitAttendance() {
+      this.submitting = true;
+      this.errors = null;
+
+      const url = this.editingId ? `/me/attendance/${this.editingId}` : '/me/attendance';
+      const method = this.editingId ? 'PUT' : 'POST';
+
+      try {
+        const response = await fetch(url, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': this.csrfToken,
+            Accept: 'application/json'
+          },
+          body: JSON.stringify(this.form)
+        });
+
+        if (response.ok) {
+          await this.loadAttendances();
+          this.closeForm();
+          return;
+        }
+
+        if (response.status === 422) {
+          const result = await response.json();
+          this.errors = result.errors || { general: 'Dữ liệu không hợp lệ' };
+          return;
+        }
+
+        throw new Error('Lưu chấm công thất bại');
+      } catch (error) {
+        console.error(error);
+        this.errors = { general: error.message };
+      } finally {
+        this.submitting = false;
+      }
     },
-    resetForm() {
+    closeForm() {
+      this.showCreateModal = false;
+      this.editingId = null;
+      this.errors = null;
       this.form = {
         date: '',
         check_in: '',
-        check_out: ''
+        check_out: '',
+        status: 'present',
+        notes: ''
       };
-      this.editingId = null;
     }
   }
-}
+};
 </script>
 
 <style scoped>

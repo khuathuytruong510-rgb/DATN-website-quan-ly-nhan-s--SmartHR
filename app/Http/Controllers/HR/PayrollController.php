@@ -53,8 +53,8 @@ class PayrollController extends ApiController
         }
 
         $data = $validator->validated();
-        $data['total_salary'] = ($data['base_salary'] ?? 0) + ($data['allowance'] ?? 0) - ($data['deduction'] ?? 0);
-        
+        $data['total_salary'] = $data['base_salary'] ?? 0;
+
         $payroll = Payroll::create($data);
         return response()->json($payroll, 201);
     }
@@ -79,11 +79,9 @@ class PayrollController extends ApiController
 
         $data = $validator->validated();
         if (isset($data['base_salary']) || isset($data['allowance']) || isset($data['deduction'])) {
-            $data['total_salary'] = ($data['base_salary'] ?? $payroll->base_salary) + 
-                                   ($data['allowance'] ?? $payroll->allowance) - 
-                                   ($data['deduction'] ?? $payroll->deduction);
+            $data['total_salary'] = $data['base_salary'] ?? $payroll->base_salary;
         }
-        
+
         $payroll->update($data);
         return response()->json($payroll);
     }

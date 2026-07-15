@@ -58,8 +58,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/me/attendance', [EmployeeController::class, 'attendanceIndex'])->name('me.attendance')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/attendance/create', [EmployeeController::class, 'attendanceCreate'])->name('me.attendance.create')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::post('/me/attendance', [EmployeeController::class, 'attendanceStore'])->name('me.attendance.store')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::put('/me/attendance/{attendance}', [EmployeeController::class, 'attendanceUpdate'])->name('me.attendance.update')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/contracts', [EmployeeController::class, 'contracts'])->name('me.contracts')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/payroll', [EmployeeController::class, 'payrolls'])->name('me.payrolls')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::post('/me/payroll/{payroll}/confirm', [\App\Http\Controllers\Web\PayrollConfirmationController::class, 'confirm'])->name('me.payroll.confirm')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::post('/me/payroll/{payroll}/report-issue', [\App\Http\Controllers\Web\PayrollConfirmationController::class, 'reportIssue'])->name('me.payroll.report_issue')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/contracts', [EmployeeController::class, 'contracts'])->name('me.contracts')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/evaluations', [EmployeeController::class, 'evaluations'])->name('me.evaluations')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/benefits', [EmployeeController::class, 'benefits'])->name('me.benefits')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
@@ -67,6 +70,27 @@ Route::middleware('auth')->group(function () {
     Route::get('/me/leave-requests/create', [EmployeeController::class, 'leaveCreate'])->name('me.leave_requests.create')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::post('/me/leave-requests', [EmployeeController::class, 'leaveStore'])->name('me.leave_requests.store')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/notifications', [EmployeeController::class, 'notifications'])->name('me.notifications')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+
+    Route::get('/me/schedule', [EmployeeController::class, 'schedule'])->name('me.schedule')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+
+    // Employee support requests
+    Route::get('/me/support-requests', [\App\Http\Controllers\Web\SupportRequestController::class, 'index'])->name('me.support_requests')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/support-requests/create', [\App\Http\Controllers\Web\SupportRequestController::class, 'create'])->name('me.support_requests.create')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::post('/me/support-requests', [\App\Http\Controllers\Web\SupportRequestController::class, 'store'])->name('me.support_requests.store')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/support-requests/{supportRequest}', [\App\Http\Controllers\Web\SupportRequestController::class, 'show'])->name('me.support_requests.show')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+
+    // Overtime requests
+    Route::get('/me/overtime-requests', [\App\Http\Controllers\Web\OvertimeRequestController::class, 'index'])->name('me.overtime_requests')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/overtime-requests/create', [\App\Http\Controllers\Web\OvertimeRequestController::class, 'create'])->name('me.overtime_requests.create')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::post('/me/overtime-requests', [\App\Http\Controllers\Web\OvertimeRequestController::class, 'store'])->name('me.overtime_requests.store')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/overtime-requests/{overtimeRequest}', [\App\Http\Controllers\Web\OvertimeRequestController::class, 'show'])->name('me.overtime_requests.show')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+
+    // Change password
+    Route::get('/me/change-password', [EmployeeController::class, 'showChangePassword'])->name('me.password.change')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::post('/me/change-password', [EmployeeController::class, 'updatePassword'])->name('me.password.update')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+
+    // Activity logs
+    Route::get('/me/activity-logs', [\App\Http\Controllers\Web\ActivityLogController::class, 'index'])->name('me.activity_logs')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
 
     Route::middleware(\App\Http\Middleware\EnsureAdminOrHr::class)->group(function () {
         Route::get('/positions', [SmartHrController::class, 'positions'])->name('positions.index');
@@ -107,8 +131,15 @@ Route::middleware('auth')->group(function () {
         
         Route::get('/payroll', [SmartHrController::class, 'payroll'])->name('payroll.index');
         Route::get('/payroll/create', [SmartHrController::class, 'createPayroll'])->name('payroll.create');
+        Route::post('/payroll/generate', [SmartHrController::class, 'generatePayroll'])->name('payroll.generate');
         Route::post('/payroll', [SmartHrController::class, 'storePayroll'])->name('payroll.store');
+        Route::get('/payroll/email', [\App\Http\Controllers\Web\PayrollEmailController::class, 'index'])->name('payroll.email.index');
+        Route::post('/payroll/email/send/{payroll}', [\App\Http\Controllers\Web\PayrollEmailController::class, 'send'])->name('payroll.email.send');
+        Route::post('/payroll/email/send-all', [\App\Http\Controllers\Web\PayrollEmailController::class, 'sendAll'])->name('payroll.email.send_all');
         Route::get('/payroll/{payroll}', [SmartHrController::class, 'showPayroll'])->name('payroll.show');
+        Route::post('/payroll/{payroll}/send-confirmation', [SmartHrController::class, 'sendPayrollConfirmationEmail'])->name('payroll.send_confirmation');
+        Route::post('/payroll/{payroll}/approve', [SmartHrController::class, 'approvePayroll'])->name('payroll.approve');
+        Route::post('/payroll/{payroll}/mark-paid', [SmartHrController::class, 'markPaid'])->name('payroll.mark_paid');
         Route::get('/payroll/{payroll}/edit', [SmartHrController::class, 'editPayroll'])->name('payroll.edit');
         Route::put('/payroll/{payroll}', [SmartHrController::class, 'updatePayroll'])->name('payroll.update');
         Route::delete('/payroll/{payroll}', [SmartHrController::class, 'destroyPayroll'])->name('payroll.destroy');
@@ -144,6 +175,45 @@ Route::middleware('auth')->group(function () {
         Route::post('/leave-requests/{leaveRequest}/approve', [SmartHrController::class, 'approveLeaveRequest'])->name('leave_requests.approve');
         Route::post('/leave-requests/{leaveRequest}/reject', [SmartHrController::class, 'rejectLeaveRequest'])->name('leave_requests.reject');
         Route::delete('/leave-requests/{leaveRequest}', [SmartHrController::class, 'destroyLeaveRequest'])->name('leave_requests.destroy');
+        
+        // Salary history detail
+        Route::get('/salary-histories/{salaryHistory}', [\App\Http\Controllers\Web\SalaryHistoryController::class, 'show'])->name('salary_histories.show');
+        // Route to view salary history by payroll
+        Route::get('/payroll/{payroll}/salary-history', [\App\Http\Controllers\Web\SalaryHistoryController::class, 'byPayroll'])->name('payroll.salary_history');
+        // Salary history list
+        Route::get('/salary-histories', [\App\Http\Controllers\Web\SalaryHistoryController::class, 'index'])->name('salary_histories.index');
+        // Employee-facing salary history (own records)
+        Route::get('/me/salary-histories', [\App\Http\Controllers\Web\SalaryHistoryController::class, 'meIndex'])->name('me.salary_histories');
+
+        // Attendance detail (web)
+        Route::get('/attendances/{attendance}', [\App\Http\Controllers\Web\AttendanceController::class, 'show'])->name('attendances.show');
+    });
+
+    // Accountant portal (only for accountant role)
+    Route::middleware(\App\Http\Middleware\EnsureAccountant::class)->group(function () {
+        Route::get('/accountant', [\App\Http\Controllers\Web\AccountantController::class, 'dashboard'])->name('accountant.dashboard');
+        Route::get('/accountant/payroll', [\App\Http\Controllers\Web\AccountantController::class, 'payrollIndex'])->name('accountant.payroll.index');
+        Route::get('/accountant/payroll/{payroll}', [\App\Http\Controllers\Web\AccountantController::class, 'payrollShow'])->name('accountant.payroll.show');
+        Route::post('/accountant/payroll/{payroll}/send-email', [\App\Http\Controllers\Web\AccountantController::class, 'sendPayrollEmail'])->name('accountant.payroll.send_email');
+        Route::get('/accountant/payroll/generate', [\App\Http\Controllers\Web\AccountantController::class, 'payrollGenerate'])->name('accountant.payroll.generate');
+        Route::get('/accountant/payroll/send', [\App\Http\Controllers\Web\AccountantController::class, 'payrollSend'])->name('accountant.payroll.send');
+        Route::post('/accountant/payroll/send-all', [\App\Http\Controllers\Web\AccountantController::class, 'sendAllPayrolls'])->name('accountant.payroll.send_all');
+        Route::get('/accountant/payroll/feedback', [\App\Http\Controllers\Web\AccountantController::class, 'payrollFeedback'])->name('accountant.payroll.feedback');
+
+        Route::get('/accountant/allowances', [\App\Http\Controllers\Web\AccountantController::class, 'allowances'])->name('accountant.allowances');
+        Route::get('/accountant/deductions', [\App\Http\Controllers\Web\AccountantController::class, 'deductions'])->name('accountant.deductions');
+        Route::get('/accountant/bonuses', [\App\Http\Controllers\Web\AccountantController::class, 'bonuses'])->name('accountant.bonuses');
+
+        Route::get('/accountant/reports', [\App\Http\Controllers\Web\AccountantController::class, 'reports'])->name('accountant.reports');
+        Route::get('/accountant/export', [\App\Http\Controllers\Web\AccountantController::class, 'export'])->name('accountant.export');
+
+        Route::get('/accountant/activity-logs', [\App\Http\Controllers\Web\AccountantController::class, 'activityLogs'])->name('accountant.activity_logs');
+        Route::post('/accountant/payroll/{payroll}/recalculate', [\App\Http\Controllers\Web\AccountantController::class, 'recalculatePayroll'])->name('accountant.payroll.recalculate');
+        Route::post('/accountant/payroll/{payroll}/lock', [\App\Http\Controllers\Web\AccountantController::class, 'lockPayroll'])->name('accountant.payroll.lock');
+        Route::post('/accountant/payroll/{payroll}/unlock', [\App\Http\Controllers\Web\AccountantController::class, 'unlockPayroll'])->name('accountant.payroll.unlock');
+        Route::get('/accountant/profile', [\App\Http\Controllers\Web\AccountantController::class, 'profile'])->name('accountant.profile');
+        Route::get('/accountant/change-password', [\App\Http\Controllers\Web\AccountantController::class, 'showChangePassword'])->name('accountant.password.change');
+        Route::post('/accountant/change-password', [\App\Http\Controllers\Web\AccountantController::class, 'updatePassword'])->name('accountant.password.update');
     });
 });
 

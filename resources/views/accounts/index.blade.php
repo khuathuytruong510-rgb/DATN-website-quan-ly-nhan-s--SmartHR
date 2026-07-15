@@ -40,7 +40,10 @@
                                 @if ($user->is_hr)
                                     <span class="badge">HR</span>
                                 @endif
-                                @if (! $user->is_admin && ! $user->is_hr)
+                                @if ($user->is_accountant)
+                                    <span class="badge">Kế toán</span>
+                                @endif
+                                @if (! $user->is_admin && ! $user->is_hr && ! $user->is_accountant)
                                     <span class="badge">Người dùng</span>
                                 @endif
                             </td>
