@@ -101,10 +101,12 @@
                             <div class="col-md-6">
                                 <label class="form-label">Trạng thái</label>
                                 <select name="status" class="form-select">
-                                    <option value="pending" {{ old('status', $contract->status) == 'pending' ? 'selected' : '' }}>Chờ hiệu lực</option>
+                                    <option value="waiting_employee" {{ old('status', $contract->status) == 'waiting_employee' ? 'selected' : '' }}>Chờ nhân viên ký</option>
+                                    <option value="waiting_director" {{ old('status', $contract->status) == 'waiting_director' ? 'selected' : '' }}>Chờ giám đốc ký</option>
                                     <option value="active" {{ old('status', $contract->status) == 'active' ? 'selected' : '' }}>Có hiệu lực</option>
+                                    <option value="expiring" {{ old('status', $contract->status) == 'expiring' ? 'selected' : '' }}>Sắp hết hạn</option>
                                     <option value="expired" {{ old('status', $contract->status) == 'expired' ? 'selected' : '' }}>Hết hạn</option>
-                                    <option value="canceled" {{ old('status', $contract->status) == 'canceled' ? 'selected' : '' }}>Đã hủy</option>
+                                    <option value="cancelled" {{ old('status', $contract->status) == 'cancelled' ? 'selected' : '' }}>Đã hủy</option>
                                 </select>
                                 @error('status')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
                             </div>
@@ -195,8 +197,8 @@
                     <div class="card-body">
                         <div class="mb-3">
                             <div class="fw-semibold">Trạng thái hợp đồng</div>
-                            <span class="badge bg-{{ $contract->status === 'active' ? 'success' : ($contract->status === 'expired' ? 'danger' : ($contract->status === 'canceled' ? 'secondary' : 'warning')) }}">
-                                {{ $contract->status === 'active' ? 'Có hiệu lực' : ($contract->status === 'expired' ? 'Hết hạn' : ($contract->status === 'canceled' ? 'Đã hủy' : 'Chờ hiệu lực')) }}
+                            <span class="badge bg-{{ $contract->status === 'active' ? 'success' : ($contract->status === 'expired' ? 'danger' : ($contract->status === 'cancelled' ? 'secondary' : ($contract->status === 'expiring' ? 'info' : 'warning'))) }}">
+                                {{ $contract->status === 'active' ? 'Có hiệu lực' : ($contract->status === 'expired' ? 'Hết hạn' : ($contract->status === 'cancelled' ? 'Đã hủy' : ($contract->status === 'expiring' ? 'Sắp hết hạn' : ($contract->status === 'waiting_director' ? 'Chờ giám đốc ký' : 'Chờ nhân viên ký')))) }}
                             </span>
                         </div>
                         <div class="mb-3">
