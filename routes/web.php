@@ -246,6 +246,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/salary-payments/{salaryPayment}', [\App\Http\Controllers\Web\SalaryPaymentController::class, 'show'])->name('salary_payments.show');
         Route::get('/salary-payments/{salaryPayment}/edit', [\App\Http\Controllers\Accountant\SalaryPaymentController::class, 'edit'])->name('salary_payments.edit');
         Route::put('/salary-payments/{salaryPayment}', [\App\Http\Controllers\Accountant\SalaryPaymentController::class, 'update'])->name('salary_payments.update');
+        Route::post('/salary-payments/{salaryPayment}/send-email', [\App\Http\Controllers\Accountant\SalaryPaymentController::class, 'sendEmail'])->name('salary_payments.send_email');
         Route::post('/salary-payments/{salaryPayment}/pay', [\App\Http\Controllers\Web\SalaryPaymentController::class, 'pay'])->name('salary_payments.pay');
         Route::post('/salary-payments/{salaryPayment}/action', [\App\Http\Controllers\Accountant\SalaryPaymentController::class, 'pay'])->name('salary_payments.action');
         Route::delete('/salary-payments/{salaryPayment}', [\App\Http\Controllers\Accountant\SalaryPaymentController::class, 'destroy'])->name('salary_payments.destroy');

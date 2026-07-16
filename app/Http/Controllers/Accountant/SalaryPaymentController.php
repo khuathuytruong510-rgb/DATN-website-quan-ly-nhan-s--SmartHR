@@ -7,6 +7,7 @@ use App\Models\Payroll;
 use App\Models\SalaryPayment;
 use App\Services\SalaryService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 
 class SalaryPaymentController extends Controller
 {
@@ -234,6 +235,28 @@ class SalaryPaymentController extends Controller
             'Content-Type' => 'text/csv; charset=utf-8',
             'Content-Disposition' => "attachment; filename=$filename"
         ]);
+    }
+
+    /**
+     * Gửi phiếu lương qua email
+     */
+    public function sendEmail(SalaryPayment $salaryPayment)
+    {
+        if (!$salaryPayment->employee || !$salaryPayment->employee->email) {
+            return back()->with('error', 'Nhân viên chưa có email!');
+        }
+
+        try {
+            Mail::to($salaryPayment->employee->email)
+                ->send(new \App\Mail\SalaryPaidMail($salaryPayment));
+
+            $this->salaryService->recordLog($salaryPayment, 'email_sent', 'Gửi phiếu qua email');
+
+            return back()->with('success', 'Gửi phiếu lương thành công!');
+        } catch (\Exception $e) {
+            $this->salaryService->recordLog($salaryPayment, 'email_failed', $e->getMessage());
+            return back()->with('error', 'Gửi email thất bại: ' . $e->getMessage());
+        }
     }
 
     /**
