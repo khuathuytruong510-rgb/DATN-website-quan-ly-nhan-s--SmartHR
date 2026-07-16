@@ -9,12 +9,14 @@ use Illuminate\Support\Collection;
 class AttendanceCalculationService
 {
     // Standard work hours configuration
-    private const WORKING_HOURS_PER_DAY = 8;
     private const STANDARD_CHECK_IN = '08:00';
-    private const STANDARD_CHECK_OUT = '17:30';
+    private const STANDARD_CHECK_OUT = '17:00';
+
     private const BREAK_TIME_START = '12:00';
-    private const BREAK_TIME_END = '13:30';
-    private const BREAK_DURATION_MINUTES = 90; // 1.5 hours
+
+    private const BREAK_TIME_END = '13:00';
+
+    private const BREAK_DURATION_MINUTES = 60;
 
     /**
      * Calculate all attendance metrics for a single record
@@ -46,7 +48,7 @@ class AttendanceCalculationService
         $workHours = $this->calculateWorkHours($attendance->check_in, $attendance->check_out);
         $lateMinutes = $this->calculateLateMinutes($attendance->check_in);
         $earlyLeaveMinutes = $this->calculateEarlyLeaveMinutes($attendance->check_out);
-        $overtimeHours = $this->calculateOvertimeHours($workHours);
+        $overtimeHours = $this->calculateOvertimeHours($attendance->check_out);
 
         $status = $this->determineStatus($lateMinutes, $earlyLeaveMinutes, $overtimeHours);
 
@@ -67,13 +69,17 @@ class AttendanceCalculationService
      */
     private function calculateWorkHours(Carbon $checkIn, Carbon $checkOut): float
     {
-        $totalMinutes = (int) floor(($checkOut->getTimestamp() - $checkIn->getTimestamp()) / 60);
+        $totalMinutes = $checkIn->diffInMinutes($checkOut);
 
-        $breakTimeInMinutes = $this->calculateBreakTimeOverlap($checkIn, $checkOut);
+        $breakMinutes = $this->calculateBreakTimeOverlap(
+            $checkIn,
+            $checkOut
+        );
 
-        $workMinutes = max(0, $totalMinutes - $breakTimeInMinutes);
+        $workMinutes = $totalMinutes - $breakMinutes;
 
-        return max(0, $workMinutes / 60); // Convert to hours
+        // Không tính quá 8 giờ là giờ làm
+        return min(8, round($workMinutes / 60, 2));
     }
 
     /**
@@ -84,14 +90,21 @@ class AttendanceCalculationService
         $breakStart = $checkIn->clone()->setTimeFromTimeString(self::BREAK_TIME_START);
         $breakEnd = $checkIn->clone()->setTimeFromTimeString(self::BREAK_TIME_END);
 
+        // If check-out is before break starts or check-in is after break ends
         if ($checkOut->lessThanOrEqualTo($breakStart) || $checkIn->greaterThanOrEqualTo($breakEnd)) {
             return 0;
         }
 
-        $effectiveBreakStart = $checkIn->greaterThan($breakStart) ? $checkIn : $breakStart;
-        $effectiveBreakEnd = $checkOut->lessThan($breakEnd) ? $checkOut : $breakEnd;
+        // Calculate overlapping break period
+        $effectiveBreakStart = $checkIn->greaterThan($breakStart)
+            ? $checkIn
+            : $breakStart;
 
-        $breakMinutes = (int) floor(($effectiveBreakEnd->getTimestamp() - $effectiveBreakStart->getTimestamp()) / 60);
+        $effectiveBreakEnd = $checkOut->lessThan($breakEnd)
+            ? $checkOut
+            : $breakEnd;
+
+        $breakMinutes = $effectiveBreakEnd->diffInMinutes($effectiveBreakStart);
 
         return max(0, $breakMinutes);
     }
@@ -105,11 +118,14 @@ class AttendanceCalculationService
      */
     private function calculateLateMinutes(Carbon $checkIn): int
     {
-        $standardCheckInTime = $checkIn->clone()->setTimeFromTimeString(self::STANDARD_CHECK_IN);
+        $standard = $checkIn->copy()
+            ->setTimeFromTimeString(self::STANDARD_CHECK_IN);
 
-        $lateMinutes = (int) floor(($checkIn->getTimestamp() - $standardCheckInTime->getTimestamp()) / 60);
+        if ($checkIn->lessThanOrEqualTo($standard)) {
+            return 0;
+        }
 
-        return max(0, $lateMinutes);
+        return $standard->diffInMinutes($checkIn);
     }
 
     /**
@@ -121,11 +137,14 @@ class AttendanceCalculationService
      */
     private function calculateEarlyLeaveMinutes(Carbon $checkOut): int
     {
-        $standardCheckOutTime = $checkOut->clone()->setTimeFromTimeString(self::STANDARD_CHECK_OUT);
+        $standard = $checkOut->copy()
+            ->setTimeFromTimeString(self::STANDARD_CHECK_OUT);
 
-        $earlyMinutes = (int) floor(($standardCheckOutTime->getTimestamp() - $checkOut->getTimestamp()) / 60);
+        if ($checkOut->greaterThanOrEqualTo($standard)) {
+            return 0;
+        }
 
-        return max(0, $earlyMinutes);
+        return $checkOut->diffInMinutes($standard);
     }
 
     /**
@@ -135,11 +154,19 @@ class AttendanceCalculationService
      * If negative, return 0
      * Example: check_out at 19:30, standard is 17:30 => overtime 2 hours
      */
-    private function calculateOvertimeHours(float $workHours): float
+    private function calculateOvertimeHours(Carbon $checkOut): float
     {
-        $overtimeHours = max(0, $workHours - self::WORKING_HOURS_PER_DAY);
+        $standardCheckOut = $checkOut->copy()
+            ->setTimeFromTimeString(self::STANDARD_CHECK_OUT);
 
-        return round($overtimeHours, 2);
+        if ($checkOut->lessThanOrEqualTo($standardCheckOut)) {
+            return 0;
+        }
+
+        return round(
+            $standardCheckOut->diffInMinutes($checkOut) / 60,
+            2
+        );
     }
 
     /**
@@ -147,23 +174,17 @@ class AttendanceCalculationService
      * Status: present, late, leave_early, late_and_leave_early, overtime, absent
      */
     private function determineStatus(int $lateMinutes, int $earlyLeaveMinutes, float $overtimeHours): string
-    {
-        $isLate = $lateMinutes > 0;
-        $isEarlyLeave = $earlyLeaveMinutes > 0;
-        $hasOvertime = $overtimeHours > 0;
-
-        if ($isLate && $isEarlyLeave) {
-            return 'late_and_leave_early';
-        } elseif ($isLate) {
-            return 'late';
-        } elseif ($isEarlyLeave && !$hasOvertime) {
-            return 'leave_early';
-        } elseif ($hasOvertime) {
-            return 'overtime';
-        }
-
-        return 'present';
+{
+    if ($lateMinutes > 0) {
+        return 'late';
     }
+
+    if ($earlyLeaveMinutes > 0) {
+        return 'leave';
+    }
+
+    return 'present';
+}
 
     /**
      * Update attendance record with calculated metrics
@@ -244,4 +265,16 @@ class AttendanceCalculationService
             'break_duration_minutes' => self::BREAK_DURATION_MINUTES,
         ];
     }
+    public function calculateWorkingDay(float $hours): float
+        {
+            if ($hours >= 8) {
+                return 1;
+            }
+
+            if ($hours >= 4) {
+                return 0.5;
+            }
+
+            return 0;
+        }
 }
