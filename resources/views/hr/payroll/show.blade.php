@@ -22,7 +22,7 @@
                         </form>
                     @endif
                     @if($payroll->status === 'approved')
-                        <form method="POST" action="{{ route('payroll.mark_paid', $payroll) }}" style="display: inline;">
+                        <form method="POST" action="{{ route('payroll.paid', $payroll) }}" style="display: inline;">
                             @csrf
                             <button type="submit" class="btn primary">Đánh dấu đã thanh toán</button>
                         </form>

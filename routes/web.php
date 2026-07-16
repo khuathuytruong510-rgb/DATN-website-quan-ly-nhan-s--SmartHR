@@ -169,6 +169,10 @@ Route::middleware('auth')->group(function () {
             Route::post('/payroll/{payroll}/approve', [PayrollController::class, 'approve'])
                 ->name('payroll.approve');
 
+            // Duyệt bảng lương và tạo thanh toán
+            Route::post('/payroll/{payroll}/approve-with-payment', [PayrollController::class, 'approveWithPayment'])
+                ->name('payroll.approve_with_payment');
+
             // Đánh dấu đã thanh toán
             Route::post('/payroll/{payroll}/paid', [PayrollController::class, 'paid'])
                 ->name('payroll.paid');
@@ -237,8 +241,15 @@ Route::middleware('auth')->group(function () {
 
         // Salary payments (accountant)
         Route::get('/salary-payments', [\App\Http\Controllers\Web\SalaryPaymentController::class, 'index'])->name('salary_payments.index');
+        Route::get('/salary-payments/select-payroll', [\App\Http\Controllers\Accountant\SalaryPaymentController::class, 'selectPayroll'])->name('salary_payments.select_payroll');
+        Route::post('/salary-payments/create/{payroll}', [\App\Http\Controllers\Accountant\SalaryPaymentController::class, 'create'])->name('salary_payments.create');
         Route::get('/salary-payments/{salaryPayment}', [\App\Http\Controllers\Web\SalaryPaymentController::class, 'show'])->name('salary_payments.show');
+        Route::get('/salary-payments/{salaryPayment}/edit', [\App\Http\Controllers\Accountant\SalaryPaymentController::class, 'edit'])->name('salary_payments.edit');
+        Route::put('/salary-payments/{salaryPayment}', [\App\Http\Controllers\Accountant\SalaryPaymentController::class, 'update'])->name('salary_payments.update');
         Route::post('/salary-payments/{salaryPayment}/pay', [\App\Http\Controllers\Web\SalaryPaymentController::class, 'pay'])->name('salary_payments.pay');
+        Route::post('/salary-payments/{salaryPayment}/action', [\App\Http\Controllers\Accountant\SalaryPaymentController::class, 'pay'])->name('salary_payments.action');
+        Route::delete('/salary-payments/{salaryPayment}', [\App\Http\Controllers\Accountant\SalaryPaymentController::class, 'destroy'])->name('salary_payments.destroy');
+        Route::get('/salary-payments/export/{month}/{year}', [\App\Http\Controllers\Accountant\SalaryPaymentController::class, 'export'])->name('salary_payments.export');
 
         // Attendance detail (web)
         Route::get('/attendances/{attendance}', [\App\Http\Controllers\Web\AttendanceController::class, 'show'])->name('attendances.show');
