@@ -56,6 +56,14 @@ class Payroll extends Model
     }
 
     /**
+     * Thanh toán lương
+     */
+    public function salaryPayment()
+    {
+        return $this->hasOne(SalaryPayment::class);
+    }
+
+    /**
      * Check if payroll is paid
      */
     public function getIsPaidAttribute(): bool
