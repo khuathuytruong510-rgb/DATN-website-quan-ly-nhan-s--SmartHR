@@ -2,96 +2,124 @@
 
 namespace App\Http\Controllers\HR;
 
-use App\Http\Controllers\ApiController;
+use App\Http\Controllers\Controller;
+use App\Models\Employee;
 use App\Models\Payroll;
+use App\Services\PayrollCalculationService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
 
-class PayrollController extends ApiController
+class PayrollController extends Controller
 {
-    public function index(Request $request): \Illuminate\Http\JsonResponse
+    /**
+     * Danh sách bảng lương
+     */
+    public function index(Request $request)
     {
-        $query = Payroll::with('employee');
+        $month = $request->month ?? now()->month;
+        $year = $request->year ?? now()->year;
 
-        if ($search = $request->query('q')) {
-            $query->where(function ($query) use ($search) {
-                $query->whereHas('employee', function ($q) use ($search) {
-                    $q->where('name', 'like', "%{$search}%");
-                });
-            });
-        }
+        $payrolls = Payroll::with('employee')
+            ->where('month', $month)
+            ->where('year', $year)
+            ->orderByDesc('id')
+            ->get();
 
-        if ($month = $request->query('month')) {
-            $query->where('month', 'like', "{$month}%");
-        }
-
-        $perPage = min((int) $request->query('per_page', 10), 50);
-        return response()->json($query->paginate($perPage));
+        return view('hr.payroll.index', compact(
+            'payrolls',
+            'month',
+            'year'
+        ));
     }
 
-    public function show($id): \Illuminate\Http\JsonResponse
-    {
-        $payroll = Payroll::with('employee')->findOrFail($id);
-        return response()->json($payroll);
+    /**
+     * Tính lương toàn bộ nhân viên
+     */
+    public function generate(
+        Request $request,
+        PayrollCalculationService $service
+    ) {
+        $month = $request->month ?? now()->month;
+        $year = $request->year ?? now()->year;
+
+        $employees = Employee::all();
+
+        foreach ($employees as $employee) {
+
+            $service->calculate(
+                $employee,
+                $month,
+                $year
+            );
+        }
+
+        return redirect()
+            ->route(
+                'payroll.index',
+                [
+                    'month' => $month,
+                    'year' => $year
+                ]
+            )
+            ->with(
+                'success',
+                'Đã tính bảng lương thành công!'
+            );
     }
 
-    public function store(Request $request): \Illuminate\Http\JsonResponse
+    /**
+     * Xem chi tiết bảng lương
+     */
+    public function show(Payroll $payroll)
     {
-        $this->currentUser($request);
+        $payroll->load('employee');
 
-        $validator = Validator::make($request->all(), [
-            'employee_id' => 'required|exists:employees,id',
-            'month' => 'required|date_format:Y-m',
-            'base_salary' => 'required|numeric|min:0',
-            'allowance' => 'nullable|numeric|min:0',
-            'deduction' => 'nullable|numeric|min:0',
-            'status' => 'nullable|in:pending,approved,paid',
+        return view(
+            'hr.payroll.show',
+            compact('payroll')
+        );
+    }
+
+    /**
+     * Duyệt bảng lương
+     */
+    public function approve(Payroll $payroll)
+    {
+        $payroll->update([
+            'status' => 'approved'
         ]);
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        $data = $validator->validated();
-        $data['total_salary'] = $data['base_salary'] ?? 0;
-
-        $payroll = Payroll::create($data);
-        return response()->json($payroll, 201);
+        return back()->with(
+            'success',
+            'Đã duyệt bảng lương.'
+        );
     }
 
-    public function update(Request $request, $id): \Illuminate\Http\JsonResponse
+    /**
+     * Đánh dấu đã thanh toán
+     */
+    public function paid(Payroll $payroll)
     {
-        $this->currentUser($request);
-        $payroll = Payroll::findOrFail($id);
-
-        $validator = Validator::make($request->all(), [
-            'employee_id' => 'sometimes|required|exists:employees,id',
-            'month' => 'sometimes|required|date_format:Y-m',
-            'base_salary' => 'sometimes|required|numeric|min:0',
-            'allowance' => 'nullable|numeric|min:0',
-            'deduction' => 'nullable|numeric|min:0',
-            'status' => 'nullable|in:pending,approved,paid',
+        $payroll->update([
+            'status' => 'paid',
+            'paid_at' => now()
         ]);
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        $data = $validator->validated();
-        if (isset($data['base_salary']) || isset($data['allowance']) || isset($data['deduction'])) {
-            $data['total_salary'] = $data['base_salary'] ?? $payroll->base_salary;
-        }
-
-        $payroll->update($data);
-        return response()->json($payroll);
+        return back()->with(
+            'success',
+            'Đã thanh toán lương.'
+        );
     }
 
-    public function destroy(Request $request, $id): \Illuminate\Http\JsonResponse
+    /**
+     * Xóa bảng lương
+     */
+    public function destroy(Payroll $payroll)
     {
-        $this->currentUser($request);
-        $payroll = Payroll::findOrFail($id);
         $payroll->delete();
 
-        return response()->json(null, 204);
+        return back()->with(
+            'success',
+            'Đã xóa bảng lương.'
+        );
     }
 }

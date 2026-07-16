@@ -4,40 +4,63 @@
 
 <div class="container-fluid">
 
-    <div class="card shadow-lg border-0 rounded-4">
+    {{-- Header --}}
+    <div class="card shadow-sm border-0 mb-4">
 
-        <div class="card-header bg-white border-0 pt-4 px-4">
+        <div class="card-body">
 
-            <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex justify-content-between align-items-center flex-wrap">
 
                 <div>
-
-                    <h3 class="mb-1 fw-bold text-secondary">
-                        💰 BẢNG LƯƠNG NHÂN VIÊN
+                    <h3 class="fw-bold mb-1">
+                        Bảng lương nhân viên
                     </h3>
 
-                    <small class="text-muted">
-                        Hệ thống quản lý tiền lương SmartHR
-                    </small>
-
+                    <p class="text-muted mb-0">
+                        Quản lý và tính lương nhân viên theo tháng.
+                    </p>
                 </div>
 
-                <form action="{{ route('payroll.generate') }}" method="POST" class="d-flex align-items-center gap-3">
-
+                <form method="POST" action="{{ route('payroll.generate') }}">
                     @csrf
 
-                    <div class="d-flex align-items-center gap-2">
-                        <label for="month" class="mb-0 text-secondary">Chọn tháng</label>
-                        <input type="month" id="month" name="month" class="form-control" value="{{ old('month', $selectedMonth ?? now()->format('Y-m')) }}" style="max-width: 180px;" required>
+                    <div class="row">
+
+                        <div class="col-md-3">
+                            <label>Tháng</label>
+                            <select name="month" class="form-select">
+                                @for($i=1;$i<=12;$i++)
+                                    <option value="{{ $i }}" {{ $month==$i?'selected':'' }}>
+                                        Tháng {{ $i }}
+                                    </option>
+                                @endfor
+                            </select>
+                        </div>
+
+                        <div class="col-md-3">
+                            <label>Năm</label>
+                            <select name="year" class="form-select">
+                                @for($y=2025;$y<=2035;$y++)
+                                    <option value="{{ $y }}" {{ $year==$y?'selected':'' }}>
+                                        {{ $y }}
+                                    </option>
+                                @endfor
+                            </select>
+                        </div>
+
+                        <div class="col-md-3 d-flex align-items-end">
+
+                            <button class="btn btn-primary w-100">
+
+                                <i class="bi bi-calculator"></i>
+
+                                Tính lương
+
+                            </button>
+
+                        </div>
+
                     </div>
-
-                    <button class="btn btn-light border fw-bold px-4 shadow-sm">
-
-                        <i class="fas fa-calculator me-2"></i>
-
-                        Tính lương
-
-                    </button>
 
                 </form>
 
@@ -45,31 +68,38 @@
 
         </div>
 
-        <div class="card-body px-4">
+    </div>
+
+
+
+    {{-- Bảng lương --}}
+    <div class="card shadow-sm border-0">
+
+        <div class="card-body p-0">
 
             <div class="table-responsive">
 
-                <table class="table table-hover align-middle custom-payroll-table">
+                <table class="table table-hover align-middle payroll-table mb-0">
 
-                    <thead class="text-secondary text-uppercase fs-7 fw-bold">
+                    <thead>
 
                         <tr>
 
-                            <th class="text-start">👤 Nhân viên</th>
+                            <th>Nhân viên</th>
 
-                            <th class="text-center">💼 Chức vụ</th>
+                            <th>Chức vụ</th>
 
-                            <th class="text-center">📅 Tháng</th>
+                            <th class="text-center">Tháng</th>
 
-                            <th class="text-center">💵 Lương cơ bản</th>
+                            <th class="text-end">Lương CB</th>
 
-                            <th class="text-center">📌 Công</th>
+                            <th class="text-center">Ngày công</th>
 
-                            <th class="text-center">📆 Ngày TC</th>
+                            <th class="text-center">TC Ngày</th>
 
-                            <th class="text-center">⏰ Giờ TC</th>
+                            <th class="text-center">TC Giờ</th>
 
-                            <th class="text-end">💰 Lương ngày</th>
+                            <th class="text-end">Lương công</th>
 
                             <th class="text-end">TC Ngày</th>
 
@@ -81,369 +111,359 @@
 
                             <th class="text-end">Thưởng</th>
 
-                            <th class="text-center">BH (10.5%)</th>
+                            <th class="text-end">BH</th>
 
                             <th class="text-end">Thuế</th>
 
-                            <th class="text-end fw-bold">Thực nhận</th>
+                            <th class="text-end">Thực nhận</th>
 
                         </tr>
 
                     </thead>
 
                     <tbody>
+                        @forelse($payrolls as $payroll)
 
-                    @forelse($payrolls as $payroll)
+<tr>
 
-                    <tr>
-
-                        <td class="fw-semibold text-dark text-start">
-
-                            {{ $payroll->employee->name }}
-
-                        </td>
-
-                        <td class="text-center">
-
-                            @if($payroll->employee->position == 'Giám Đốc')
-
-                                <span class="badge bg-danger rounded-pill px-3 py-2">
-                                    👑 Giám Đốc
-                                </span>
-
-                            @elseif($payroll->employee->position == 'Trưởng Phòng Nhân Sự')
-
-                                <span class="badge bg-warning text-dark rounded-pill px-3 py-2">
-                                    👨‍💼 Trưởng phòng HR
-                                </span>
-
-                            @else
-
-                                <span class="badge bg-info rounded-pill px-3 py-2">
-                                    👨‍💻 Nhân viên
-                                </span>
-
-                            @endif
-
-                        </td>
-
-                        <td class="text-center text-muted">
-
-                            {{ $payroll->display_month }}
-
-                        </td>
-
-                        <td class="text-center">
-
-                            <span class="badge bg-info-subtle text-info-emphasis rounded-pill px-3 py-2 fw-bold">
-
-                                {{ number_format($payroll->base_salary) }}
-
-                            </span>
-
-                        </td>
-                                                <td class="text-center">
-
-                            @if($payroll->working_days < $payroll->required_working_days)
-
-                                <span class="badge bg-danger-subtle text-danger-emphasis rounded-pill px-3 py-2 fw-bold">
-
-                                    {{ $payroll->working_days }}/{{ $payroll->required_working_days }}
-
-                                </span>
-
-                            @elseif($payroll->overtime_days > 0)
-
-                                <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill px-3 py-2 fw-bold">
-
-                                    {{ $payroll->required_working_days }}/{{ $payroll->required_working_days }} ⭐
-
-                                </span>
-
-                            @else
-
-                                <span class="badge bg-success-subtle text-success-emphasis rounded-pill px-3 py-2 fw-bold">
-
-                                    {{ $payroll->required_working_days }}/{{ $payroll->required_working_days }}
-
-                                </span>
-
-                            @endif
-
-                        </td>
-
-                        <td class="text-center">
-
-                            @if($payroll->overtime_days > 0)
-
-                                <span class="badge bg-info-subtle text-info-emphasis rounded-pill px-3 py-2 fw-semibold">
-
-                                    +{{ $payroll->overtime_days }}
-
-                                </span>
-
-                            @else
-
-                                <span class="badge bg-light text-muted rounded-pill px-3 py-2">
-
-                                    0
-
-                                </span>
-
-                            @endif
-
-                        </td>
-
-                        <td class="text-center">
-
-                            <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill px-3 py-2 fw-semibold">
-
-                                {{ number_format($payroll->overtime_hours,2) }}
-
-                            </span>
-
-                        </td>
-
-                        <td class="text-end fw-semibold">
-
-                            {{ number_format($payroll->working_salary) }}
-
-                        </td>
-
-                        <td class="text-end">
-
-                            @if($payroll->overtime_day_salary > 0)
-
-                                <span class="text-danger fw-bold">
-
-                                    +{{ number_format($payroll->overtime_day_salary) }}
-
-                                </span>
-
-                            @else
-
-                                -
-
-                            @endif
-
-                        </td>
-
-                        <td class="text-end">
-
-                            @if($payroll->overtime_hour_salary > 0)
-
-                                <span class="text-warning fw-bold">
-
-                                    +{{ number_format($payroll->overtime_hour_salary) }}
-
-                                </span>
-
-                            @else
-
-                                -
-
-                            @endif
-
-                        </td>
-
-                        <td class="text-end">
-
-                            <span class="badge bg-info-subtle text-info-emphasis rounded-pill px-3 py-2 fw-bold">
-
-                                {{ number_format($payroll->overtime_salary) }}
-
-                            </span>
-
-                        </td>
-
-                        <td class="text-end">
-
-                            <span class="badge bg-success-subtle text-success-emphasis rounded-pill px-3 py-2 fw-bold">
-
-                                {{ number_format($payroll->allowance) }}
-
-                            </span>
-
-                        </td>
-
-                        <td class="text-end">
-
-                            @if($payroll->bonus > 0)
-
-                                <span class="badge bg-success rounded-pill px-3 py-2">
-
-                                    🎉 {{ number_format($payroll->bonus) }}
-
-                                </span>
-
-                            @else
-
-                                -
-
-                            @endif
-
-                        </td>
-
-                        <td class="text-center">
-
-                            <span class="badge bg-danger-subtle text-danger-emphasis rounded-pill px-3 py-2 fw-bold">
-
-                                {{ number_format($payroll->insurance) }}
-
-                            </span>
-
-                        </td>
-
-                        <td class="text-end">
-
-                            @if($payroll->tax > 0)
-
-                                <span class="badge bg-danger rounded-pill px-3 py-2">
-
-                                    {{ number_format($payroll->tax) }}
-
-                                </span>
-
-                            @else
-
-                                <span class="badge bg-success rounded-pill px-3 py-2">
-
-                                    0
-
-                                </span>
-
-                            @endif
-
-                        </td>
-
-                        <td class="text-end">
-
-                            <span class="badge bg-primary rounded-pill px-3 py-2 fs-6 fw-bold">
-
-                                {{ number_format($payroll->total_salary) }}
-
-                            </span>
-
-                        </td>
-
-                    </tr>
-                                            @empty
-
-                            <tr>
-
-                                <td colspan="16" class="text-center py-5 text-muted">
-
-                                    Không có dữ liệu bảng lương cho tháng này.
-
-                                </td>
-
-                            </tr>
-
-                        @endforelse
-
-                    </tbody>
-
-                </table>
-
-            </div>
-
+    <td>
+        <div class="fw-semibold">
+            {{ $payroll->employee->name }}
         </div>
+    </td>
 
-    </div>
+    <td>
+
+       @switch($payroll->employee->position)
+
+            @case('Giám Đốc')
+                <span class="badge text-bg-dark">
+                    Giám đốc
+                </span>
+                @break
+
+            @case('Trưởng Phòng Nhân Sự')
+                <span class="badge text-bg-primary">
+                    Trưởng phòng
+                </span>
+                @break
+
+            @default
+                <span class="badge text-bg-light border text-dark">
+                    Nhân viên
+                </span>
+
+        @endswitch
+
+    </td>
+
+    <td class="text-center">
+        {{ sprintf('%02d', $payroll->month) }}/{{ $payroll->year }}
+    </td>
+
+    <td class="text-end">
+        {{ number_format($payroll->base_salary) }}
+    </td>
+
+    <td class="text-center">
+
+        @if($payroll->working_days > $payroll->required_working_days)
+
+            <span class="text-primary fw-semibold">
+                {{ $payroll->working_days }}/{{ $payroll->required_working_days }}
+            </span>
+
+        @elseif($payroll->working_days == $payroll->required_working_days)
+
+            <span class="text-success fw-semibold">
+        {{ $payroll->working_days }}/{{ $payroll->required_working_days }}
+    </span>
+
+@else
+
+    <span class="text-danger fw-semibold">
+        {{ $payroll->working_days }}/{{ $payroll->required_working_days }}
+    </span>
+
+@endif
+
+    </td>
+
+    <td class="text-center">
+
+        @if($payroll->overtime_days > 0)
+
+            <span class="text-primary fw-semibold">
+                +{{ $payroll->overtime_days }}
+            </span>
+
+        @else
+
+            -
+
+        @endif
+
+    </td>
+
+    <td class="text-center">
+
+        {{ number_format($payroll->overtime_hours,2) }}
+
+    </td>
+
+    <td class="text-end">
+
+        {{ number_format($payroll->working_salary) }}
+
+    </td>
+
+    <td class="text-end">
+
+    @if($payroll->overtime_day_salary > 0)
+
+        <span class="text-primary fw-semibold">
+
+            {{ number_format($payroll->overtime_day_salary) }}
+
+        </span>
+
+    @else
+
+        -
+
+    @endif
+
+</td>
+
+<td class="text-end">
+
+    @if($payroll->overtime_hour_salary > 0)
+
+        <span class="text-primary fw-semibold">
+
+            {{ number_format($payroll->overtime_hour_salary) }}
+
+        </span>
+
+    @else
+
+        -
+
+    @endif
+
+</td>
+
+<td class="text-end">
+
+    @if($payroll->overtime_salary > 0)
+
+        <span class="text-primary fw-semibold">
+
+            {{ number_format($payroll->overtime_salary) }}
+
+        </span>
+
+    @else
+
+        -
+
+    @endif
+
+</td>
+
+    <td class="text-end">
+
+        {{ number_format($payroll->allowance) }}
+
+    </td>
+
+    <td class="text-end">
+
+        @if($payroll->bonus>0)
+
+            <span class="text-success fw-semibold">
+
+                {{ number_format($payroll->bonus) }}
+
+            </span>
+
+        @else
+
+            -
+
+        @endif
+
+    </td>
+
+    <td class="text-end text-danger">
+
+        {{ number_format($payroll->insurance) }}
+
+    </td>
+
+    <td class="text-end">
+
+        @if($payroll->tax>0)
+
+            <span class="text-danger">
+
+                {{ number_format($payroll->tax) }}
+
+            </span>
+
+        @else
+
+            0
+
+        @endif
+
+    </td>
+
+    <td class="text-end">
+
+        <span class="fw-bold text-success fs-5">
+            {{ number_format($payroll->total_salary) }} VNĐ
+        </span>
+
+    </td>
+
+</tr>
+
+@empty
+
+<tr>
+
+    <td colspan="16" class="text-center py-5 text-muted">
+
+        Chưa có dữ liệu bảng lương.
+
+    </td>
+
+</tr>
+
+@endforelse
+
+</tbody>
+
+</table>
 
 </div>
 
+</div>
+
+</div>
+
+</div>
 <style>
 
-.custom-payroll-table{
-    border-collapse:separate;
-    border-spacing:0 8px;
+body{
+    background:#f5f7fb;
 }
 
-.custom-payroll-table th{
-    font-size:.82rem;
+.card{
+    border:none;
+    border-radius:14px;
+    overflow:hidden;
+}
+
+.card-body{
+    padding:1.25rem;
+}
+
+.table{
+    margin-bottom:0;
+}
+
+.payroll-table thead{
     background:#f8f9fa;
-    color:#495057;
+}
+
+.payroll-table thead th{
+    font-size:13px;
     font-weight:700;
+    color:#6c757d;
     text-transform:uppercase;
-    padding:14px 10px;
-    border-bottom:2px solid #dee2e6;
+    letter-spacing:.5px;
+    padding:15px 12px;
+    border-bottom:2px solid #e9ecef;
     white-space:nowrap;
 }
 
-.custom-payroll-table td{
-    padding:14px 10px;
-    font-size:.92rem;
-    background:#fff;
-    border-bottom:1px solid #f3f3f3;
+.payroll-table tbody td{
+    padding:15px 12px;
     vertical-align:middle;
     white-space:nowrap;
+    border-color:#f1f3f5;
+    font-size:14px;
 }
 
-.custom-payroll-table tbody tr:hover td{
+.payroll-table tbody tr{
+    transition:all .18s ease;
+}
+
+.payroll-table tbody tr:hover{
+    background:#f8fbff;
+}
+
+.payroll-table tbody tr:hover td{
     background:#f8fbff;
 }
 
 .badge{
-    font-size:.85rem;
+    font-size:13px;
+    font-weight:500;
+    padding:6px 12px;
+    border-radius:6px;
+}
+
+.btn{
+    border-radius:10px;
     font-weight:600;
 }
 
-.bg-info-subtle{
-    background:#e8f4fd!important;
+.form-control,
+.form-select{
+    border-radius:10px;
+    min-height:42px;
 }
 
-.text-info-emphasis{
-    color:#0d6efd!important;
+.text-end{
+    font-variant-numeric:tabular-nums;
 }
 
-.bg-primary-subtle{
-    background:#eaf2ff!important;
+.text-success{
+    font-weight:600;
 }
 
-.text-primary-emphasis{
-    color:#0d6efd!important;
+.text-danger{
+    font-weight:600;
 }
 
-.bg-success-subtle{
-    background:#e8f8ef!important;
+.table-responsive{
+    border-radius:12px;
 }
 
-.text-success-emphasis{
+h3{
+    color:#212529;
+}
+
+.text-muted{
+    font-size:14px;
+}
+.text-success{
     color:#198754!important;
 }
 
-.bg-danger-subtle{
-    background:#fdecec!important;
+.text-primary{
+    color:#0d6efd!important;
 }
 
-.text-danger-emphasis{
+.text-danger{
     color:#dc3545!important;
 }
 
-.card{
-    overflow:hidden;
-}
-
-.card-header{
-    background:linear-gradient(90deg,#0d6efd,#4f8dfd);
-    color:#fff;
-}
-
-.card-header h3{
-    color:#fff!important;
-}
-
-.card-header small{
-    color:#f8f9fa!important;
-}
-
-.btn-light{
-    transition:.2s;
-}
-
-.btn-light:hover{
-    transform:translateY(-2px);
+.text-muted{
+    color:#6c757d!important;
 }
 
 </style>

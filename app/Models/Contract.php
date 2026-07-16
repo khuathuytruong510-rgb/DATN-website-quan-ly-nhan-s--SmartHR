@@ -27,14 +27,21 @@ class Contract extends Model
         'notes',
         'document_path',
         'document_name',
+        'file_path',
         'start_date',
         'end_date',
+        'created_by',
+        'parent_contract_id',
+        'employee_signed_at',
+        'director_signed_at',
     ];
 
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
         'sign_date' => 'date',
+        'employee_signed_at' => 'datetime',
+        'director_signed_at' => 'datetime',
     ];
 
     public function employee()

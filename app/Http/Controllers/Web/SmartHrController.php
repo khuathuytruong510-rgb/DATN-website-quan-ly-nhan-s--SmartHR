@@ -1231,8 +1231,8 @@ class SmartHrController extends Controller
         return view('contracts.form', [
             'contract' => new Contract([
                 'contract_code' => $this->generateContractCode(),
-                'status' => 'pending',
-                'contract_status' => 'pending',
+                'status' => 'waiting_employee',
+                'contract_status' => 'waiting_employee',
                 'base_salary' => 0,
                 'allowance' => 0,
                 'bonus' => 0,
@@ -1243,15 +1243,19 @@ class SmartHrController extends Controller
         ]);
     }
 
-    public function storeContract(ContractFormRequest $request): RedirectResponse
+    public function storeContract(ContractFormRequest $request, ContractService $contractService): RedirectResponse
     {
+        if (! $this->canManageContracts()) {
+            abort(403);
+        }
+
         $data = $this->prepareContractData($request, null);
 
         if ($this->hasActiveContract($data['employee_id'], null)) {
             return back()->withInput()->with('error', 'Nhân viên này đã có hợp đồng đang có hiệu lực.');
         }
 
-        $contract = Contract::create($data);
+        $contractService->createContract(Auth::user(), $data);
 
         return redirect()->route('contracts.index')->with('success', 'Tạo hợp đồng thành công.');
     }
@@ -1300,24 +1304,87 @@ class SmartHrController extends Controller
         ]);
     }
 
-    public function updateContract(ContractFormRequest $request, Contract $contract): RedirectResponse
+    public function updateContract(ContractFormRequest $request, Contract $contract, ContractService $contractService): RedirectResponse
     {
+        if (! $this->canManageContracts()) {
+            abort(403);
+        }
+
         $data = $this->prepareContractData($request, $contract);
 
         if ($this->hasActiveContract($data['employee_id'], $contract->id)) {
             return back()->withInput()->with('error', 'Nhân viên này đã có hợp đồng đang có hiệu lực.');
         }
 
-        $contract->update($data);
+        $contractService->updateContract(Auth::user(), $contract, $data);
 
         return redirect()->route('contracts.index')->with('success', 'Cập nhật hợp đồng thành công.');
     }
 
     public function destroyContract(Contract $contract): RedirectResponse
     {
+        if (! $this->canManageContracts()) {
+            abort(403);
+        }
+
         $contract->delete();
 
         return redirect()->route('contracts.index')->with('success', 'Xóa hợp đồng thành công.');
+    }
+
+    public function renewContract(Contract $contract, ContractService $contractService): View
+    {
+        if (! $this->canManageContracts()) {
+            abort(403);
+        }
+
+        return view('contracts.form', [
+            'contract' => new Contract([
+                'parent_contract_id' => $contract->id,
+                'employee_id' => $contract->employee_id,
+                'contract_code' => $this->generateContractCode(),
+                'status' => 'waiting_employee',
+                'contract_status' => 'waiting_employee',
+                'base_salary' => $contract->salary ?? 0,
+                'allowance' => $contract->allowance ?? 0,
+                'bonus' => $contract->bonus ?? 0,
+                'contract_type' => $contract->contract_type,
+                'start_date' => now()->toDateString(),
+                'end_date' => now()->addYear()->toDateString(),
+                'notes' => $contract->notes,
+            ]),
+            'employees' => Employee::orderBy('name')->get(),
+            'signers' => User::where('is_admin', true)->orWhere('is_hr', true)->orderBy('name')->get(),
+            'isEdit' => false,
+            'renewingFrom' => $contract,
+        ]);
+    }
+
+    public function storeRenewalContract(ContractFormRequest $request, Contract $contract, ContractService $contractService): RedirectResponse
+    {
+        if (! $this->canManageContracts()) {
+            abort(403);
+        }
+
+        $data = $this->prepareContractData($request, null);
+        $contractService->renewContract(Auth::user(), $contract, $data);
+
+        return redirect()->route('contracts.index')->with('success', 'Gia hạn hợp đồng thành công.');
+    }
+
+    public function signContract(Contract $contract, Request $request, ContractService $contractService): RedirectResponse
+    {
+        $user = Auth::user();
+        $employee = Employee::where('email', $user->email)->first();
+
+        if (! $this->canSignContract($user, $employee, $contract)) {
+            abort(403);
+        }
+
+        $party = $request->input('party', 'employee');
+        $contractService->signContract($user, $contract, $party);
+
+        return back()->with('success', 'Ký hợp đồng thành công.');
     }
 
     private function validateDepartment(Request $request): array
@@ -1343,35 +1410,18 @@ class SmartHrController extends Controller
     private function prepareContractData(ContractFormRequest $request, ?Contract $contract = null): array
     {
         $data = $request->validated();
-
-        $computedStatus = $this->resolveContractStatus($data['start_date'] ?? null, $data['end_date'] ?? null);
-        $data['status'] = ($data['status'] ?? 'pending') === 'canceled' ? 'canceled' : $computedStatus;
+        $data['status'] = $data['status'] ?? 'waiting_employee';
         $data['contract_status'] = $data['status'];
 
-        if (! empty($data['contract_code'])) {
-            $data['contract_code'] = strtoupper($data['contract_code']);
-        } elseif ($contract && $contract->contract_code) {
-            $data['contract_code'] = $contract->contract_code;
-        } else {
-            $data['contract_code'] = $this->generateContractCode();
-        }
-
         if ($request->hasFile('document')) {
-            $file = $request->file('document');
-            $path = $file->store('contracts', 'public');
-            $data['document_path'] = $path;
-            $data['document_name'] = $file->getClientOriginalName();
-        } elseif ($contract && $contract->document_path) {
-            $data['document_path'] = $contract->document_path;
-            $data['document_name'] = $contract->document_name;
+            $data['document'] = $request->file('document');
         }
 
         $employee = $request->employee_id ? Employee::find($request->employee_id) : null;
-        $position = $employee?->position ?? null;
-        $baseSalary = $this->resolveContractBaseSalary($position);
+        if ($employee) {
+            $data['employee_id'] = $employee->id;
+        }
 
-        $data['salary'] = (int) $baseSalary;
-        $data['base_salary'] = (float) $baseSalary;
         $data['allowance'] = (float) ($data['allowance'] ?? 0);
         $data['bonus'] = (float) ($data['bonus'] ?? 0);
 
@@ -1418,7 +1468,7 @@ class SmartHrController extends Controller
     private function hasActiveContract(int $employeeId, ?int $excludeId): bool
     {
         $query = Contract::where('employee_id', $employeeId)
-            ->whereIn('status', ['active', 'pending'])
+            ->whereIn('status', ['active', 'waiting_employee', 'waiting_director', 'expiring'])
             ->where(function ($q) {
                 $q->whereNull('end_date')->orWhere('end_date', '>=', now()->toDateString());
             });
@@ -1428,6 +1478,30 @@ class SmartHrController extends Controller
         }
 
         return $query->exists();
+    }
+
+    private function canManageContracts(): bool
+    {
+        $user = Auth::user();
+
+        return $user && ($user->is_admin || $user->is_hr);
+    }
+
+    private function canSignContract(?User $user, ?Employee $employee, Contract $contract): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->is_admin) {
+            return true;
+        }
+
+        if ($employee && $contract->employee_id === $employee->id) {
+            return true;
+        }
+
+        return false;
     }
 
     private function validateAttendance(Request $request): array

@@ -24,8 +24,8 @@ class ContractFormRequest extends FormRequest
             'sign_date' => ['nullable', 'date'],
             'start_date' => ['required', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-            'status' => ['required', 'in:pending,active,expired,canceled'],
-            'base_salary' => ['required', 'numeric', 'min:0'],
+            'status' => ['nullable', 'in:waiting_employee,waiting_director,active,expiring,expired,cancelled'],
+            'base_salary' => ['nullable', 'numeric', 'min:0'],
             'allowance' => ['nullable', 'numeric', 'min:0'],
             'bonus' => ['nullable', 'numeric', 'min:0'],
             'payment_method' => ['nullable', 'in:bank_transfer,cash'],
@@ -33,6 +33,7 @@ class ContractFormRequest extends FormRequest
             'signer_id' => ['nullable', 'exists:users,id'],
             'notes' => ['nullable', 'string'],
             'document' => ['nullable', 'file', 'mimes:pdf,doc,docx', 'max:20480'],
+            'parent_contract_id' => ['nullable', 'exists:contracts,id'],
         ];
     }
 
