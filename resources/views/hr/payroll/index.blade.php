@@ -117,6 +117,8 @@
 
                             <th class="text-end">Thực nhận</th>
 
+                            <th class="text-center">Hành động</th>
+
                         </tr>
 
                     </thead>
@@ -325,6 +327,24 @@
             {{ number_format($payroll->total_salary) }} VNĐ
         </span>
 
+    </td>
+
+    <td class="text-center">
+        <div class="btn-group btn-group-sm" role="group">
+            <a href="{{ route('payroll.show', $payroll) }}" class="btn btn-outline-primary" title="Xem">
+                <i class="bi bi-eye"></i>
+            </a>
+            @if($payroll->status !== 'approved')
+                <form method="POST" action="{{ route('payroll.approve_with_payment', $payroll) }}" style="display:inline;">
+                    @csrf
+                    <button type="submit" class="btn btn-outline-success" title="Duyệt & Thanh toán" onclick="return confirm('Xác nhận duyệt bảng lương và tạo phiếu thanh toán?')">
+                        <i class="bi bi-check-circle"></i>
+                    </button>
+                </form>
+            @else
+                <span class="badge text-bg-success">Đã duyệt</span>
+            @endif
+        </div>
     </td>
 
 </tr>

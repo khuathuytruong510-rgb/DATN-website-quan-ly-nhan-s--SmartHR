@@ -5,6 +5,7 @@ namespace App\Http\Controllers\HR;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\Payroll;
+use App\Models\SalaryPayment;
 use App\Services\PayrollCalculationService;
 use Illuminate\Http\Request;
 
@@ -91,6 +92,34 @@ class PayrollController extends Controller
         return back()->with(
             'success',
             'Đã duyệt bảng lương.'
+        );
+    }
+
+    /**
+     * Duyệt bảng lương và tạo phiếu thanh toán
+     */
+    public function approveWithPayment(Payroll $payroll)
+    {
+        $payroll->update(['status' => 'approved']);
+
+        // Tạo record thanh toán nếu chưa tồn tại
+        if (!$payroll->salaryPayment) {
+            SalaryPayment::create([
+                'employee_id' => $payroll->employee_id,
+                'payroll_id' => $payroll->id,
+                'code' => 'PAY-' . now()->format('YmdHis'),
+                'month' => $payroll->month,
+                'year' => $payroll->year,
+                'total' => $payroll->total_salary,
+                'deductions' => $payroll->insurance + $payroll->tax,
+                'net' => $payroll->total_salary - ($payroll->insurance + $payroll->tax),
+                'status' => 'pending',
+            ]);
+        }
+
+        return back()->with(
+            'success',
+            'Đã duyệt bảng lương và tạo phiếu thanh toán.'
         );
     }
 
