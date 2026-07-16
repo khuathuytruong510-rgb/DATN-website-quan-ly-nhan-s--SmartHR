@@ -131,6 +131,12 @@
                         </button>
                     </form>
                 @elseif($salaryPayment->status === 'paid')
+                    <form method="POST" action="{{ route('salary_payments.send_email', $salaryPayment) }}" style="display:inline;">
+                        @csrf
+                        <button type="submit" class="btn btn-info" onclick="return confirm('Gửi phiếu lương đến email nhân viên?')">
+                            <i class="bi bi-envelope"></i> Gửi phiếu qua email
+                        </button>
+                    </form>
                     <span class="badge text-bg-success" style="padding: 10px; font-size: 1rem;">
                         <i class="bi bi-check-circle"></i> Đã thanh toán thành công
                     </span>
