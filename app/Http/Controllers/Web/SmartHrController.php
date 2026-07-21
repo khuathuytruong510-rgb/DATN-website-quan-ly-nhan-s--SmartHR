@@ -1150,6 +1150,7 @@ class SmartHrController extends Controller
             'employee_id' => ['required', 'exists:employees,id'],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'half_day' => ['nullable', 'boolean'],
             'type' => ['required', 'in:sick,personal,annual,unpaid'],
             'reason' => ['nullable', 'string'],
             'is_urgent' => ['nullable', 'boolean'],
@@ -1157,22 +1158,25 @@ class SmartHrController extends Controller
         ]);
 
         $data['is_urgent'] = $request->boolean('is_urgent');
+        $data['half_day'] = $request->boolean('half_day');
 
         $limitCheck = $this->checkLeaveLimit(
             $data['employee_id'],
             $data['start_date'],
-            $data['end_date']
+            $data['end_date'],
+            $data['half_day']
         );
 
         if ($limitCheck['exceeded'] && empty($data['is_urgent'])) {
-            return back()->withInput()->with('error',
-                "Nhân viên đã sử dụng {$limitCheck['used_days']}/{$limitCheck['max_days']} ngày nghỉ phép trong tháng này. " .
-                "Vui lòng yêu cầu nhân viên liên hệ bộ phận hỗ trợ nếu cần nghỉ thêm với lý do thuyết phục."
-            );
+            $msg = "Nhân viên đã sử dụng {$limitCheck['used_days']}/{$limitCheck['max_days']} ngày nghỉ phép trong tháng này. ";
+            if ($limitCheck['requests_exceeded']) {
+                $msg .= "Nhân viên đã hết {$limitCheck['max_requests']} lượt xin nghỉ trong tháng. ";
+            }
+            $msg .= "Vui lòng yêu cầu nhân viên liên hệ bộ phận hỗ trợ nếu cần nghỉ thêm với lý do thuyết phục.";
+            return back()->withInput()->with('error', $msg);
         }
 
-        $data['days'] = \Carbon\Carbon::parse($data['end_date'])
-            ->diffInDays(\Carbon\Carbon::parse($data['start_date'])) + 1;
+        $data['days'] = $this->calculateLeaveDays($data['start_date'], $data['end_date'], $data['half_day']);
         $data['status'] = 'pending';
 
         LeaveRequest::create($data);
