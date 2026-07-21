@@ -67,6 +67,7 @@
                     <th>Đến ngày</th>
                     <th>Số ngày</th>
                     <th>Lý do</th>
+                    <th>Khẩn cấp</th>
                     <th>Trạng thái</th>
                     <th>Hành động</th>
                 </tr>
@@ -80,6 +81,18 @@
                         <td>{{ \Carbon\Carbon::parse($leave->end_date)->format('d/m/Y') }}</td>
                         <td>{{ $leave->days }}</td>
                         <td>{{ $leave->reason ?? 'Không có lý do' }}</td>
+                        <td>
+                            @if($leave->is_urgent)
+                                <span style="color: #d32f2f; font-weight: bold; background: #ffebee; padding: 2px 8px; border-radius: 4px;">Khẩn cấp</span>
+                                @if($leave->urgent_reason)
+                                    <div style="margin-top:4px;font-size:12px;color:#666;max-width:200px;">
+                                        {{ Str::limit($leave->urgent_reason, 80) }}
+                                    </div>
+                                @endif
+                            @else
+                                -
+                            @endif
+                        </td>
                         <td>
                             <span class="badge @if($leave->status === 'approved') approved @elseif($leave->status === 'rejected') rejected @else pending @endif">
                                 @if($leave->status === 'approved') ✓ Đã duyệt

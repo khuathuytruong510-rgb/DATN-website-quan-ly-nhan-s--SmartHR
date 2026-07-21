@@ -11,12 +11,15 @@ use App\Models\EmployeeEvaluation;
 use App\Models\LeaveRequest;
 use App\Models\Notification;
 use App\Models\Payroll;
+use App\Traits\HasLeaveLimit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\View\View;
 
 class EmployeeController extends Controller
 {
+    use HasLeaveLimit;
+
     public function dashboard()
     {
         $user = auth()->user();
@@ -197,7 +200,16 @@ class EmployeeController extends Controller
 
         $leaves = $employee->leaveRequests()->latest()->get();
 
-        return view('employee.leave.index', ['leaves' => $leaves]);
+        $limitCheck = $this->checkLeaveLimit(
+            $employee->id,
+            now()->startOfMonth()->toDateString(),
+            now()->endOfMonth()->toDateString()
+        );
+
+        return view('employee.leave.index', [
+            'leaves' => $leaves,
+            'leaveLimit' => $limitCheck,
+        ]);
     }
 
     public function leaveCreate()
@@ -215,7 +227,24 @@ class EmployeeController extends Controller
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'type' => ['required', 'in:annual,sick,personal,unpaid'],
             'reason' => ['nullable', 'string'],
+            'is_urgent' => ['nullable', 'boolean'],
+            'urgent_reason' => ['required_if:is_urgent,1', 'nullable', 'string', 'max:500'],
         ]);
+
+        $data['is_urgent'] = $request->boolean('is_urgent');
+
+        $limitCheck = $this->checkLeaveLimit(
+            $employee->id,
+            $data['start_date'],
+            $data['end_date']
+        );
+
+        if ($limitCheck['exceeded'] && empty($data['is_urgent'])) {
+            return back()->withInput()->with('error',
+                "Bạn đã sử dụng {$limitCheck['used_days']}/{$limitCheck['max_days']} ngày nghỉ phép trong tháng này. " .
+                "Vui lòng liên hệ bộ phận hỗ trợ nếu cần nghỉ thêm với lý do thuyết phục."
+            );
+        }
 
         $data['employee_id'] = $employee->id;
         $data['days'] = (int) (Carbon::parse($data['end_date'])->diffInDays(Carbon::parse($data['start_date'])) + 1);
