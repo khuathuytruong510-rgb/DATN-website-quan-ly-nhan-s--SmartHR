@@ -18,15 +18,10 @@ class PayrollEmailController extends Controller
         $this->middleware(\App\Http\Middleware\EnsureHrOrAdmin::class);
     }
 
-    public function index(): View
-    {
-        $payrolls = Payroll::with('employee')
-            ->orderByDesc('month')
-            ->orderByDesc('id')
-            ->get();
-
-        return view('payroll.email.index', compact('payrolls'));
-    }
+   public function index()
+{
+    dd('Đã vào PayrollEmailController');
+}
 
     public function send(Payroll $payroll): RedirectResponse
     {

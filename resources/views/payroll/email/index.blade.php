@@ -15,7 +15,7 @@
                 </div>
                 <form action="{{ route('payroll.email.send_all') }}" method="POST">
                     @csrf
-                    <button class="btn btn-primary" type="submit">Gửi tất cả</button>
+                    <butphp artisan route:listton class="btn btn-primary" type="submit">Gửi tất cả</button>
                 </form>
             </div>
         </div>
@@ -90,5 +90,6 @@
             </div>
         </div>
     </div>
+    
 </div>
 @endsection

@@ -52,7 +52,15 @@ class EmployeeController extends ApiController
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $employee = Employee::create(array_merge($validator->validated(), ['status' => $request->input('status', 'active')]));
+        $data = array_merge($validator->validated(), ['status' => $request->input('status', 'active')]);
+
+        // Auto-generate employee code if not provided
+        if (empty($data['employee_code'])) {
+            $department = Department::findOrFail($data['department_id']);
+            $data['employee_code'] = Employee::generateUniqueEmployeeCode($department);
+        }
+
+        $employee = Employee::create($data);
 
         $this->syncDepartmentCount($employee->department_id);
 

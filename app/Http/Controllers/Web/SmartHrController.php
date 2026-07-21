@@ -14,6 +14,7 @@ use App\Models\Benefit;
 use App\Models\LeaveRequest;
 use App\Models\Payroll;
 use App\Models\Notification;
+use App\Models\Position;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,7 +24,9 @@ use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use App\Mail\PayrollConfirmationMail;
+use App\Services\ContractService;
 use App\Services\PayrollCalculationService;
+use App\Support\ContractFixedTerms;
 use Illuminate\Support\Facades\Mail;
 
 class SmartHrController extends Controller
@@ -111,12 +114,20 @@ class SmartHrController extends Controller
         $user = auth()->user();
 
         if ($user->is_admin || $user->is_hr || $user->is_accountant) {
+            $expiringContracts = Contract::with(['employee.department'])
+                ->whereNotIn('status', ['expired', 'cancelled'])
+                ->whereNotNull('end_date')
+                ->whereBetween('end_date', [now()->toDateString(), now()->addDays(30)->toDateString()])
+                ->orderBy('end_date')
+                ->get();
+
             return view('admin.dashboard', [
                 'departmentCount' => Department::count(),
                 'employeeCount' => Employee::count(),
                 'contractCount' => Contract::count(),
                 'latestEmployees' => Employee::with('department')->latest()->take(5)->get(),
                 'latestContracts' => Contract::with('employee')->latest()->take(5)->get(),
+                'expiringContracts' => $expiringContracts,
             ]);
         }
 
@@ -200,10 +211,12 @@ class SmartHrController extends Controller
         ]);
 
         if ($data['role'] !== 'admin') {
+            $department = Department::findOrFail($data['department_id']);
             Employee::create([
                 'user_id' => $user->id,
                 'name' => $data['name'],
                 'email' => $data['email'],
+                'employee_code' => Employee::generateUniqueEmployeeCode($department),
                 'position' => $data['role'] === 'hr' ? 'HR' : ($data['role'] === 'accountant' ? 'Kế toán' : 'Nhân viên'),
                 'department_id' => $data['department_id'],
                 'status' => 'active',
@@ -417,15 +430,26 @@ class SmartHrController extends Controller
 
     public function createEmployee(): View
     {
+        $employee = new Employee(['status' => 'active']);
         return view('employees.form', [
-            'employee' => new Employee(['status' => 'active']),
+            'employee' => $employee,
             'departments' => Department::orderBy('name')->get(),
+            'positions' => Position::orderBy('name')->get(),
+            'nextEmployeeCode' => '', // Will be auto-generated on store based on department
         ]);
     }
 
     public function storeEmployee(Request $request)
     {
-        $employee = Employee::create($this->validateEmployee($request));
+        $data = $this->validateEmployee($request);
+        
+        // Auto-generate employee code based on department if not already set
+        if (empty($data['employee_code'])) {
+            $department = Department::findOrFail($data['department_id']);
+            $data['employee_code'] = Employee::generateUniqueEmployeeCode($department);
+        }
+        
+        $employee = Employee::create($data);
         $this->syncDepartmentCount($employee->department_id);
 
         if ($request->expectsJson()) {
@@ -443,6 +467,7 @@ class SmartHrController extends Controller
         return view('employees.form', [
             'employee' => $employee,
             'departments' => Department::orderBy('name')->get(),
+            'positions' => Position::orderBy('name')->get(),
         ]);
     }
 
@@ -1214,11 +1239,24 @@ class SmartHrController extends Controller
     public function showEmployee(Request $request, Employee $employee)
     {
         if ($request->expectsJson()) {
+            $position = $employee->position ?: optional($employee->positionDetail)->name;
+            $positionDetail = $employee->positionDetail;
+            $positionMinSalary = optional($positionDetail)->salary_range_min;
+            $positionMaxSalary = optional($positionDetail)->salary_range_max;
+            $positionAllowance = optional($positionDetail)->allowance;
+            $positionAllowanceDefault = $positionAllowance ?: ($positionMinSalary ? (int) round($positionMinSalary * 0.1) : 0);
+
             return response()->json([
                 'id' => $employee->id,
                 'name' => $employee->name,
                 'employee_code' => $employee->employee_code,
-                'position' => $employee->position,
+                'position' => $position,
+                'position_id' => $employee->position_id,
+                'position_salary_min' => $positionMinSalary,
+                'position_salary_max' => $positionMaxSalary,
+                'position_allowance' => $positionAllowance,
+                'position_base_salary' => optional($positionDetail)->base_salary,
+                'position_allowance_default' => $positionAllowanceDefault,
                 'department' => $employee->department ? ['name' => $employee->department->name] : null,
             ]);
         }
@@ -1233,12 +1271,19 @@ class SmartHrController extends Controller
                 'contract_code' => $this->generateContractCode(),
                 'status' => 'waiting_employee',
                 'contract_status' => 'waiting_employee',
+                'contract_type' => 'fixed_term',
+                'terms' => ContractFixedTerms::forType('fixed_term'),
+                'contract_content' => ContractFixedTerms::forType('fixed_term'),
                 'base_salary' => 0,
                 'allowance' => 0,
                 'bonus' => 0,
+                'allowed_unpaid_leave_days_per_month' => 1,
+                'allowed_makeup_attendance_per_month' => 3,
+                'allowed_maternity_leave_days' => 180,
             ]),
             'employees' => Employee::orderBy('name')->get(),
             'signers' => User::where('is_admin', true)->orWhere('is_hr', true)->orderBy('name')->get(),
+            'positions' => Position::orderBy('name')->get(),
             'isEdit' => false,
         ]);
     }
@@ -1255,7 +1300,20 @@ class SmartHrController extends Controller
             return back()->withInput()->with('error', 'Nhân viên này đã có hợp đồng đang có hiệu lực.');
         }
 
-        $contractService->createContract(Auth::user(), $data);
+        if ($request->input('sign_and_save')) {
+            $data['employee_signed_at'] = Auth::user()->is_admin || Auth::user()->is_hr ? now()->toDateTimeString() : null;
+            $data['director_signed_at'] = Auth::user()->is_admin ? now()->toDateTimeString() : null;
+        }
+
+        $contract = $contractService->createContract(Auth::user(), $data);
+
+        if ($request->ajax() || $request->wantsJson() || $request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Tạo hợp đồng thành công.',
+                'redirect' => route('contracts.index'),
+            ]);
+        }
 
         return redirect()->route('contracts.index')->with('success', 'Tạo hợp đồng thành công.');
     }
@@ -1300,6 +1358,7 @@ class SmartHrController extends Controller
             'contract' => $contract,
             'employees' => Employee::orderBy('name')->get(),
             'signers' => User::where('is_admin', true)->orWhere('is_hr', true)->orderBy('name')->get(),
+            'positions' => Position::orderBy('name')->get(),
             'isEdit' => true,
         ]);
     }
@@ -1316,7 +1375,20 @@ class SmartHrController extends Controller
             return back()->withInput()->with('error', 'Nhân viên này đã có hợp đồng đang có hiệu lực.');
         }
 
-        $contractService->updateContract(Auth::user(), $contract, $data);
+        if ($request->input('sign_and_save')) {
+            $data['employee_signed_at'] = Auth::user()->is_admin || Auth::user()->is_hr ? now()->toDateTimeString() : null;
+            $data['director_signed_at'] = Auth::user()->is_admin ? now()->toDateTimeString() : null;
+        }
+
+        $contract = $contractService->updateContract(Auth::user(), $contract, $data);
+
+        if ($request->ajax() || $request->wantsJson() || $request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Cập nhật hợp đồng thành công.',
+                'redirect' => route('contracts.index'),
+            ]);
+        }
 
         return redirect()->route('contracts.index')->with('success', 'Cập nhật hợp đồng thành công.');
     }
@@ -1352,9 +1424,13 @@ class SmartHrController extends Controller
                 'start_date' => now()->toDateString(),
                 'end_date' => now()->addYear()->toDateString(),
                 'notes' => $contract->notes,
+                'allowed_unpaid_leave_days_per_month' => $contract->allowed_unpaid_leave_days_per_month ?? 1,
+                'allowed_makeup_attendance_per_month' => $contract->allowed_makeup_attendance_per_month ?? 3,
+                'allowed_maternity_leave_days' => $contract->allowed_maternity_leave_days ?? 180,
             ]),
             'employees' => Employee::orderBy('name')->get(),
             'signers' => User::where('is_admin', true)->orWhere('is_hr', true)->orderBy('name')->get(),
+            'positions' => Position::orderBy('name')->get(),
             'isEdit' => false,
             'renewingFrom' => $contract,
         ]);
@@ -1401,16 +1477,26 @@ class SmartHrController extends Controller
         return $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:employees,email,' . $employeeId],
-            'position' => ['required', 'string', 'max:255'],
+            'position' => ['nullable', 'string', 'max:255'],
+            'position_id' => ['nullable', 'exists:positions,id'],
             'department_id' => ['required', 'exists:departments,id'],
             'status' => ['required', 'in:active,inactive'],
+            'gender' => ['nullable', 'in:male,female,other'],
+            'dob' => ['nullable', 'date'],
+            'cccd' => ['nullable', 'string', 'max:20'],
+            'phone' => ['nullable', 'string', 'max:20'],
+            'address' => ['nullable', 'string'],
+            'start_date' => ['nullable', 'date'],
+            'education' => ['nullable', 'string', 'max:255'],
+            'experience' => ['nullable', 'string'],
+            'leave_balance' => ['nullable', 'integer', 'min:0'],
         ]);
     }
 
     private function prepareContractData(ContractFormRequest $request, ?Contract $contract = null): array
     {
         $data = $request->validated();
-        $data['status'] = $data['status'] ?? 'waiting_employee';
+        $data['status'] = $data['status'] ?? \App\Models\Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE;
         $data['contract_status'] = $data['status'];
 
         if ($request->hasFile('document')) {
@@ -1468,7 +1554,7 @@ class SmartHrController extends Controller
     private function hasActiveContract(int $employeeId, ?int $excludeId): bool
     {
         $query = Contract::where('employee_id', $employeeId)
-            ->whereIn('status', ['active', 'waiting_employee', 'waiting_director', 'expiring'])
+            ->whereIn('status', [\App\Models\Contract::STATUS_ACTIVE, \App\Models\Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE, \App\Models\Contract::STATUS_WAITING_DIRECTOR_SIGNATURE, 'expiring'])
             ->where(function ($q) {
                 $q->whereNull('end_date')->orWhere('end_date', '>=', now()->toDateString());
             });
@@ -1525,6 +1611,82 @@ class SmartHrController extends Controller
         Department::whereKey($departmentId)->update([
             'employee_count' => Employee::where('department_id', $departmentId)->count(),
         ]);
+    }
+
+    public function getPositionByName(string $name)
+    {
+        $position = Position::query()
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
+            ->orWhereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($name) . '%'])
+            ->first();
+
+        if (! $position) {
+            return response()->json(['found' => false]);
+        }
+
+        return response()->json([
+            'found' => true,
+            'id' => $position->id,
+            'name' => $position->name,
+            'salary_range_min' => $position->salary_range_min,
+            'salary_range_max' => $position->salary_range_max,
+            'allowance' => $position->allowance,
+            'base_salary' => $position->base_salary,
+            'level' => $position->level,
+        ]);
+    }
+
+    public function getPositionById(int $id)
+    {
+        $position = Position::find($id);
+
+        if (! $position) {
+            return response()->json(['found' => false]);
+        }
+
+        return response()->json([
+            'found' => true,
+            'id' => $position->id,
+            'name' => $position->name,
+            'salary_range_min' => $position->salary_range_min,
+            'salary_range_max' => $position->salary_range_max,
+            'allowance' => $position->allowance,
+            'base_salary' => $position->base_salary,
+            'level' => $position->level,
+        ]);
+    }
+
+    public function getNextEmployeeCode(Request $request)
+    {
+        $departmentId = $request->query('department_id');
+        
+        if (!$departmentId) {
+            return response()->json(['error' => 'department_id is required'], 400);
+        }
+        
+        $department = Department::find($departmentId);
+        if (!$department) {
+            return response()->json(['error' => 'Department not found'], 404);
+        }
+        
+        $code = Employee::generateUniqueEmployeeCode($department);
+        return response()->json(['code' => $code]);
+    }
+
+    private function generateEmployeeCode(): string
+    {
+        $prefix = 'NV-' . now()->format('Ym') . '-';
+        $lastEmployee = Employee::where('employee_code', 'like', $prefix . '%')
+            ->orderByDesc('employee_code')
+            ->first();
+
+        if ($lastEmployee && preg_match('/(\d+)$/', $lastEmployee->employee_code, $matches)) {
+            $next = (int) $matches[1] + 1;
+        } else {
+            $next = 1;
+        }
+
+        return $prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
     }
 
     /**

@@ -1,7 +1,8 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="container-fluid py-3">
+<div class="contract-page">
+<div class="container-fluid py-2">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="mb-1">Chi tiết hợp đồng</h2>
@@ -29,8 +30,42 @@
                         <div class="col-md-6"><strong>Ngày bắt đầu:</strong> {{ optional($contract->start_date)->format('d/m/Y') ?? '—' }}</div>
                         <div class="col-md-6"><strong>Ngày kết thúc:</strong> {{ optional($contract->end_date)->format('d/m/Y') ?? '—' }}</div>
                         <div class="col-md-6"><strong>Lương:</strong> {{ number_format($contract->salary ?? 0, 0, ',', '.') }} VNĐ</div>
-                        <div class="col-md-6"><strong>Người tạo:</strong> {{ optional($contract->createdBy)->name ?? '—' }}</div>
+                        <div class="col-md-6"><strong>Phụ cấp:</strong> {{ number_format($contract->allowance ?? 0, 0, ',', '.') }} VNĐ</div>
+                        <div class="col-md-6"><strong>Nơi làm việc:</strong> {{ $contract->workplace ?? '—' }}</div>
+                        <div class="col-md-6"><strong>Ca làm việc:</strong> {{ $contract->working_schedule === 'morning' ? 'Sáng' : ($contract->working_schedule === 'evening' ? 'Tối' : ($contract->working_schedule === 'morning_evening' ? 'Sáng và tối' : '—')) }}</div>
+                        <div class="col-md-6"><strong>Người tạo:</strong> {{ optional($contract->createdByUser)->name ?? '—' }}</div>
                         <div class="col-md-12"><strong>Ghi chú:</strong> {{ $contract->notes ?? '—' }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Quyền lợi cố định</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="border rounded p-3 text-center">
+                                <div class="text-muted small mb-1">Nghỉ phép không lương</div>
+                                <div class="fs-4 fw-bold text-primary">{{ $contract->allowed_unpaid_leave_days_per_month ?? 1 }} ngày/tháng</div>
+                                <div class="text-muted small">Khi xin nghỉ phép sẽ không được hưởng lương</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded p-3 text-center">
+                                <div class="text-muted small mb-1">Điểm danh bù</div>
+                                <div class="fs-4 fw-bold text-success">{{ $contract->allowed_makeup_attendance_per_month ?? 3 }} lần/tháng</div>
+                                <div class="text-muted small">Được phép bù công khi bỏ lỡ</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded p-3 text-center">
+                                <div class="text-muted small mb-1">Nghỉ thai sản</div>
+                                <div class="fs-4 fw-bold text-info">{{ $contract->allowed_maternity_leave_days ?? 180 }} ngày</div>
+                                <div class="text-muted small">Theo Luật Lao động Việt Nam</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -64,16 +99,59 @@
                 </div>
             </div>
 
-            @if($contract->parent_contract_id)
-                <div class="card shadow-sm mb-4">
-                    <div class="card-header bg-white">
-                        <h5 class="mb-0">Lịch sử gia hạn hợp đồng</h5>
-                    </div>
-                    <div class="card-body">
-                        <p class="mb-0">Hợp đồng này được tạo từ hợp đồng gốc #{{ $contract->parent_contract_id }}.</p>
-                    </div>
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Điều khoản</h5>
                 </div>
-            @endif
+                <div class="card-body">
+                    <div class="mb-3"><strong>Điều khoản mặc định:</strong></div>
+                    <div class="border rounded p-3 bg-light">{{ $contract->contract_content ?? $contract->terms ?? '—' }}</div>
+                    @if($contract->additional_terms)
+                        <div class="mt-3"><strong>Điều khoản bổ sung:</strong></div>
+                        <div class="border rounded p-3 bg-light">{{ $contract->additional_terms }}</div>
+                    @endif
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Lịch sử gia hạn</h5>
+                </div>
+                <div class="card-body">
+                    @if($contract->parent_contract_id || $contract->renewals->count())
+                        <ul class="mb-0">
+                            @if($contract->parent_contract_id)
+                                <li>Hợp đồng này là bản gia hạn của <a href="{{ route('contracts.show', $contract->parentContract) }}">{{ $contract->parentContract?->contract_code ?? '#' . $contract->parent_contract_id }}</a>.</li>
+                            @endif
+                            @foreach($contract->renewals as $renewal)
+                                <li><a href="{{ route('contracts.show', $renewal) }}">{{ $renewal->contract_code }}</a> — {{ optional($renewal->start_date)->format('d/m/Y') }} đến {{ optional($renewal->end_date)->format('d/m/Y') }}</li>
+                            @endforeach
+                        </ul>
+                    @else
+                        <p class="mb-0">Chưa có lịch sử gia hạn.</p>
+                    @endif
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Nhật ký hợp đồng</h5>
+                </div>
+                <div class="card-body">
+                    @if($contract->logs->count())
+                        <ul class="timeline list-unstyled mb-0">
+                            @foreach($contract->logs->sortByDesc('created_at') as $log)
+                                <li class="border-start ps-3 pb-3">
+                                    <div class="fw-semibold">{{ $log->message }}</div>
+                                    <div class="text-muted small">{{ optional($log->created_at)->format('d/m/Y H:i') }}</div>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @else
+                        <p class="mb-0">Chưa có nhật ký.</p>
+                    @endif
+                </div>
+            </div>
         </div>
 
         <div class="col-lg-4">
@@ -84,19 +162,23 @@
                 <div class="card-body">
                     @php
                         $badge = match($contract->status) {
-                            'waiting_employee', 'waiting_director' => 'warning',
+                            'waiting_employee_signature', 'waiting_director_signature', 'waiting_employee', 'waiting_director' => 'warning',
                             'active' => 'success',
                             'expiring' => 'info',
                             'expired' => 'danger',
+                            'rejected' => 'dark',
                             'cancelled' => 'secondary',
                             default => 'secondary',
                         };
                         $label = match($contract->status) {
+                            'waiting_employee_signature' => 'Chờ nhân viên ký',
+                            'waiting_director_signature' => 'Chờ giám đốc ký',
                             'waiting_employee' => 'Chờ nhân viên ký',
                             'waiting_director' => 'Chờ giám đốc ký',
                             'active' => 'Có hiệu lực',
                             'expiring' => 'Sắp hết hạn',
                             'expired' => 'Hết hạn',
+                            'rejected' => 'Từ chối',
                             'cancelled' => 'Đã hủy',
                             default => 'Chờ xử lý',
                         };
@@ -118,5 +200,6 @@
             </div>
         </div>
     </div>
+</div>
 </div>
 @endsection

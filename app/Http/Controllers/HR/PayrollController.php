@@ -151,4 +151,17 @@ class PayrollController extends Controller
             'Đã xóa bảng lương.'
         );
     }
+
+public function sendConfirmation(Payroll $payroll)
+{
+    $payroll->update([
+        'status' => 'waiting_employee_confirmation',
+        'confirmation_sent_at' => now(),
+    ]);
+
+    return back()->with(
+        'success',
+        'Đã gửi yêu cầu xác nhận bảng lương.'
+    );
+}
 }
