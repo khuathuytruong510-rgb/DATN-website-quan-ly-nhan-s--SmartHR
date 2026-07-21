@@ -9,6 +9,7 @@ use App\Models\EmployeeBenefit;
 use App\Models\EmployeeEvaluation;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Employee extends Model
 {
@@ -52,6 +53,11 @@ class Employee extends Model
     public function attendances(): HasMany
     {
         return $this->hasMany(Attendance::class);
+    }
+
+    public function faceProfile(): HasOne
+    {
+        return $this->hasOne(FaceProfile::class);
     }
 
     public function payrolls(): HasMany
