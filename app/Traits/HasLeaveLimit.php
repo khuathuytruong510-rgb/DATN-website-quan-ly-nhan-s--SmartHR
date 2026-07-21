@@ -17,7 +17,7 @@ trait HasLeaveLimit
     {
         $start = Carbon::parse($startDate);
         $end = Carbon::parse($endDate);
-        $fullDays = (int) ($end->diffInDays($start) + 1);
+        $fullDays = (int) (abs($end->diffInDays($start)) + 1);
 
         if ($halfDay && $fullDays === 1) {
             return 0.5;
