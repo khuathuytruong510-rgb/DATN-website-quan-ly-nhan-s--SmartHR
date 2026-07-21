@@ -225,6 +225,7 @@ class EmployeeController extends Controller
         $data = $request->validate([
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'half_day' => ['nullable', 'boolean'],
             'type' => ['required', 'in:annual,sick,personal,unpaid'],
             'reason' => ['nullable', 'string'],
             'is_urgent' => ['nullable', 'boolean'],
@@ -232,22 +233,26 @@ class EmployeeController extends Controller
         ]);
 
         $data['is_urgent'] = $request->boolean('is_urgent');
+        $data['half_day'] = $request->boolean('half_day');
 
         $limitCheck = $this->checkLeaveLimit(
             $employee->id,
             $data['start_date'],
-            $data['end_date']
+            $data['end_date'],
+            $data['half_day']
         );
 
         if ($limitCheck['exceeded'] && empty($data['is_urgent'])) {
-            return back()->withInput()->with('error',
-                "Bạn đã sử dụng {$limitCheck['used_days']}/{$limitCheck['max_days']} ngày nghỉ phép trong tháng này. " .
-                "Vui lòng liên hệ bộ phận hỗ trợ nếu cần nghỉ thêm với lý do thuyết phục."
-            );
+            $msg = "Bạn đã sử dụng {$limitCheck['used_days']}/{$limitCheck['max_days']} ngày nghỉ phép trong tháng này. ";
+            if ($limitCheck['requests_exceeded']) {
+                $msg .= "Bạn đã hết {$limitCheck['max_requests']} lượt xin nghỉ trong tháng. ";
+            }
+            $msg .= "Vui lòng liên hệ bộ phận hỗ trợ nếu cần nghỉ thêm với lý do thuyết phục.";
+            return back()->withInput()->with('error', $msg);
         }
 
         $data['employee_id'] = $employee->id;
-        $data['days'] = (int) (Carbon::parse($data['end_date'])->diffInDays(Carbon::parse($data['start_date'])) + 1);
+        $data['days'] = $this->calculateLeaveDays($data['start_date'], $data['end_date'], $data['half_day']);
         $data['status'] = 'pending';
 
         LeaveRequest::create($data);
