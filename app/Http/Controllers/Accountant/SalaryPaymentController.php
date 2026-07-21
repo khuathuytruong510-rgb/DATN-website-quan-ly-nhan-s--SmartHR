@@ -146,13 +146,8 @@ class SalaryPaymentController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        // Xử lý thanh toán thông qua Service
+        // Xử lý thanh toán thông qua Service (đồng thời ghi lịch sử lương)
         $this->salaryService->processPayment($salaryPayment, $validated);
-
-        // Cập nhật status của payroll
-        if ($salaryPayment->payroll) {
-            $salaryPayment->payroll->update(['status' => 'paid', 'paid_at' => now()]);
-        }
 
         return redirect()->route('salary_payments.show', $salaryPayment)
             ->with('success', 'Thanh toán lương thành công!');
