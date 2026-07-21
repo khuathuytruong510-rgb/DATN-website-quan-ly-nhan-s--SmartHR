@@ -83,7 +83,7 @@ class AttendanceAndPayrollSeeder extends Seeder
 
     private function createJunePayroll($employees): void
     {
-        $month = '2026-06';
+        $month = 6;
         $year = 2026;
         
         foreach ($employees as $employee) {

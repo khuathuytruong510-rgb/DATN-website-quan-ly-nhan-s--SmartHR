@@ -13,6 +13,7 @@ class LeaveRequest extends Model
         'start_date',
         'end_date',
         'days',
+        'half_day',
         'type',
         'reason',
         'is_urgent',
@@ -23,7 +24,17 @@ class LeaveRequest extends Model
         'rejection_reason',
     ];
 
-    protected $dates = ['start_date', 'end_date', 'approved_at'];
+    protected function casts(): array
+    {
+        return [
+            'start_date' => 'date',
+            'end_date' => 'date',
+            'approved_at' => 'datetime',
+            'days' => 'float',
+            'half_day' => 'boolean',
+            'is_urgent' => 'boolean',
+        ];
+    }
 
     public function employee(): BelongsTo
     {

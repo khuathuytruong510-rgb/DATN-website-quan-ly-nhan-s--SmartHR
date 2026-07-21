@@ -17,6 +17,7 @@ class AccountantLeaveRequestTest extends TestCase
         $accountant = User::factory()->create(['is_accountant' => true]);
         $department = \App\Models\Department::create([
             'name' => 'Engineering',
+            'code' => 'ENG',
             'manager' => 'Manager',
         ]);
         $employee = Employee::create([
@@ -59,7 +60,7 @@ class AccountantLeaveRequestTest extends TestCase
             'name' => 'Tran Van B',
             'email' => 'employee2@example.com',
             'position' => 'Analyst',
-            'department_id' => \App\Models\Department::create(['name' => 'HR', 'manager' => 'Manager'])->id,
+            'department_id' => \App\Models\Department::create(['name' => 'HR', 'code' => 'HR', 'manager' => 'Manager'])->id,
             'status' => 'active',
         ]);
         $leaveRequest = LeaveRequest::create([
