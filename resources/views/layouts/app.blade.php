@@ -128,8 +128,9 @@
                             <summary class="nav-summary {{ request()->routeIs('accountant.*') ? 'active' : '' }}">Kế toán</summary>
                             <a class="{{ request()->routeIs('accountant.dashboard') ? 'active' : '' }}" href="{{ route('accountant.dashboard') }}">Dashboard</a>
                             <a class="{{ request()->routeIs('accountant.payroll.*') ? 'active' : '' }}" href="{{ route('accountant.payroll.index') }}">Quản lý bảng lương</a>
+                            <a class="{{ request()->routeIs('payroll.index') || request()->routeIs('payroll.payment.*') ? 'active' : '' }}" href="{{ route('payroll.index') }}">Thanh toán lương</a>
+                            <a class="{{ request()->routeIs('salary_histories.*') ? 'active' : '' }}" href="{{ route('salary_histories.index') }}">Lịch sử lương</a>
                             <a class="{{ request()->routeIs('accountant.payroll.generate') ? 'active' : '' }}" href="{{ route('accountant.payroll.generate') }}">Tính lương</a>
-                            <a class="{{ request()->routeIs('accountant.payroll.send') ? 'active' : '' }}" href="{{ route('accountant.payroll.send') }}">Gửi bảng lương</a>
                             <a class="{{ request()->routeIs('accountant.payroll.feedback') ? 'active' : '' }}" href="{{ route('accountant.payroll.feedback') }}">Phản hồi lương</a>
                             <a class="{{ request()->routeIs('accountant.leave_requests') ? 'active' : '' }}" href="{{ route('accountant.leave_requests') }}">Nghỉ phép</a>
                             <a class="{{ request()->routeIs('accountant.allowances') ? 'active' : '' }}" href="{{ route('accountant.allowances') }}">Quản lý phụ cấp</a>
@@ -149,7 +150,7 @@
                         <a class="{{ request()->routeIs('me.leave_requests') || request()->routeIs('me.leave_requests.*') ? 'active' : '' }}" href="{{ route('me.leave_requests') }}"><i class="bi bi-journal-text me-2"></i>Đơn xin nghỉ</a>
                         <a class="{{ request()->routeIs('me.overtime_requests') || request()->routeIs('me.overtime_requests.*') ? 'active' : '' }}" href="{{ route('me.overtime_requests') }}"><i class="bi bi-clock me-2"></i>Đăng ký tăng ca</a>
                         @php
-                            $mePayrollActive = request()->routeIs('me.payrolls') || request()->routeIs('me.salary_histories');
+                            $mePayrollActive = request()->routeIs('me.payrolls') || request()->routeIs('me.salary_histories*');
                         @endphp
                         <details class="nav-group" {{ $mePayrollActive ? 'open' : '' }}>
                             <summary class="nav-summary {{ $mePayrollActive ? 'active' : '' }}">Lương</summary>

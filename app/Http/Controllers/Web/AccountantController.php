@@ -193,7 +193,16 @@ class AccountantController extends Controller
 
     public function payrollFeedback(): View
     {
-        return view('accountant.payroll.feedback');
+        $issues = Payroll::with('employee')
+            ->where('confirmation_status', 'issue_reported')
+            ->whereNotNull('issue_report')
+            ->orderByDesc('issue_reported_at')
+            ->orderByDesc('id')
+            ->paginate(20);
+
+        return view('accountant.payroll.feedback', [
+            'issues' => $issues,
+        ]);
     }
 
     public function leaveRequests(Request $request): View
