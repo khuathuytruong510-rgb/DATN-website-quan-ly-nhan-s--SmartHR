@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Mail\PayrollMail;
 use App\Mail\PayrollConfirmationMail;
+use App\Traits\HasLeaveLimit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Auth;
@@ -18,6 +19,8 @@ use App\Models\ActivityLog;
 
 class AccountantController extends Controller
 {
+    use HasLeaveLimit;
+
     public function dashboard(): View
     {
         $total = Payroll::count();
@@ -230,7 +233,24 @@ class AccountantController extends Controller
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'type' => ['required', 'in:sick,personal,annual,unpaid,maternity'],
             'reason' => ['nullable', 'string'],
+            'is_urgent' => ['nullable', 'boolean'],
+            'urgent_reason' => ['required_if:is_urgent,1', 'nullable', 'string', 'max:500'],
         ]);
+
+        $data['is_urgent'] = $request->boolean('is_urgent');
+
+        $limitCheck = $this->checkLeaveLimit(
+            $data['employee_id'],
+            $data['start_date'],
+            $data['end_date']
+        );
+
+        if ($limitCheck['exceeded'] && empty($data['is_urgent'])) {
+            return back()->withInput()->with('error',
+                "Nhân viên đã sử dụng {$limitCheck['used_days']}/{$limitCheck['max_days']} ngày nghỉ phép trong tháng này. " .
+                "Vui lòng yêu cầu nhân viên liên hệ bộ phận hỗ trợ nếu cần nghỉ thêm với lý do thuyết phục."
+            );
+        }
 
         $data['days'] = \Carbon\Carbon::parse($data['end_date'])->diffInDays(\Carbon\Carbon::parse($data['start_date'])) + 1;
         $data['status'] = 'pending';
@@ -306,7 +326,6 @@ class AccountantController extends Controller
     {
         return view('accountant.change_password');
     }
-
     public function updatePassword(Request $request)
     {
         $data = $request->validate([
@@ -325,3 +344,4 @@ class AccountantController extends Controller
         return redirect()->route('accountant.profile')->with('success', 'Đổi mật khẩu thành công');
     }
 }
+

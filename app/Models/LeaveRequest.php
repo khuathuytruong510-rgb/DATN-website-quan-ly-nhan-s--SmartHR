@@ -15,6 +15,8 @@ class LeaveRequest extends Model
         'days',
         'type',
         'reason',
+        'is_urgent',
+        'urgent_reason',
         'status',
         'approved_by',
         'approved_at',

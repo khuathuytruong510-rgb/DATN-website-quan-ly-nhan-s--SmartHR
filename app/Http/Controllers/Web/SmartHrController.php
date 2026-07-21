@@ -16,6 +16,7 @@ use App\Models\Payroll;
 use App\Models\Notification;
 use App\Models\Position;
 use App\Models\User;
+use App\Traits\HasLeaveLimit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -31,6 +32,8 @@ use Illuminate\Support\Facades\Mail;
 
 class SmartHrController extends Controller
 {
+    use HasLeaveLimit;
+
     public function showLogin(): View
     {
         return view('auth.login');
@@ -1149,7 +1152,24 @@ class SmartHrController extends Controller
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'type' => ['required', 'in:sick,personal,annual,unpaid'],
             'reason' => ['nullable', 'string'],
+            'is_urgent' => ['nullable', 'boolean'],
+            'urgent_reason' => ['required_if:is_urgent,1', 'nullable', 'string', 'max:500'],
         ]);
+
+        $data['is_urgent'] = $request->boolean('is_urgent');
+
+        $limitCheck = $this->checkLeaveLimit(
+            $data['employee_id'],
+            $data['start_date'],
+            $data['end_date']
+        );
+
+        if ($limitCheck['exceeded'] && empty($data['is_urgent'])) {
+            return back()->withInput()->with('error',
+                "Nhân viên đã sử dụng {$limitCheck['used_days']}/{$limitCheck['max_days']} ngày nghỉ phép trong tháng này. " .
+                "Vui lòng yêu cầu nhân viên liên hệ bộ phận hỗ trợ nếu cần nghỉ thêm với lý do thuyết phục."
+            );
+        }
 
         $data['days'] = \Carbon\Carbon::parse($data['end_date'])
             ->diffInDays(\Carbon\Carbon::parse($data['start_date'])) + 1;
