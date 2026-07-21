@@ -21,6 +21,7 @@ class EmployeeSalaryHistoryAccessTest extends TestCase
 
         $department = Department::create([
             'name' => 'Engineering',
+            'code' => 'ENG',
             'manager' => 'Manager',
         ]);
 
