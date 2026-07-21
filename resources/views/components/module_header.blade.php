@@ -1,7 +1,7 @@
 @props(['title' => '', 'subtitle' => '', 'buttonText' => null, 'buttonRoute' => null])
 
-<div class="module-header card shadow-sm mb-4">
-    <div class="card-body d-flex justify-content-between align-items-center module-header-body">
+<div class="module-header card shadow-sm mb-3">
+    <div class="card-body d-flex justify-content-between align-items-center module-header-body py-3">
         <div>
             <h3 class="mb-1 fw-bold module-title">{{ $title }}</h3>
             @if($subtitle)

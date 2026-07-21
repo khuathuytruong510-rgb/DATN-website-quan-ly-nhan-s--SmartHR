@@ -6,8 +6,6 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'SmartHR')</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         :root {
             --bg: #eef3ff;
@@ -43,14 +41,20 @@
         .topbar { background: var(--panel); border-bottom: 1px solid var(--line); padding: 24px 30px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
         .topbar-title { font-weight: 800; font-size: 20px; }
         .userbox { display: flex; align-items: center; gap: 12px; }
-        .content { padding: 30px; }
-        .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 22px; }
+        .content { padding: 14px 24px 22px; min-height: 0; display: flex; flex-direction: column; }
+        .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
         h1 { margin: 0 0 8px; font-size: 32px; }
         .muted { color: var(--muted); margin: 0; }
         .grid { display: grid; gap: 20px; }
         .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .two-cols { grid-template-columns: 1fr 1fr; }
         .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px; box-shadow: 0 10px 40px rgba(15, 23, 42, .06); }
+        .contract-page { display: flex; flex-direction: column; gap: 14px; }
+        .contract-page .page-head { margin-bottom: 16px; }
+        .contract-page .card { padding: 16px 18px; box-shadow: 0 8px 24px rgba(15, 23, 42, .05); }
+        .contract-page .card-header { padding: 0 0 10px; margin-bottom: 10px; border-bottom: 1px solid var(--line); }
+        .contract-page .card-body { padding: 0.75rem 0 0; }
+        .contract-page .container-fluid { padding: 0; }
         .stat-value { font-size: 40px; font-weight: 800; margin: 18px 0 10px; }
         .btn { display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 8px; padding: 10px 14px; font-weight: 700; text-decoration: none; cursor: pointer; background: #f8fafc; color: var(--text); }
         .btn.primary { background: var(--primary); color: #fff; }

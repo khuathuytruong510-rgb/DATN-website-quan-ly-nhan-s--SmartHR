@@ -15,6 +15,7 @@
             <table class="table table-hover">
                 <thead>
                     <tr>
+                        <th>Mã NV</th>
                         <th>Tên</th>
                         <th>Email</th>
                         <th>Chức vụ</th>
@@ -26,6 +27,7 @@
                 <tbody>
                     @foreach($employees as $employee)
                         <tr>
+                            <td><code>{{ $employee->employee_code ?? '—' }}</code></td>
                             <td class="fw-semibold">{{ $employee->name }}</td>
                             <td>{{ $employee->email }}</td>
                             <td>{{ $employee->position ?? '-' }}</td>

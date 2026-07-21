@@ -10,6 +10,7 @@
             'contracts' => $contractCount,
             'latestEmployees' => $latestEmployees,
             'latestContracts' => $latestContracts,
+            'expiringContracts' => $expiringContracts,
         ];
     @endphp
 
