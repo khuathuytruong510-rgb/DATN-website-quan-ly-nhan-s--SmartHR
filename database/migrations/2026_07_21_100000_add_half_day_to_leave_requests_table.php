@@ -8,15 +8,19 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('leave_requests', function (Blueprint $table) {
-            $table->boolean('half_day')->default(false)->after('end_date');
-        });
+        if (! Schema::hasColumn('leave_requests', 'half_day')) {
+            Schema::table('leave_requests', function (Blueprint $table) {
+                $table->boolean('half_day')->default(false)->after('end_date');
+            });
+        }
     }
 
     public function down(): void
     {
-        Schema::table('leave_requests', function (Blueprint $table) {
-            $table->dropColumn('half_day');
-        });
+        if (Schema::hasColumn('leave_requests', 'half_day')) {
+            Schema::table('leave_requests', function (Blueprint $table) {
+                $table->dropColumn('half_day');
+            });
+        }
     }
 };
