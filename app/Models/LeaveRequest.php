@@ -30,6 +30,7 @@ class LeaveRequest extends Model
             'start_date' => 'date',
             'end_date' => 'date',
             'approved_at' => 'datetime',
+            'days' => 'float',
             'half_day' => 'boolean',
             'is_urgent' => 'boolean',
         ];
