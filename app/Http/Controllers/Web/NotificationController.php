@@ -13,8 +13,20 @@ class NotificationController extends Controller
 {
     public function index(): View
     {
-        $notifications = Notification::with('sender')->latest()->paginate(10);
         $user = Auth::user();
+
+        $notifications = Notification::with('sender')
+            ->where(function ($query) use ($user) {
+                $query->where('target', 'all')
+                    ->orWhere('target', 'hr');
+
+                // Admin cũng xem được mọi thông báo hệ thống gửi tới HR
+                if ($user->is_admin) {
+                    $query->orWhere('target', 'employee');
+                }
+            })
+            ->latest()
+            ->paginate(10);
 
         return view('notifications.index', compact('notifications', 'user'));
     }

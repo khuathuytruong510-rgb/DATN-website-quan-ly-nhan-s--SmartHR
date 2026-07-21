@@ -23,6 +23,10 @@ Route::middleware('guest')->group(function () {
     Route::post('/register', [SmartHrController::class, 'register'])->name('register.store');
 });
 
+// Xác nhận bảng lương qua email (không cần đăng nhập)
+Route::get('/payroll/confirm/{token}', [\App\Http\Controllers\Web\PayrollConfirmationController::class, 'confirmByToken'])
+    ->name('payroll.confirm.token');
+
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [SmartHrController::class, 'dashboard'])->name('dashboard');
 
@@ -71,6 +75,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/me/payroll', [EmployeeController::class, 'payrolls'])->name('me.payrolls')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::post('/me/payroll/{payroll}/confirm', [\App\Http\Controllers\Web\PayrollConfirmationController::class, 'confirm'])->name('me.payroll.confirm')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::post('/me/payroll/{payroll}/report-issue', [\App\Http\Controllers\Web\PayrollConfirmationController::class, 'reportIssue'])->name('me.payroll.report_issue')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::post('/me/payroll/bank-change-request', [\App\Http\Controllers\Web\PayrollConfirmationController::class, 'requestBankChange'])->name('me.payroll.bank_change')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/evaluations', [EmployeeController::class, 'evaluations'])->name('me.evaluations')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/benefits', [EmployeeController::class, 'benefits'])->name('me.benefits')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/leave-requests', [EmployeeController::class, 'leaveIndex'])->name('me.leave_requests')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
@@ -106,6 +111,9 @@ Route::middleware('auth')->group(function () {
 
     // Employee-facing salary history (own records)
     Route::get('/me/salary-histories', [\App\Http\Controllers\Web\SalaryHistoryController::class, 'meIndex'])->name('me.salary_histories');
+    Route::get('/me/salary-histories/{salaryHistory}', [\App\Http\Controllers\Web\SalaryHistoryController::class, 'meShow'])
+        ->name('me.salary_histories.show')
+        ->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
 
     Route::middleware(\App\Http\Middleware\EnsureAdminOrHr::class)->group(function () {
         Route::get('/positions', [SmartHrController::class, 'positions'])->name('positions.index');
@@ -160,51 +168,40 @@ Route::middleware('auth')->group(function () {
             Route::post('/payroll/generate', [PayrollController::class, 'generate'])
                 ->name('payroll.generate');
 
-            // Tạo mới (nếu có)
-            Route::get('/payroll/create', [PayrollController::class, 'create'])
-                ->name('payroll.create');
+            // Yêu cầu đổi STK/QR — đặt trước {payroll}
+            Route::get('/payroll/bank-requests', [\App\Http\Controllers\HR\SalaryReceiveChangeRequestController::class, 'index'])
+                ->name('payroll.bank_requests.index');
+            Route::post('/payroll/bank-requests/{changeRequest}/approve', [\App\Http\Controllers\HR\SalaryReceiveChangeRequestController::class, 'approve'])
+                ->name('payroll.bank_requests.approve');
+            Route::post('/payroll/bank-requests/{changeRequest}/reject', [\App\Http\Controllers\HR\SalaryReceiveChangeRequestController::class, 'reject'])
+                ->name('payroll.bank_requests.reject');
 
-            Route::post('/payroll', [PayrollController::class, 'store'])
-                ->name('payroll.store');
+            // Sự cố lương từ nhân viên
+            Route::get('/payroll/issues', [PayrollController::class, 'issues'])
+                ->name('payroll.issues.index');
+            Route::get('/payroll/{payroll}/fix-issue', [PayrollController::class, 'fixIssueForm'])
+                ->name('payroll.issues.fix_form');
+            Route::post('/payroll/{payroll}/fix-issue', [PayrollController::class, 'fixIssueSave'])
+                ->name('payroll.issues.fix');
 
             // Chi tiết
             Route::get('/payroll/{payroll}', [PayrollController::class, 'show'])
                 ->name('payroll.show');
 
-            // Chỉnh sửa
-            Route::get('/payroll/{payroll}/edit', [PayrollController::class, 'edit'])
-                ->name('payroll.edit');
-
-            Route::put('/payroll/{payroll}', [PayrollController::class, 'update'])
-                ->name('payroll.update');
-
-            // Duyệt bảng lương
+            // Duyệt bảng lương (HR/Admin)
             Route::post('/payroll/{payroll}/approve', [PayrollController::class, 'approve'])
                 ->name('payroll.approve');
 
-            // Duyệt bảng lương và tạo thanh toán
             Route::post('/payroll/{payroll}/approve-with-payment', [PayrollController::class, 'approveWithPayment'])
                 ->name('payroll.approve_with_payment');
 
-            // Đánh dấu đã thanh toán
-            Route::post('/payroll/{payroll}/paid', [PayrollController::class, 'paid'])
-                ->name('payroll.paid');
-
-            // Gửi xác nhận
-            Route::post('/payroll/{payroll}/send-confirmation', [PayrollController::class, 'sendConfirmation'])
-                ->name('payroll.send_confirmation');
-
-                
-            // Gửi phiếu lương
-           Route::get('/payroll/email', [\App\Http\Controllers\Web\PayrollEmailController::class, 'index'])
-                ->name('payroll.email.index'); 
-                
-
-            Route::post('/payroll/email/send/{payroll}', [\App\Http\Controllers\Web\PayrollEmailController::class, 'send'])
-                ->name('payroll.email.send');
-
-            Route::post('/payroll/email/send-all', [\App\Http\Controllers\Web\PayrollEmailController::class, 'sendAll'])
-                ->name('payroll.email.send_all');
+            // Thanh toán lương (Kế toán/Admin)
+            Route::get('/payroll/{payroll}/payment', [\App\Http\Controllers\HR\PayrollPaymentController::class, 'show'])
+                ->name('payroll.payment.show');
+            Route::post('/payroll/{payroll}/payment/bank', [\App\Http\Controllers\HR\PayrollPaymentController::class, 'updateBank'])
+                ->name('payroll.payment.bank');
+            Route::post('/payroll/{payroll}/payment/confirm', [\App\Http\Controllers\HR\PayrollPaymentController::class, 'confirm'])
+                ->name('payroll.payment.confirm');
 
             // Xóa
             Route::delete('/payroll/{payroll}', [PayrollController::class, 'destroy'])

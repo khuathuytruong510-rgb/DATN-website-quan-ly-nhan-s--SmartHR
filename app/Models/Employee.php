@@ -34,6 +34,10 @@ class Employee extends Model
         'experience',
         'leave_balance',
         'position_id',
+        'bank_name',
+        'account_number',
+        'account_holder',
+        'qr_image',
     ];
 
     protected $casts = [
