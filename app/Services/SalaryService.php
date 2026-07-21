@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\SalaryHistory;
 use App\Models\SalaryPayment;
 use App\Models\SalaryPaymentLog;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
@@ -30,6 +32,23 @@ class SalaryService
             $payment->save();
 
             $this->recordLog($payment, 'paid', $data['notes'] ?? null);
+
+            if ($payment->payroll_id && $payment->payroll) {
+                $payroll = $payment->payroll;
+                if ($payroll->status !== 'paid') {
+                    $payroll->update([
+                        'status' => 'paid',
+                        'paid_at' => $payroll->paid_at ?? now(),
+                        'paid_by' => $payroll->paid_by ?? Auth::id(),
+                        'payment_method' => $payroll->payment_method ?? ($data['payment_method'] ?? $payment->payment_method),
+                    ]);
+                }
+
+                SalaryHistory::recordFromPaidPayroll(
+                    $payroll->fresh(['employee', 'salaryPayment']),
+                    Auth::user() instanceof User ? Auth::user() : null
+                );
+            }
 
             // send mail to employee if email exists
             if ($payment->employee && !empty($payment->employee->email)) {

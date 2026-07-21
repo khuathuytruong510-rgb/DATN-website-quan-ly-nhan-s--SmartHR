@@ -19,8 +19,26 @@
                 @foreach ($notifications as $notification)
                     <div class="list-group-item">
                         <h4>{{ $notification->title }}</h4>
-                        <p>{{ $notification->message }}</p>
+                        <p style="white-space:pre-wrap;">{{ $notification->message }}</p>
                         <p class="muted">Gửi đến: {{ ucfirst($notification->target) }} | {{ $notification->created_at->format('d/m/Y H:i') }}</p>
+                        @php
+                            $payrollId = data_get($notification->data, 'payroll_id');
+                            if (! $payrollId && preg_match('/mã\s*#(\d+)/u', (string) $notification->message, $m)) {
+                                $payrollId = (int) $m[1];
+                            }
+                            $isIssue = data_get($notification->data, 'type') === 'payroll_issue'
+                                || str_contains((string) $notification->title, 'sự cố lương');
+                        @endphp
+                        @if($isIssue)
+                            <div class="actions" style="margin-top:10px;">
+                                @if($payrollId)
+                                    <a href="{{ route('payroll.issues.fix_form', $payrollId) }}" class="btn primary">Khắc phục</a>
+                                    <a href="{{ route('payroll.show', $payrollId) }}" class="btn">Xem phiếu</a>
+                                @else
+                                    <a href="{{ route('payroll.issues.index') }}" class="btn primary">Xem sự cố lương</a>
+                                @endif
+                            </div>
+                        @endif
                     </div>
                 @endforeach
             </div>
