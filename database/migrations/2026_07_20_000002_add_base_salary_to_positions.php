@@ -8,15 +8,24 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('positions', function (Blueprint $table) {
-            $table->unsignedBigInteger('base_salary')->default(0)->after('allowance');
-        });
+        if (! Schema::hasColumn('positions', 'base_salary')) {
+            Schema::table('positions', function (Blueprint $table) {
+                $after = Schema::hasColumn('positions', 'allowance') ? 'allowance' : null;
+                if ($after) {
+                    $table->unsignedBigInteger('base_salary')->default(0)->after($after);
+                } else {
+                    $table->unsignedBigInteger('base_salary')->default(0);
+                }
+            });
+        }
     }
 
     public function down(): void
     {
-        Schema::table('positions', function (Blueprint $table) {
-            $table->dropColumn('base_salary');
-        });
+        if (Schema::hasColumn('positions', 'base_salary')) {
+            Schema::table('positions', function (Blueprint $table) {
+                $table->dropColumn('base_salary');
+            });
+        }
     }
 };

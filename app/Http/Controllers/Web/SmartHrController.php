@@ -1072,24 +1072,13 @@ class SmartHrController extends Controller
                 ->with('info', 'Phiếu lương đã được thanh toán.');
         }
 
-        if ($payroll->status !== 'approved') {
+        if ($payroll->status !== \App\Services\PayrollPaymentWorkflowService::READY_FOR_PAYMENT) {
             return redirect()->route('payroll.show', $payroll)
-                ->with('error', 'Chỉ có thể đánh dấu đã thanh toán sau khi phiếu lương được chuyển sang trạng thái sẵn sàng thanh toán.');
+                ->with('error', 'Chỉ thanh toán khi bảng lương đủ điều kiện thanh toán (đã xác nhận).');
         }
 
-        $payroll->update([
-            'status' => 'paid',
-            'paid_at' => now(),
-            'paid_by' => auth()->id(),
-        ]);
-
-        \App\Models\SalaryHistory::recordFromPaidPayroll(
-            $payroll->fresh(['employee', 'salaryPayment']),
-            auth()->user()
-        );
-
-        return redirect()->route('payroll.show', $payroll)
-            ->with('success', 'Đã đánh dấu phiếu lương là đã thanh toán.');
+        return redirect()->route('payroll.payment.show', $payroll)
+            ->with('info', 'Vui lòng hoàn tất thanh toán tại trang quy trình.');
     }
 
     public function editPayroll(Payroll $payroll): View
