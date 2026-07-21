@@ -16,6 +16,7 @@
     <div class="grid two-cols">
         <div>
             <div class="field"><label>Tên phòng ban</label><div>{{ $department->name }}</div></div>
+            <div class="field"><label>Mã phòng ban</label><div><span class="badge bg-secondary">{{ $department->code }}</span></div></div>
             <div class="field"><label>Trưởng phòng</label><div>{{ $department->manager ?: '-' }}</div></div>
         </div>
         <div>

@@ -79,7 +79,13 @@
                         <td>{{ ucfirst(str_replace('_', ' ', $leave->type ?? 'N/A')) }}</td>
                         <td>{{ \Carbon\Carbon::parse($leave->start_date)->format('d/m/Y') }}</td>
                         <td>{{ \Carbon\Carbon::parse($leave->end_date)->format('d/m/Y') }}</td>
-                        <td>{{ $leave->days }}</td>
+                        <td>
+                            @if($leave->half_day)
+                                <span style="color: #1976d2; font-weight: bold;">{{ $leave->days }} (1/2 ngày)</span>
+                            @else
+                                {{ $leave->days }}
+                            @endif
+                        </td>
                         <td>{{ $leave->reason ?? 'Không có lý do' }}</td>
                         <td>
                             @if($leave->is_urgent)

@@ -35,9 +35,9 @@ class Employee extends Model
         'leave_balance',
         'position_id',
         'bank_name',
-        'account_number',
-        'account_holder',
-        'qr_image',
+        'bank_account_number',
+        'bank_account_holder',
+        'address_detail',
     ];
 
     protected $casts = [
@@ -88,6 +88,11 @@ class Employee extends Model
     public function positionDetail(): BelongsTo
     {
         return $this->belongsTo(Position::class, 'position_id');
+    }
+
+    public function salaryPayments(): HasMany
+    {
+        return $this->hasMany(SalaryPayment::class, 'employee_id');
     }
 
     /**

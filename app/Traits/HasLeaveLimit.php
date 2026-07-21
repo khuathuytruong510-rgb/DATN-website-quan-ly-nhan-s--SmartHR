@@ -7,26 +7,35 @@ use Carbon\Carbon;
 
 trait HasLeaveLimit
 {
-    /**
-     * Maximum allowed leave days per month (excluding rejected requests)
-     */
     private const MAX_LEAVE_DAYS_PER_MONTH = 2;
+    private const MAX_LEAVE_REQUESTS_PER_MONTH = 2;
 
     /**
-     * Check if employee has exceeded the monthly leave limit
-     *
-     * @param int $employeeId
-     * @param string $startDate
-     * @param string $endDate
-     * @param int|null $excludeLeaveId Leave request ID to exclude (for updates)
-     * @return array{exceeded: bool, used_days: int, requested_days: int, remaining_days: int}
+     * Tính số ngày nghỉ (hỗ trợ nửa ngày)
      */
-    private function checkLeaveLimit(int $employeeId, string $startDate, string $endDate, ?int $excludeLeaveId = null): array
+    private function calculateLeaveDays(string $startDate, string $endDate, bool $halfDay = false): float
     {
         $start = Carbon::parse($startDate);
         $end = Carbon::parse($endDate);
-        $requestedDays = (int) ($end->diffInDays($start) + 1);
+        $fullDays = (int) (abs($end->diffInDays($start)) + 1);
 
+        if ($halfDay && $fullDays === 1) {
+            return 0.5;
+        }
+
+        if ($halfDay && $fullDays > 1) {
+            return $fullDays - 0.5;
+        }
+
+        return (float) $fullDays;
+    }
+
+    /**
+     * Kiểm tra hạn nghỉ phép: max 2 ngày + max 2 đơn/tháng
+     */
+    private function checkLeaveLimit(int $employeeId, string $startDate, string $endDate, bool $halfDay = false, ?int $excludeLeaveId = null): array
+    {
+        $start = Carbon::parse($startDate);
         $year = $start->year;
         $month = $start->month;
 
@@ -39,15 +48,21 @@ trait HasLeaveLimit
             $query->where('id', '!=', $excludeLeaveId);
         }
 
-        $usedDays = (int) $query->sum('days');
+        $usedDays = (float) $query->sum('days');
+        $usedRequests = (int) (clone $query)->count();
+        $requestedDays = $this->calculateLeaveDays($startDate, $endDate, $halfDay);
         $remainingDays = max(0, self::MAX_LEAVE_DAYS_PER_MONTH - $usedDays);
 
         return [
-            'exceeded' => ($usedDays + $requestedDays) > self::MAX_LEAVE_DAYS_PER_MONTH,
+            'days_exceeded' => ($usedDays + $requestedDays) > self::MAX_LEAVE_DAYS_PER_MONTH,
+            'requests_exceeded' => $usedRequests >= self::MAX_LEAVE_REQUESTS_PER_MONTH,
+            'exceeded' => (($usedDays + $requestedDays) > self::MAX_LEAVE_DAYS_PER_MONTH) || ($usedRequests >= self::MAX_LEAVE_REQUESTS_PER_MONTH),
             'used_days' => $usedDays,
+            'used_requests' => $usedRequests,
             'requested_days' => $requestedDays,
             'remaining_days' => $remainingDays,
             'max_days' => self::MAX_LEAVE_DAYS_PER_MONTH,
+            'max_requests' => self::MAX_LEAVE_REQUESTS_PER_MONTH,
         ];
     }
 }

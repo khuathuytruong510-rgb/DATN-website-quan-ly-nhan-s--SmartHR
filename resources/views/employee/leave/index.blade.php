@@ -18,7 +18,8 @@
     @if(isset($leaveLimit))
         <div class="alert" style="margin-bottom: 1rem; padding: 0.75rem 1rem; border-radius: 4px; {{ $leaveLimit['remaining_days'] > 0 ? 'background: #e8f5e9; border-left: 4px solid #4CAF50;' : 'background: #ffebee; border-left: 4px solid #f44336;' }}">
             <strong>Quy định nghỉ phép tháng này:</strong>
-            Đã sử dụng <strong>{{ $leaveLimit['used_days'] }}/{{ $leaveLimit['max_days'] }}</strong> ngày.
+            Đã sử dụng <strong>{{ $leaveLimit['used_days'] }}/{{ $leaveLimit['max_days'] }}</strong> ngày
+            (<strong>{{ $leaveLimit['used_requests'] }}/{{ $leaveLimit['max_requests'] }}</strong> lượt).
             @if($leaveLimit['remaining_days'] > 0)
                 Còn lại <strong>{{ $leaveLimit['remaining_days'] }}</strong> ngày phép.
             @else
@@ -48,9 +49,15 @@
             <tbody>
                 @foreach($leaves as $leave)
                     <tr>
-                        <td>{{ optional($leave->start_date)->format('d/m/Y') }}</td>
-                        <td>{{ optional($leave->end_date)->format('d/m/Y') }}</td>
-                        <td>{{ $leave->days }}</td>
+                        <td>{{ \Carbon\Carbon::parse($leave->start_date)->format('d/m/Y') }}</td>
+                        <td>{{ \Carbon\Carbon::parse($leave->end_date)->format('d/m/Y') }}</td>
+                        <td>
+                            @if($leave->half_day)
+                                <span style="color: #1976d2; font-weight: bold;">{{ $leave->days }} (1/2 ngày)</span>
+                            @else
+                                {{ $leave->days }}
+                            @endif
+                        </td>
                         <td>{{ ucfirst($leave->type) }}</td>
                         <td><span class="badge {{ $leave->status }}">{{ ucfirst($leave->status) }}</span></td>
                         <td>{{ $leave->reason ?? '-' }}</td>

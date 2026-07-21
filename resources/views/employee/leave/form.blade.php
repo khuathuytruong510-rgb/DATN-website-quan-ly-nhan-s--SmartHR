@@ -45,6 +45,16 @@
         </div>
 
         <div class="field">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" name="half_day" value="1" {{ old('half_day') ? 'checked' : '' }} id="half_day" />
+                <strong>Nghỉ 1/2 ngày</strong>
+            </label>
+            <p class="muted" style="margin: 0.25rem 0 0 1.5rem; font-size: 0.85em;">
+                Chỉ áp dụng khi ngày bắt đầu = ngày kết thúc.
+            </p>
+        </div>
+
+        <div class="field">
             <label>Loại nghỉ phép</label>
             <select name="type" required>
                 <option value="">-- Chọn loại nghỉ --</option>

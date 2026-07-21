@@ -58,7 +58,7 @@
                 <select id="department_id" name="department_id">
                     <option value="">Chọn phòng ban</option>
                     @foreach($departments as $department)
-                        <option value="{{ $department->id }}" {{ old('department_id', $user->employee->department_id ?? '') == $department->id ? 'selected' : '' }}>{{ $department->name }}</option>
+                        <option value="{{ $department->id }}" {{ old('department_id', $user->employee->department_id ?? '') == $department->id ? 'selected' : '' }}>[{{ $department->code }}] {{ $department->name }}</option>
                     @endforeach
                 </select>
                 @error('department_id')<span class="error">{{ $message }}</span>@enderror
