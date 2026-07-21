@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Carbon\Carbon;
+use App\Models\User;
 
 class Payroll extends Model
 {
@@ -38,8 +39,11 @@ class Payroll extends Model
         'confirmed_at',
         'confirmation_status',
         'confirmation_deadline',
+        'confirmation_token',
         'issue_report',
         'issue_reported_at',
+        'paid_by',
+        'payment_method',
     ];
 
     protected $casts = [
@@ -55,12 +59,22 @@ class Payroll extends Model
         return $this->belongsTo(Employee::class);
     }
 
+    public function paidByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'paid_by');
+    }
+
     /**
      * Thanh toán lương
      */
     public function salaryPayment()
     {
         return $this->hasOne(SalaryPayment::class);
+    }
+
+    public function salaryHistory()
+    {
+        return $this->hasOne(SalaryHistory::class);
     }
 
     /**
