@@ -15,25 +15,25 @@
         <table>
             <thead>
                 <tr>
+                    <th style="width:50px">STT</th>
                     <th>Tên phòng ban</th>
-                    <th>Trưởng phòng</th>
-                    <th>Nhân viên</th>
-                    <th>Mô tả</th>
-                    <th>Thao tác</th>
+                    <th style="width:120px">Mã phòng ban</th>
+                    <th>Mô tả chức năng</th>
+                    <th style="width:160px">Thao tác</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse ($departments as $department)
+                @forelse ($departments as $i => $department)
                     <tr>
+                        <td>{{ $departments->firstItem() + $i }}</td>
                         <td><strong>{{ $department->name }}</strong></td>
-                        <td>{{ $department->manager ?: '-' }}</td>
-                        <td>{{ $department->employee_count }}</td>
+                        <td><span class="badge bg-secondary">{{ $department->code }}</span></td>
                         <td>{{ $department->description ?: '-' }}</td>
                         <td>
                             <div class="actions">
                                 <a class="btn link" href="{{ route('departments.show', $department) }}">Xem</a>
                                 <a class="btn" href="{{ route('departments.edit', $department) }}">Sửa</a>
-                                <form method="POST" action="{{ route('departments.destroy', $department) }}" onsubmit="return confirm('Xóa phòng ban này?')">
+                                <form method="POST" action="{{ route('departments.destroy', $department) }}" onsubmit="return confirm('Xóa phòng ban này?')" style="display:inline">
                                     @csrf
                                     @method('DELETE')
                                     <button class="btn danger" type="submit">Xóa</button>

@@ -8,6 +8,45 @@ use App\Models\Payroll;
 
 class PayrollCalculationService
 {
+    public function calculateTax(float $taxableIncome): float
+    {
+        if ($taxableIncome <= 5000000) {
+            return 0;
+        } elseif ($taxableIncome <= 10000000) {
+            return ($taxableIncome - 5000000) * 0.05;
+        } elseif ($taxableIncome <= 18000000) {
+            return 250000 + (($taxableIncome - 10000000) * 0.10);
+        } elseif ($taxableIncome <= 32000000) {
+            return 1050000 + (($taxableIncome - 18000000) * 0.15);
+        } elseif ($taxableIncome <= 52000000) {
+            return 3150000 + (($taxableIncome - 32000000) * 0.20);
+        } elseif ($taxableIncome <= 80000000) {
+            return 7150000 + (($taxableIncome - 52000000) * 0.25);
+        } else {
+            return 14150000 + (($taxableIncome - 80000000) * 0.30);
+        }
+    }
+
+    public function normalizeOvertimeHours($value): float
+    {
+        if (is_string($value) && str_contains($value, ':')) {
+            $parts = explode(':', $value);
+            return (float)($parts[0] ?? 0) + (float)($parts[1] ?? 0) / 60;
+        }
+        if ($value > 1000) {
+            return round($value / 3600, 2);
+        }
+        if ($value > 100) {
+            return round($value / 60, 2);
+        }
+        return (float) $value;
+    }
+
+    public function calculateNetSalary(float $gross, float $insurance, float $tax): float
+    {
+        return max(0, $gross - $insurance - $tax);
+    }
+
     public function calculate(Employee $employee, int $month, int $year)
     {
         /*
