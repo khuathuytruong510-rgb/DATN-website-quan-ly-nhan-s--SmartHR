@@ -100,7 +100,10 @@
                         <a class="{{ request()->routeIs('evaluations.*') ? 'active' : '' }}" href="{{ route('evaluations.index') }}">Đánh giá</a>
                         <a class="{{ request()->routeIs('leave_requests.*') ? 'active' : '' }}" href="{{ route('leave_requests.index') }}">Nghỉ phép</a>
                         @php
-                            $payrollActive = request()->routeIs('payroll.*') || request()->routeIs('salary_histories.*');
+                            $payrollActive = request()->routeIs('payroll.*')
+                                || request()->routeIs('salary_histories.*')
+                                || request()->routeIs('salary_payments.*')
+                                || request()->routeIs('statistics.*');
                         @endphp
                         <details class="nav-group" {{ $payrollActive ? 'open' : '' }}>
                             <summary class="nav-summary {{ $payrollActive ? 'active' : '' }}">Lương</summary>
@@ -110,6 +113,8 @@
                                 <a class="{{ request()->routeIs('payroll.bank_requests.*') ? 'active' : '' }}" href="{{ route('payroll.bank_requests.index') }}">Duyệt đổi STK/QR</a>
                                 <a class="{{ request()->routeIs('payroll.issues.*') ? 'active' : '' }}" href="{{ route('payroll.issues.index') }}">Sự cố lương</a>
                             @endif
+                            <a class="{{ request()->routeIs('salary_payments.*') ? 'active' : '' }}" href="{{ route('salary_payments.index') }}">Thanh toán</a>
+                            <a class="{{ request()->routeIs('statistics.*') ? 'active' : '' }}" href="{{ route('statistics.index') }}">Thống kê & Báo cáo</a>
                         </details>
                         <a class="{{ request()->routeIs('notifications.*') ? 'active' : '' }}" href="{{ route('notifications.index') }}">Thông báo</a>
                         @if ($user->is_admin)
@@ -130,6 +135,7 @@
                             <a class="{{ request()->routeIs('accountant.payroll.*') ? 'active' : '' }}" href="{{ route('accountant.payroll.index') }}">Quản lý bảng lương</a>
                             <a class="{{ request()->routeIs('payroll.index') || request()->routeIs('payroll.payment.*') ? 'active' : '' }}" href="{{ route('payroll.index') }}">Thanh toán lương</a>
                             <a class="{{ request()->routeIs('salary_histories.*') ? 'active' : '' }}" href="{{ route('salary_histories.index') }}">Lịch sử lương</a>
+                            <a class="{{ request()->routeIs('statistics.*') ? 'active' : '' }}" href="{{ route('statistics.index') }}">Thống kê & Báo cáo</a>
                             <a class="{{ request()->routeIs('accountant.payroll.generate') ? 'active' : '' }}" href="{{ route('accountant.payroll.generate') }}">Tính lương</a>
                             <a class="{{ request()->routeIs('accountant.payroll.feedback') ? 'active' : '' }}" href="{{ route('accountant.payroll.feedback') }}">Phản hồi lương</a>
                             <a class="{{ request()->routeIs('accountant.leave_requests') ? 'active' : '' }}" href="{{ route('accountant.leave_requests') }}">Nghỉ phép</a>
@@ -205,6 +211,7 @@
                         <alert type="error">{{ session('error') }}</alert>
                     @endif
                     @yield('content')
+                    
                 </section>
             </main>
         </div>
