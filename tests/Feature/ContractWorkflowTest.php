@@ -36,6 +36,7 @@ class ContractWorkflowTest extends TestCase
         $hr = User::factory()->create(['name' => 'HR User', 'is_hr' => true, 'is_admin' => false]);
         $department = Department::create([
             'name' => 'Engineering',
+            'code' => 'ENG',
             'manager' => 'Manager',
             'description' => 'Engineering department',
         ]);
@@ -69,6 +70,7 @@ class ContractWorkflowTest extends TestCase
 
         $department = Department::create([
             'name' => 'Engineering',
+            'code' => 'ENG',
             'manager' => 'Manager',
             'description' => 'Engineering department',
         ]);

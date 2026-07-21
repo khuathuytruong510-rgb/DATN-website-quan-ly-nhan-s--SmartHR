@@ -23,6 +23,12 @@
         </div>
 
         <div class="field">
+            <label>Mã phòng ban</label>
+            <input type="text" name="code" value="{{ old('code', $department->code) }}" maxlength="10" required placeholder="VD: BGD, HCNS, CNTT...">
+            @error('code')<span class="error">{{ $message }}</span>@enderror
+        </div>
+
+        <div class="field">
             <label>Trưởng phòng</label>
             <input type="text" name="manager" value="{{ old('manager', $department->manager) }}">
             @error('manager')<span class="error">{{ $message }}</span>@enderror
