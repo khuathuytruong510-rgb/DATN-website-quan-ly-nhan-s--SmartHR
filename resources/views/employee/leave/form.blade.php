@@ -26,6 +26,11 @@
         </div>
     @endif
 
+    <div class="alert alert-info" style="margin-bottom: 1rem; padding: 0.75rem 1rem; background: #e8f4fd; border-left: 4px solid #2196F3; border-radius: 4px;">
+        <strong>Quy định nghỉ phép:</strong> Mỗi nhân viên được phép nghỉ tối đa <strong>2 ngày/tháng</strong>.
+        Nếu cần nghỉ nhiều hơn, vui lòng đánh dấu là <strong>khẩn cấp</strong> và cung cấp lý do thuyết phục để bộ phận hỗ trợ xem xét.
+    </div>
+
     <form method="POST" action="{{ route('me.leave_requests.store') }}">
         @csrf
 
@@ -55,6 +60,35 @@
             <textarea name="reason">{{ old('reason') }}</textarea>
         </div>
 
-        <button class="btn primary" type="submit">Gửi đơn nghỉ phép</button>
+        <div class="field" style="border: 1px solid #ddd; padding: 1rem; border-radius: 4px; background: #fff8e1;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" name="is_urgent" value="1" {{ old('is_urgent') ? 'checked' : '' }} id="is_urgent" />
+                <strong>Nghỉ phép khẩn cấp (vượt quá 2 ngày/tháng)</strong>
+            </label>
+            <p class="muted" style="margin: 0.5rem 0 0 1.5rem; font-size: 0.9em;">
+                Chỉ chọn khi thực sự cần thiết. Cần cung cấp lý do thuyết phục để bộ phận hỗ trợ xem xét.
+            </p>
+            <div id="urgent_reason_wrapper" style="margin-top: 0.75rem; display: {{ old('is_urgent') ? 'block' : 'none' }};">
+                <label for="urgent_reason">Lý do khẩn cấp <span style="color: red;">*</span></label>
+                <textarea name="urgent_reason" id="urgent_reason" rows="3" placeholder="Mô tả chi tiết lý do tại sao bạn cần nghỉ phép vượt quá quy định...">{{ old('urgent_reason') }}</textarea>
+            </div>
+        </div>
+
+        <button class="btn primary" type="submit" style="margin-top: 1rem;">Gửi đơn nghỉ phép</button>
     </form>
+
+    <script>
+        document.getElementById('is_urgent').addEventListener('change', function() {
+            const wrapper = document.getElementById('urgent_reason_wrapper');
+            const textarea = document.getElementById('urgent_reason');
+            if (this.checked) {
+                wrapper.style.display = 'block';
+                textarea.required = true;
+            } else {
+                wrapper.style.display = 'none';
+                textarea.required = false;
+                textarea.value = '';
+            }
+        });
+    </script>
 @endsection

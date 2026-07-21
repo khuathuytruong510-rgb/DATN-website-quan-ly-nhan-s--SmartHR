@@ -4,11 +4,14 @@ namespace App\Http\Controllers\HR;
 
 use App\Http\Controllers\ApiController;
 use App\Models\LeaveRequest;
+use App\Traits\HasLeaveLimit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class LeaveRequestController extends ApiController
 {
+    use HasLeaveLimit;
+
     public function index(Request $request): \Illuminate\Http\JsonResponse
     {
         $query = LeaveRequest::with('employee');
@@ -45,6 +48,8 @@ class LeaveRequestController extends ApiController
             'end_date' => 'required|date|after_or_equal:start_date',
             'type' => 'required|in:sick,personal,annual,unpaid',
             'reason' => 'nullable|string',
+            'is_urgent' => 'nullable|boolean',
+            'urgent_reason' => 'required_if:is_urgent,1|nullable|string|max:500',
             'status' => 'nullable|in:pending,approved,rejected',
         ]);
 
@@ -53,6 +58,25 @@ class LeaveRequestController extends ApiController
         }
 
         $data = $validator->validated();
+        $data['is_urgent'] = filter_var($data['is_urgent'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+        $limitCheck = $this->checkLeaveLimit(
+            $data['employee_id'],
+            $data['start_date'],
+            $data['end_date']
+        );
+
+        if ($limitCheck['exceeded'] && empty($data['is_urgent'])) {
+            return response()->json([
+                'errors' => [
+                    'leave_limit' => [
+                        "Nhân viên đã sử dụng {$limitCheck['used_days']}/{$limitCheck['max_days']} ngày nghỉ phép trong tháng này. " .
+                        "Vui lòng liên hệ bộ phận hỗ trợ nếu cần nghỉ thêm với lý do thuyết phục."
+                    ]
+                ]
+            ], 422);
+        }
+
         $data['days'] = \Carbon\Carbon::parse($data['end_date'])
                         ->diffInDays(\Carbon\Carbon::parse($data['start_date'])) + 1;
 
