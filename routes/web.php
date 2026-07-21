@@ -80,6 +80,9 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/me/schedule', [EmployeeController::class, 'schedule'])->name('me.schedule')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
 
+    // Employee payment history
+    Route::get('/me/payment-history', [EmployeeController::class, 'paymentHistory'])->name('me.payment_history')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+
     // Employee salary advances (own)
     Route::get('/me/salary-advances', [\App\Http\Controllers\Web\SalaryAdvanceController::class, 'index'])->name('me.salary_advances')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/salary-advances/create', [\App\Http\Controllers\Web\SalaryAdvanceController::class, 'create'])->name('me.salary_advances.create')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
@@ -269,6 +272,31 @@ Route::middleware('auth')->group(function () {
 
         // Attendance detail (web)
         Route::get('/attendances/{attendance}', [\App\Http\Controllers\Web\AttendanceController::class, 'show'])->name('attendances.show');
+
+        // Payment Center
+        Route::get('/payment-center', [\App\Http\Controllers\Web\PaymentCenterController::class, 'dashboard'])->name('payment_center.dashboard');
+        Route::get('/payment-center/bank-accounts', [\App\Http\Controllers\Web\PaymentCenterController::class, 'bankAccounts'])->name('payment_center.bank_accounts');
+        Route::post('/payment-center/bank-accounts/{employee}', [\App\Http\Controllers\Web\PaymentCenterController::class, 'updateBankAccount'])->name('payment_center.bank_accounts.update');
+        Route::get('/payment-center/history', [\App\Http\Controllers\Web\PaymentCenterController::class, 'paymentHistory'])->name('payment_center.history');
+        Route::get('/payment-center/payments/{salaryPayment}', [\App\Http\Controllers\Web\PaymentCenterController::class, 'showPayment'])->name('payment_center.payments.show');
+        Route::get('/payment-center/payments/{salaryPayment}/qr', [\App\Http\Controllers\Web\PaymentCenterController::class, 'qrCode'])->name('payment_center.qr_code');
+        Route::get('/payment-center/reconcile', [\App\Http\Controllers\Web\PaymentCenterController::class, 'reconcileIndex'])->name('payment_center.reconcile');
+        Route::post('/payment-center/reconcile/{salaryPayment}', [\App\Http\Controllers\Web\PaymentCenterController::class, 'reconcileStore'])->name('payment_center.reconcile.store');
+        Route::get('/payment-center/export', [\App\Http\Controllers\Web\PaymentCenterController::class, 'export'])->name('payment_center.export');
+        Route::get('/payment-center/batches', [\App\Http\Controllers\Web\PaymentCenterController::class, 'batchIndex'])->name('payment_center.batches.index');
+        Route::get('/payment-center/batches/create', [\App\Http\Controllers\Web\PaymentCenterController::class, 'batchCreate'])->name('payment_center.batches.create');
+        Route::post('/payment-center/batches', [\App\Http\Controllers\Web\PaymentCenterController::class, 'batchStore'])->name('payment_center.batches.store');
+        Route::get('/payment-center/batches/{batch}', [\App\Http\Controllers\Web\PaymentCenterController::class, 'batchShow'])->name('payment_center.batches.show');
+        Route::post('/payment-center/batches/{batch}/process', [\App\Http\Controllers\Web\PaymentCenterController::class, 'batchProcess'])->name('payment_center.batches.process');
+        Route::delete('/payment-center/batches/{batch}', [\App\Http\Controllers\Web\PaymentCenterController::class, 'batchDestroy'])->name('payment_center.batches.destroy');
+
+        // Statistics & Reports
+        Route::get('/statistics', [\App\Http\Controllers\Web\StatisticsController::class, 'index'])->name('statistics.index');
+        Route::get('/statistics/trend', [\App\Http\Controllers\Web\StatisticsController::class, 'trend'])->name('statistics.trend');
+        Route::get('/statistics/departments', [\App\Http\Controllers\Web\StatisticsController::class, 'departmentReport'])->name('statistics.departments');
+        Route::get('/statistics/departments/export', [\App\Http\Controllers\Web\StatisticsController::class, 'exportDepartment'])->name('statistics.departments.export');
+        Route::get('/api/statistics/trend', [\App\Http\Controllers\Web\StatisticsController::class, 'apiTrend'])->name('api.statistics.trend');
+        Route::get('/api/statistics/distribution', [\App\Http\Controllers\Web\StatisticsController::class, 'apiDistribution'])->name('api.statistics.distribution');
     });
 
     // Accountant portal (only for accountant role)

@@ -21,6 +21,7 @@ class EmployeeContractAccessTest extends TestCase
 
         $department = \App\Models\Department::create([
             'name' => 'HR Department',
+            'code' => 'HRD',
             'manager' => 'HR Manager',
         ]);
 

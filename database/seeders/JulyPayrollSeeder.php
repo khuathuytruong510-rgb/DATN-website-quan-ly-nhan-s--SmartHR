@@ -17,7 +17,7 @@ class JulyPayrollSeeder extends Seeder
     public function run(): void
     {
         $employees = Employee::all();
-        $month = '2026-07';
+        $month = 7;
         $year = 2026;
 
         $salaryMap = [
