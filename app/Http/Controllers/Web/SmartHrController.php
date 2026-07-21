@@ -1080,7 +1080,13 @@ class SmartHrController extends Controller
         $payroll->update([
             'status' => 'paid',
             'paid_at' => now(),
+            'paid_by' => auth()->id(),
         ]);
+
+        \App\Models\SalaryHistory::recordFromPaidPayroll(
+            $payroll->fresh(['employee', 'salaryPayment']),
+            auth()->user()
+        );
 
         return redirect()->route('payroll.show', $payroll)
             ->with('success', 'Đã đánh dấu phiếu lương là đã thanh toán.');

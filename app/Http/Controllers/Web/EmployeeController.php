@@ -350,6 +350,7 @@ class EmployeeController extends Controller
     public function notifications(): View
     {
         $user = auth()->user();
+        $employee = Employee::where('email', $user->email)->first();
 
         $notifications = Notification::where(function ($query) use ($user) {
             $query->where('target', 'all');
@@ -360,7 +361,17 @@ class EmployeeController extends Controller
             } else {
                 $query->orWhere('target', 'employee');
             }
-        })->latest()->paginate(10);
+        })
+            ->when($employee && ! $user->is_hr && ! $user->is_admin, function ($query) use ($employee) {
+                $query->where(function ($q) use ($employee) {
+                    $q->whereNull('data')
+                        ->orWhere('data', 'not like', '%"employee_id"%')
+                        ->orWhere('data', 'like', '%"employee_id":'.$employee->id.'%')
+                        ->orWhere('data', 'like', '%"employee_id": '.$employee->id.'%');
+                });
+            })
+            ->latest()
+            ->paginate(10);
 
         return view('employee.notifications', compact('notifications'));
     }

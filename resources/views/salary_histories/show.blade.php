@@ -3,16 +3,28 @@
 @section('title', 'Chi tiết lịch sử lương')
 
 @section('content')
+@php
+    $user = auth()->user();
+    $isStaff = $user && ($user->is_admin || $user->is_hr || $user->is_accountant);
+    $backUrl = $isStaff ? route('salary_histories.index') : route('me.salary_histories');
+@endphp
+
 <div class="page-head">
     <div>
         <h1>Chi tiết lịch sử lương</h1>
-        <p class="muted">Thông tin chi tiết thay đổi lương của nhân viên.</p>
+        <p class="muted">
+            @if(!empty($isPayment))
+                Phiếu lương đã thanh toán kỳ {{ $salaryHistory->period }}
+            @else
+                Thông tin thay đổi lương của nhân viên
+            @endif
+        </p>
     </div>
     <div class="actions">
-        <a class="btn" href="{{ url()->previous() }}">Quay lại</a>
-        <a class="btn" href="#">Sửa</a>
-        <a class="btn" target="_blank" href="#">In</a>
-        <a class="btn primary" target="_blank" href="#">Xuất PDF</a>
+        <a class="btn" href="{{ $backUrl }}">← Danh sách</a>
+        @if($isStaff && $salaryHistory->payroll_id)
+            <a class="btn" href="{{ route('payroll.show', $salaryHistory->payroll_id) }}">Xem phiếu lương</a>
+        @endif
     </div>
 </div>
 
@@ -20,82 +32,64 @@
     <div class="grid two-cols">
         <div>
             <h3>Thông tin nhân viên</h3>
-            <div class="field"><label>Ảnh đại diện</label>
-                <div>
-                    @if(optional($salaryHistory->employee)->avatar)
-                        <img src="{{ asset('storage/' . $salaryHistory->employee->avatar) }}" alt="avatar" style="width:96px;height:96px;border-radius:8px;object-fit:cover">
-                    @else
-                        <div class="empty">Chưa có ảnh</div>
-                    @endif
-                </div>
-            </div>
-            <div class="field"><label>Mã nhân viên</label><div>{{ optional($salaryHistory->employee)->employee_code ?? 'Chưa có dữ liệu' }}</div></div>
-            <div class="field"><label>Họ và tên</label><div>{{ optional($salaryHistory->employee)->name ?? 'Chưa có dữ liệu' }}</div></div>
-            <div class="field"><label>Email</label><div>{{ optional($salaryHistory->employee)->email ?? 'Chưa có dữ liệu' }}</div></div>
-            <div class="field"><label>Số điện thoại</label><div>{{ optional($salaryHistory->employee)->phone ?? 'Chưa có dữ liệu' }}</div></div>
-            <div class="field"><label>Phòng ban</label><div>{{ optional($salaryHistory->employee->department)->name ?? ($salaryHistory->department_id ? 'Chưa có tên phòng ban' : 'Chưa có dữ liệu') }}</div></div>
-            <div class="field"><label>Chức vụ</label><div>{{ $salaryHistory->position ?? optional($salaryHistory->employee)->position ?? 'Chưa có dữ liệu' }}</div></div>
+            <div class="field"><label>Họ và tên</label><div>{{ optional($salaryHistory->employee)->name ?? '—' }}</div></div>
+            <div class="field"><label>Email</label><div>{{ optional($salaryHistory->employee)->email ?? '—' }}</div></div>
+            <div class="field"><label>Số điện thoại</label><div>{{ optional($salaryHistory->employee)->phone ?? '—' }}</div></div>
+            <div class="field"><label>Phòng ban</label><div>{{ optional(optional($salaryHistory->employee)->department)->name ?? '—' }}</div></div>
+            <div class="field"><label>Chức vụ</label><div>{{ $salaryHistory->position ?? optional($salaryHistory->employee)->position ?? '—' }}</div></div>
         </div>
 
         <div>
-            <h3>Thông tin lịch sử lương</h3>
+            <h3>{{ !empty($isPayment) ? 'Thông tin thanh toán' : 'Thông tin lịch sử lương' }}</h3>
             <div class="field"><label>Mã</label><div>{{ $salaryHistory->code ?? ('SH' . $salaryHistory->id) }}</div></div>
-            <div class="field"><label>Kỳ lương</label><div>{{ $salaryHistory->period ?? 'Chưa có' }}</div></div>
-            <div class="field"><label>Ngày áp dụng</label><div>{{ $salaryHistory->effective_date?->format('Y-m-d') ?? 'Chưa có' }}</div></div>
-            <div class="field"><label>Loại thay đổi</label><div>{{ ucfirst($salaryHistory->change_type ?? 'Điều chỉnh') }}</div></div>
+            <div class="field"><label>Kỳ lương</label><div>{{ $salaryHistory->period ?? '—' }}</div></div>
+            <div class="field"><label>{{ !empty($isPayment) ? 'Ngày thanh toán' : 'Ngày áp dụng' }}</label><div>{{ $salaryHistory->effective_date?->format('d/m/Y') ?? '—' }}</div></div>
+            <div class="field"><label>Loại</label><div>{{ $salaryHistory->change_type ?? '—' }}</div></div>
 
             <div class="row">
                 <div class="col-md-6">
-                    <div class="field"><label>Mức lương cũ</label><div>{{ number_format($old, 0, ',', '.') }} VNĐ</div></div>
+                    <div class="field"><label>{{ !empty($isPayment) ? 'Lương cơ bản' : 'Mức lương cũ' }}</label><div>{{ number_format($old, 0, ',', '.') }} ₫</div></div>
                 </div>
                 <div class="col-md-6">
-                    <div class="field"><label>Mức lương mới</label><div>{{ number_format($new, 0, ',', '.') }} VNĐ</div></div>
+                    <div class="field"><label>{{ !empty($isPayment) ? 'Thực nhận' : 'Mức lương mới' }}</label><div><strong>{{ number_format($new, 0, ',', '.') }} ₫</strong></div></div>
                 </div>
             </div>
 
-            <div class="field"><label>Chênh lệch</label><div>{{ number_format($difference, 0, ',', '.') }} VNĐ ({{ $percent !== null ? $percent . '%' : 'n/a' }})</div></div>
+            @if(empty($isPayment))
+                <div class="field"><label>Chênh lệch</label><div>{{ number_format($difference, 0, ',', '.') }} ₫ ({{ $percent !== null ? $percent . '%' : 'n/a' }})</div></div>
+            @endif
 
             <div class="field"><label>Trạng thái</label>
                 <div>
                     @php
                         $status = $salaryHistory->status ?? 'pending';
-                        $badge = 'badge-secondary';
-                        if ($status === 'applied' || $status === 'Áp dụng' || $status === 'Áp dụng') $badge = 'badge-success';
-                        if ($status === 'pending' || $status === 'chờ') $badge = 'badge-warning';
-                        if ($status === 'cancelled' || $status === 'hủy') $badge = 'badge-danger';
+                        $badgeStyle = 'background:#e2e8f0;color:#475569;';
+                        if (in_array($status, ['applied', 'paid'], true)) $badgeStyle = 'background:#dcfce7;color:#166534;';
+                        if ($status === 'pending') $badgeStyle = 'background:#fef3c7;color:#92400e;';
                     @endphp
-                    <span class="badge {{ $badge }}">{{ ucfirst($status) }}</span>
+                    <span class="badge" style="{{ $badgeStyle }}">{{ ucfirst($status) }}</span>
                 </div>
             </div>
 
-            <div class="field"><label>Người cập nhật</label><div>{{ optional($salaryHistory->updatedBy)->name ?? 'Chưa có dữ liệu' }}</div></div>
-            <div class="field"><label>Thời gian cập nhật</label><div>{{ $salaryHistory->updated_at?->format('Y-m-d H:i') ?? 'Chưa có dữ liệu' }}</div></div>
+            <div class="field"><label>Người cập nhật</label><div>{{ optional($salaryHistory->updatedBy)->name ?? '—' }}</div></div>
+            <div class="field"><label>Mã chứng từ</label><div>{{ $salaryHistory->document_number ?? '—' }}</div></div>
 
-            <h4>Phụ cấp</h4>
+            <h4 style="margin-top:18px;">Chi tiết khoản</h4>
             <table>
-                <tr><th>Phụ cấp chức vụ</th><td>{{ number_format($allowances['position'] ?? 0, 0, ',', '.') }} VNĐ</td></tr>
-                <tr><th>Phụ cấp trách nhiệm</th><td>{{ number_format($allowances['responsibility'] ?? 0, 0, ',', '.') }} VNĐ</td></tr>
-                <tr><th>Phụ cấp ăn trưa</th><td>{{ number_format($allowances['lunch'] ?? 0, 0, ',', '.') }} VNĐ</td></tr>
-                <tr><th>Phụ cấp xăng xe</th><td>{{ number_format($allowances['transport'] ?? 0, 0, ',', '.') }} VNĐ</td></tr>
-                <tr><th>Phụ cấp khác</th><td>{{ number_format($allowances['other'] ?? 0, 0, ',', '.') }} VNĐ</td></tr>
-                <tr><th><strong>Tổng phụ cấp</strong></th><td><strong>{{ number_format($allowanceTotal, 0, ',', '.') }} VNĐ</strong></td></tr>
+                <tr><th>Phụ cấp</th><td>{{ number_format($allowances['other'] ?? $allowanceTotal, 0, ',', '.') }} ₫</td></tr>
+                @if(!empty($allowances['overtime']))
+                    <tr><th>Tăng ca</th><td>{{ number_format($allowances['overtime'], 0, ',', '.') }} ₫</td></tr>
+                @endif
+                <tr><th>Thưởng</th><td>{{ number_format($rewards, 0, ',', '.') }} ₫</td></tr>
+                <tr><th>Khấu trừ</th><td>{{ number_format($deductions, 0, ',', '.') }} ₫</td></tr>
+                <tr><th>Thuế</th><td>{{ number_format($tax, 0, ',', '.') }} ₫</td></tr>
+                <tr><th>Bảo hiểm</th><td>{{ number_format($insurance, 0, ',', '.') }} ₫</td></tr>
+                <tr><th><strong>Thực nhận</strong></th><td><strong>{{ number_format($net, 0, ',', '.') }} ₫</strong></td></tr>
             </table>
 
-            <h4>Thưởng & Khấu trừ</h4>
-            <table>
-                <tr><th>Thưởng</th><td>{{ number_format($rewards, 0, ',', '.') }} VNĐ</td></tr>
-                <tr><th>Khấu trừ</th><td>{{ number_format($deductions, 0, ',', '.') }} VNĐ</td></tr>
-                <tr><th>Thuế</th><td>{{ number_format($tax, 0, ',', '.') }} VNĐ</td></tr>
-                <tr><th>Bảo hiểm</th><td>{{ number_format($insurance, 0, ',', '.') }} VNĐ</td></tr>
-                <tr><th><strong>Thực nhận sau điều chỉnh</strong></th><td><strong>{{ number_format($net, 0, ',', '.') }} VNĐ</strong></td></tr>
-            </table>
-
-            <h4>Lý do thay đổi</h4>
-            <div class="field"><label>Nội dung thay đổi</label><div>{{ $salaryHistory->notes ?? 'Chưa có dữ liệu' }}</div></div>
-            <div class="field"><label>Ghi chú</label><div class="muted">{{ $salaryHistory->notes ?? 'Chưa có dữ liệu' }}</div></div>
-            <div class="field"><label>Quyết định / Số văn bản</label><div>{{ $salaryHistory->document_number ?? 'Chưa có dữ liệu' }}</div></div>
+            <h4 style="margin-top:18px;">Ghi chú</h4>
+            <div class="field"><div style="white-space:pre-wrap;">{{ $salaryHistory->notes ?? '—' }}</div></div>
         </div>
     </div>
 </div>
-
 @endsection

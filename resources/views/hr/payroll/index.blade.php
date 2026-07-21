@@ -330,19 +330,35 @@
     </td>
 
     <td class="text-center">
-        <div class="btn-group btn-group-sm" role="group">
-            <a href="{{ route('payroll.show', $payroll) }}" class="btn btn-outline-primary" title="Xem">
+        <div class="d-inline-flex align-items-center gap-2 flex-wrap justify-content-center">
+            <a href="{{ route('payroll.show', $payroll) }}" class="btn btn-sm btn-outline-primary" title="Xem chi tiết">
                 <i class="bi bi-eye"></i>
             </a>
-            @if($payroll->status !== 'approved')
-                <form method="POST" action="{{ route('payroll.approve_with_payment', $payroll) }}" style="display:inline;">
+
+            @php
+                $user = auth()->user();
+                $canApprove = ($user->is_admin || $user->is_hr) && $payroll->status === 'pending';
+                $canPay = ($user->is_admin || $user->is_accountant) && $payroll->status === 'ready_for_payment';
+            @endphp
+
+            @if($canApprove)
+                <form method="POST" action="{{ route('payroll.approve', $payroll) }}" class="d-inline">
                     @csrf
-                    <button type="submit" class="btn btn-outline-success" title="Duyệt & Thanh toán" onclick="return confirm('Xác nhận duyệt bảng lương và tạo phiếu thanh toán?')">
-                        <i class="bi bi-check-circle"></i>
+                    <button type="submit" class="btn btn-sm btn-success" title="Duyệt" onclick="return confirm('Duyệt bảng lương của {{ optional($payroll->employee)->name }}?')">
+                        Duyệt
                     </button>
                 </form>
-            @else
-                <span class="badge text-bg-success">Đã duyệt</span>
+            @elseif($payroll->confirmation_status === 'issue_reported')
+                <span class="badge text-bg-danger text-wrap" style="max-width:160px;" title="{{ $payroll->issue_report }}">Có sự cố</span>
+                @if(auth()->user()->is_admin || auth()->user()->is_hr || auth()->user()->is_accountant)
+                    <a href="{{ route('payroll.issues.fix_form', $payroll) }}" class="btn btn-sm btn-danger">Khắc phục</a>
+                @endif
+            @elseif(in_array($payroll->status, ['waiting_confirmation', 'approved'], true))
+                <span class="badge text-bg-warning text-wrap" style="max-width:160px;">Chờ xác nhận của nhân viên</span>
+            @elseif($canPay)
+                <a href="{{ route('payroll.payment.show', $payroll) }}" class="btn btn-sm btn-pay-soft">Thanh toán</a>
+            @elseif($payroll->status === 'paid')
+                <span class="badge text-bg-success">Đã thanh toán</span>
             @endif
         </div>
     </td>
@@ -375,6 +391,17 @@
 
 </div>
 <style>
+
+.btn-pay-soft{
+    background:#bbf7d0 !important;
+    color:#166534 !important;
+    border:1px solid #86efac !important;
+    font-weight:700;
+}
+.btn-pay-soft:hover{
+    background:#86efac !important;
+    color:#14532d !important;
+}
 
 body{
     background:#f5f7fb;
