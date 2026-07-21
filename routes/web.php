@@ -28,6 +28,13 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/logout', [SmartHrController::class, 'logout'])->name('logout');
 
+    // API: Lấy thông tin vị trí theo ID (must be before {name})
+    Route::get('/api/positions/id/{id}', [SmartHrController::class, 'getPositionById'])->name('api.positions.get_by_id');
+    // API: Lấy thông tin vị trí theo tên
+    Route::get('/api/positions/{name}', [SmartHrController::class, 'getPositionByName'])->name('api.positions.get');
+    // API: Tạo mã nhân viên tiếp theo
+    Route::get('/api/employees/next-code', [SmartHrController::class, 'getNextEmployeeCode'])->name('api.employees.next_code');
+
     Route::get('/admin', [SmartHrController::class, 'dashboard'])
         ->name('admin.dashboard');
 
@@ -129,6 +136,12 @@ Route::middleware('auth')->group(function () {
         Route::get('/contracts/{contract}', [SmartHrController::class, 'showContract'])->name('contracts.show');
         Route::put('/contracts/{contract}', [SmartHrController::class, 'updateContract'])->name('contracts.update');
         Route::delete('/contracts/{contract}', [SmartHrController::class, 'destroyContract'])->name('contracts.destroy');
+        Route::get('/contracts/{contract}/renew', [SmartHrController::class, 'renewContract'])->name('contracts.renew');
+        Route::post('/contracts/{contract}/renew', [SmartHrController::class, 'storeRenewalContract'])->name('contracts.storeRenewal');
+        Route::post('/contracts/{contract}/sign', [SmartHrController::class, 'signContract'])->name('contracts.sign');
+
+        Route::get('/contract-templates/content', [\App\Http\Controllers\Web\ContractTemplateController::class, 'templateContent'])->name('contract-templates.content');
+        Route::resource('contract-templates', \App\Http\Controllers\Web\ContractTemplateController::class)->names('contract-templates');
 
         Route::get('/attendance', [SmartHrController::class, 'attendance'])->name('attendance.index');
         Route::get('/attendance/create', [SmartHrController::class, 'createAttendance'])->name('attendance.create');
@@ -181,9 +194,11 @@ Route::middleware('auth')->group(function () {
             Route::post('/payroll/{payroll}/send-confirmation', [PayrollController::class, 'sendConfirmation'])
                 ->name('payroll.send_confirmation');
 
+                
             // Gửi phiếu lương
-            Route::get('/payroll/email', [\App\Http\Controllers\Web\PayrollEmailController::class, 'index'])
-                ->name('payroll.email.index');
+           Route::get('/payroll/email', [\App\Http\Controllers\Web\PayrollEmailController::class, 'index'])
+                ->name('payroll.email.index'); 
+                
 
             Route::post('/payroll/email/send/{payroll}', [\App\Http\Controllers\Web\PayrollEmailController::class, 'send'])
                 ->name('payroll.email.send');

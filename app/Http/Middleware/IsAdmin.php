@@ -30,7 +30,6 @@ class IsAdmin
             return redirect()->route('me.attendance')
                 ->with('error', 'Bạn không có quyền truy cập trang này. Vui lòng sử dụng trang nhân viên.');
         }
-
         return $next($request);
     }
 }
