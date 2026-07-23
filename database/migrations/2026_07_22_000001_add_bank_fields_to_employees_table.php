@@ -9,10 +9,18 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('employees', function (Blueprint $table) {
-            $table->string('bank_name')->nullable()->after('phone');
-            $table->string('bank_account_number')->nullable()->after('bank_name');
-            $table->string('bank_account_holder')->nullable()->after('bank_account_number');
-            $table->text('address_detail')->nullable()->after('bank_account_holder');
+            if (! Schema::hasColumn('employees', 'bank_name')) {
+                $table->string('bank_name')->nullable()->after('phone');
+            }
+            if (! Schema::hasColumn('employees', 'bank_account_number')) {
+                $table->string('bank_account_number')->nullable()->after('bank_name');
+            }
+            if (! Schema::hasColumn('employees', 'bank_account_holder')) {
+                $table->string('bank_account_holder')->nullable()->after('bank_account_number');
+            }
+            if (! Schema::hasColumn('employees', 'address_detail')) {
+                $table->text('address_detail')->nullable()->after('bank_account_holder');
+            }
         });
     }
 

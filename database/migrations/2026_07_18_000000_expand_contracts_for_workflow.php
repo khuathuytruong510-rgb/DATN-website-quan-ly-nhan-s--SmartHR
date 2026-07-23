@@ -80,11 +80,10 @@ return new class extends Migration
 
         if (! DB::table('contract_templates')->where('is_default', true)->exists()) {
             DB::table('contract_templates')->insert([
-                'title' => 'Điều khoản hợp đồng lao động mặc định',
-                'contract_type' => 'fixed_term',
+                'name' => 'Điều khoản hợp đồng lao động mặc định',
                 'content' => 'Điều 1. Người lao động cam kết làm việc trung thùc...\nĐiều 2. Công ty có quyền thay đổi nội dung phù hợp...',
                 'is_default' => true,
-                'status' => 'active',
+                'is_active' => true,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);

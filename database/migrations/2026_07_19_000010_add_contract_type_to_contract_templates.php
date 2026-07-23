@@ -10,7 +10,7 @@ return new class extends Migration
     {
         if (Schema::hasTable('contract_templates') && ! Schema::hasColumn('contract_templates', 'contract_type')) {
             Schema::table('contract_templates', function (Blueprint $table) {
-                $table->string('contract_type')->nullable()->after('title');
+                $table->string('contract_type')->nullable()->after('name');
             });
         }
     }

@@ -31,7 +31,7 @@
                             <td class="fw-semibold">{{ $employee->name }}</td>
                             <td>{{ $employee->email }}</td>
                             <td>{{ $employee->position ?? '-' }}</td>
-                            <td>{{ $employee->department ? '[' . $employee->department->code . '] ' . $employee->department->name : '-' }}</td>
+                            <td>{{ $employee->department->name ?? '-' }}</td>
                             <td>
                                 @if($employee->status === 'active')
                                     <span class="badge bg-success-subtle text-success-emphasis">Active</span>
