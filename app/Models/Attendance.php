@@ -31,6 +31,8 @@ class Attendance extends Model
         'overtime_hours',
         'status',
         'notes',
+        'attendance_method',
+        'attendance_status',
         'approved_by',
         'approved_at',
     ];
