@@ -28,6 +28,7 @@ class AttendanceCalculationService
                 'status' => 'absent',
                 'work_hours' => 0,
                 'late_minutes' => 0,
+                'late_penalty_fee' => 0,
                 'early_leave_minutes' => 0,
                 'overtime_hours' => 0,
             ];
@@ -35,10 +36,12 @@ class AttendanceCalculationService
 
         if (!$attendance->check_out) {
             // Only checked in, not checked out yet
+            $lateMinutes = $this->calculateLateMinutes($attendance->check_in);
             return [
                 'status' => 'present', // Will be updated when checking out
                 'work_hours' => 0,
-                'late_minutes' => $this->calculateLateMinutes($attendance->check_in),
+                'late_minutes' => $lateMinutes,
+                'late_penalty_fee' => $this->calculateLatePenaltyFee($lateMinutes),
                 'early_leave_minutes' => 0,
                 'overtime_hours' => 0,
             ];
@@ -56,6 +59,7 @@ class AttendanceCalculationService
             'status' => $status,
             'work_hours' => round($workHours, 2),
             'late_minutes' => $lateMinutes,
+            'late_penalty_fee' => $this->calculateLatePenaltyFee($lateMinutes),
             'early_leave_minutes' => $earlyLeaveMinutes,
             'overtime_hours' => round($overtimeHours, 2),
         ];
@@ -129,6 +133,37 @@ class AttendanceCalculationService
     }
 
     /**
+     * Calculate late penalty fee based on late minutes (fixed penalty brackets)
+     *
+     * | Khoảng thời gian đi muộn | Mức phạt (VNĐ) |
+     * | 0 – 5 phút              | 0              |
+     * | 6 – 15 phút             | 30,000         |
+     * | 16 – 30 phút            | 50,000         |
+     * | 31 – 60 phút            | 100,000        |
+     * | > 60 phút               | 200,000        |
+     */
+    public function calculateLatePenaltyFee(int $lateMinutes): float
+    {
+        if ($lateMinutes <= 5) {
+            return 0;
+        }
+
+        if ($lateMinutes <= 15) {
+            return 30000;
+        }
+
+        if ($lateMinutes <= 30) {
+            return 50000;
+        }
+
+        if ($lateMinutes <= 60) {
+            return 100000;
+        }
+
+        return 200000;
+    }
+
+    /**
      * Calculate early leave minutes
      *
      * Formula: early_leave = standard_check_out - check_out
@@ -197,6 +232,7 @@ class AttendanceCalculationService
             'status' => $metrics['status'],
             'work_hours' => $metrics['work_hours'],
             'late_minutes' => $metrics['late_minutes'],
+            'late_penalty_fee' => $metrics['late_penalty_fee'],
             'early_leave_minutes' => $metrics['early_leave_minutes'],
             'overtime_hours' => $metrics['overtime_hours'],
         ]);
@@ -223,6 +259,7 @@ class AttendanceCalculationService
             'total_early_leave_days' => $attendances->filter(fn($a) => in_array($a->status, ['leave_early', 'late_and_leave_early']))->count(),
             'total_work_hours' => $attendances->sum('work_hours'),
             'total_late_minutes' => $attendances->sum('late_minutes'),
+            'total_late_penalty_fee' => $attendances->sum('late_penalty_fee'),
             'total_overtime_hours' => $attendances->sum('overtime_hours'),
             'average_work_hours_per_day' => $attendances->where('work_hours', '>', 0)->avg('work_hours') ?? 0,
             'attendances' => $attendances,
@@ -243,6 +280,7 @@ class AttendanceCalculationService
             'check_out' => $attendance->check_out?->format('H:i:s'),
             'work_hours' => $metrics['work_hours'],
             'late_minutes' => $metrics['late_minutes'],
+            'late_penalty_fee' => $metrics['late_penalty_fee'],
             'early_leave_minutes' => $metrics['early_leave_minutes'],
             'overtime_hours' => $metrics['overtime_hours'],
             'status' => $metrics['status'],

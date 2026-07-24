@@ -251,7 +251,7 @@ async function loadMonthlySummary() {
         if (data.success) {
             const s = data.summary;
             const html = `
-                <div class="stats-list">
+                    <div class="stats-list">
                     <div class="stat-item mb-2">
                         <span class="stat-label">Ngày Làm:</span>
                         <span class="stat-value text-success">${s.worked_days}</span>
@@ -276,6 +276,10 @@ async function loadMonthlySummary() {
                     <div class="stat-item mb-2">
                         <span class="stat-label">Tổng Phút Muộn:</span>
                         <span class="stat-value">${s.total_late_minutes}</span>
+                    </div>
+                    <div class="stat-item mb-2">
+                        <span class="stat-label">Tiền Phạt Đi Muộn:</span>
+                        <span class="stat-value text-danger">${formatCurrency(s.total_late_penalty_fee)}</span>
                     </div>
                     <div class="stat-item mb-2">
                         <span class="stat-label">Giờ Tăng Ca:</span>
@@ -393,6 +397,10 @@ function getStatusBadge(status) {
         'absent': 'Vắng',
     };
     return statuses[status] || status;
+}
+
+function formatCurrency(amount) {
+    return new Intl.NumberFormat('vi-VN').format(amount || 0) + ' ₫';
 }
 
 // Event listeners

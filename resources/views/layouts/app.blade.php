@@ -100,7 +100,7 @@
                         <a class="{{ request()->routeIs('evaluations.*') ? 'active' : '' }}" href="{{ route('evaluations.index') }}">Đánh giá</a>
                         <a class="{{ request()->routeIs('leave_requests.*') ? 'active' : '' }}" href="{{ route('leave_requests.index') }}">Nghỉ phép</a>
                         @php
-                            $payrollActive = request()->routeIs('payroll.*') || request()->routeIs('salary_histories.*') || request()->routeIs('payroll.email.*') || request()->routeIs('salary_payments.*') || request()->routeIs('payment_center.*') || request()->routeIs('statistics.*');
+                            $payrollActive = request()->routeIs('payroll.*') || request()->routeIs('salary_histories.*') || request()->routeIs('payroll.email.*') || request()->routeIs('salary_payments.*') || request()->routeIs('payment_center.*') || request()->routeIs('statistics.*') || request()->routeIs('payroll.issues.*');
                         @endphp
                         <details class="nav-group" {{ $payrollActive ? 'open' : '' }}>
                             <summary class="nav-summary {{ $payrollActive ? 'active' : '' }}">Lương</summary>
@@ -108,7 +108,9 @@
                             <a class="{{ request()->routeIs('payroll.email.*') ? 'active' : '' }}" href="{{ route('payroll.email.index') }}">Gửi phiếu lương</a>
                             <a class="{{ request()->routeIs('salary_payments.*') ? 'active' : '' }}" href="{{ route('salary_payments.index') }}">Thanh toán</a>
                             <a class="{{ request()->routeIs('salary_histories.index') ? 'active' : '' }}" href="{{ route('salary_histories.index') }}">Lịch sử lương</a>
+                            <a class="{{ request()->routeIs('payroll.issues.*') ? 'active' : '' }}" href="{{ route('payroll.issues.index') }}">Sự cố lương</a>
                             <a class="{{ request()->routeIs('payment_center.*') ? 'active' : '' }}" href="{{ route('payment_center.dashboard') }}">Trung tâm thanh toán</a>
+                            <a class="{{ request()->routeIs('payment_center.history') ? 'active' : '' }}" href="{{ route('payment_center.history') }}">Lịch sử thanh toán</a>
                             <a class="{{ request()->routeIs('statistics.*') ? 'active' : '' }}" href="{{ route('statistics.index') }}">Thống kê & Báo cáo</a>
                         </details>
                         <a class="{{ request()->routeIs('notifications.*') ? 'active' : '' }}" href="{{ route('notifications.index') }}">Thông báo</a>
