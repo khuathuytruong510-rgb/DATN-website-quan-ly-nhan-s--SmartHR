@@ -179,6 +179,14 @@ Route::middleware('auth')->group(function () {
             Route::post('/payroll/bank-requests/{changeRequest}/reject', [\App\Http\Controllers\HR\SalaryReceiveChangeRequestController::class, 'reject'])
                 ->name('payroll.bank_requests.reject');
 
+            // Gửi phiếu lương qua email (phải đặt TRƯỚC /payroll/{payroll})
+            Route::get('/payroll/email', [\App\Http\Controllers\Web\PayrollEmailController::class, 'index'])
+                ->name('payroll.email.index');
+            Route::post('/payroll/email/send-all', [\App\Http\Controllers\Web\PayrollEmailController::class, 'sendAll'])
+                ->name('payroll.email.send_all');
+            Route::post('/payroll/email/{payroll}/send', [\App\Http\Controllers\Web\PayrollEmailController::class, 'send'])
+                ->name('payroll.email.send');
+
             // Sự cố lương từ nhân viên
             Route::get('/payroll/issues', [PayrollController::class, 'issues'])
                 ->name('payroll.issues.index');

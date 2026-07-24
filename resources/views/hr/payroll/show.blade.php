@@ -97,6 +97,9 @@
             <div style="margin-bottom:12px;display:flex;justify-content:space-between;"><span style="color:#64748b;">BHXH</span><strong style="color:#dc2626;">− {{ number_format($payroll->insurance ?? 0, 0, '.', ',') }} ₫</strong></div>
             <div style="margin-bottom:12px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Thuế</span><strong style="color:#dc2626;">− {{ number_format($payroll->tax ?? 0, 0, '.', ',') }} ₫</strong></div>
             <div style="margin-bottom:12px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Khấu trừ</span><strong style="color:#dc2626;">− {{ number_format($payroll->deduction ?? 0, 0, '.', ',') }} ₫</strong></div>
+            @if(($payroll->late_penalty_fee ?? 0) > 0)
+            <div style="margin-bottom:12px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Phạt đi muộn</span><strong style="color:#dc2626;">− {{ number_format($payroll->late_penalty_fee ?? 0, 0, '.', ',') }} ₫</strong></div>
+            @endif
             <div style="border-top:1px solid var(--line);padding-top:14px;display:flex;justify-content:space-between;align-items:center;">
                 <span style="color:#64748b;">Thực nhận</span>
                 <strong style="font-size:24px;color:var(--primary);">{{ number_format($payroll->total_salary ?? 0, 0, '.', ',') }} ₫</strong>

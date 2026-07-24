@@ -110,6 +110,12 @@
                             <div class="text-xs text-gray-500 mb-1">Khấu trừ</div>
                             <div class="font-bold text-red-600">-{{ number_format(($p->insurance ?? 0)+($p->tax ?? 0)+($p->deduction ?? 0), 0, '.', ',') }}</div>
                         </div>
+                        @if(($p->late_penalty_fee ?? 0) > 0)
+                        <div>
+                            <div class="text-xs text-gray-500 mb-1">Phạt đi muộn</div>
+                            <div class="font-bold text-red-600">-{{ number_format($p->late_penalty_fee ?? 0, 0, '.', ',') }} ₫</div>
+                        </div>
+                        @endif
                         <div>
                             <div class="text-xs text-gray-500 mb-1">Thực lĩnh</div>
                             <div class="font-extrabold text-blue-600 text-xl">{{ number_format($p->total_salary ?? 0, 0, '.', ',') }} ₫</div>

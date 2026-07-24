@@ -111,6 +111,12 @@
                     <input type="number" step="0.01" min="0" id="deduction" name="deduction" class="money-input"
                            value="{{ old('deduction', $payroll->deduction ?? 0) }}">
                 </div>
+                <div class="field">
+                    <label for="late_penalty_fee">Phạt đi muộn (−)</label>
+                    <input type="number" step="0.01" min="0" id="late_penalty_fee" name="late_penalty_fee" class="money-input"
+                           value="{{ old('late_penalty_fee', $payroll->late_penalty_fee ?? 0) }}">
+                    <span style="color:#64748b;font-size:12px;">Tự tính từ chấm công, có thể điều chỉnh</span>
+                </div>
 
                 <div style="border-top:1px solid var(--line);padding-top:14px;display:flex;justify-content:space-between;align-items:center;">
                     <span style="color:#64748b;">Thực nhận (tự tính)</span>
@@ -139,7 +145,7 @@
 @push('scripts')
 <script>
 (function () {
-    const ids = ['working_salary', 'overtime_salary', 'allowance', 'bonus', 'insurance', 'tax', 'deduction'];
+    const ids = ['working_salary', 'overtime_salary', 'allowance', 'bonus', 'insurance', 'tax', 'deduction', 'late_penalty_fee'];
     const preview = document.getElementById('total_preview');
     function num(id) {
         const el = document.getElementById(id);
@@ -147,7 +153,7 @@
     }
     function recalc() {
         const total = num('working_salary') + num('overtime_salary') + num('allowance') + num('bonus')
-            - num('insurance') - num('tax') - num('deduction');
+            - num('insurance') - num('tax') - num('deduction') - num('late_penalty_fee');
         preview.textContent = new Intl.NumberFormat('vi-VN').format(Math.round(total)) + ' ₫';
     }
     ids.forEach(id => {
