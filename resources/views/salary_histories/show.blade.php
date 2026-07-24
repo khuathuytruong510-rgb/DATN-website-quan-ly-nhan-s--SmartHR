@@ -82,6 +82,9 @@
                 @endif
                 <tr><th>Thưởng</th><td>{{ number_format($rewards, 0, ',', '.') }} ₫</td></tr>
                 <tr><th>Khấu trừ</th><td>{{ number_format($deductions, 0, ',', '.') }} ₫</td></tr>
+                @if(($latePenaltyFee ?? 0) > 0)
+                    <tr><th>Phạt đi muộn</th><td style="color:#dc2626;font-weight:600;">− {{ number_format($latePenaltyFee, 0, ',', '.') }} ₫</td></tr>
+                @endif
                 <tr><th>Thuế</th><td>{{ number_format($tax, 0, ',', '.') }} ₫</td></tr>
                 <tr><th>Bảo hiểm</th><td>{{ number_format($insurance, 0, ',', '.') }} ₫</td></tr>
                 <tr><th><strong>Thực nhận</strong></th><td><strong>{{ number_format($net, 0, ',', '.') }} ₫</strong></td></tr>

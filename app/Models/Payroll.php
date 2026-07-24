@@ -28,6 +28,7 @@ class Payroll extends Model
         'allowance',
         'bonus',
         'deduction',
+        'late_penalty_fee',
         'insurance',
         'tax',
         'total_salary',
@@ -99,7 +100,8 @@ class Payroll extends Model
             $totalIncome
             - ($this->insurance ?? 0)
             - ($this->tax ?? 0)
-            - ($this->deduction ?? 0),
+            - ($this->deduction ?? 0)
+            - ($this->late_penalty_fee ?? 0),
             2
         );
     }
@@ -154,5 +156,13 @@ class Payroll extends Model
     public function getNetSalaryAttribute(): float
     {
         return round($this->total_salary ?? 0, 2);
+    }
+
+    /**
+     * Get formatted late penalty fee
+     */
+    public function getFormattedLatePenaltyFeeAttribute(): string
+    {
+        return number_format($this->late_penalty_fee ?? 0, 0, '.', ',') . ' ₫';
     }
 }

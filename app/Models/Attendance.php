@@ -27,6 +27,7 @@ class Attendance extends Model
         'check_out_notes',
         'work_hours',
         'late_minutes',
+        'late_penalty_fee',
         'early_leave_minutes',
         'overtime_hours',
         'status',
@@ -47,6 +48,7 @@ class Attendance extends Model
         'check_out_distance' => 'float',
         'work_hours' => 'float',
         'late_minutes' => 'integer',
+        'late_penalty_fee' => 'float',
         'early_leave_minutes' => 'integer',
         'overtime_hours' => 'float',
     ];
@@ -153,5 +155,27 @@ class Attendance extends Model
     public function getFormattedCheckOutAttribute(): ?string
     {
         return $this->check_out?->format('H:i:s');
+    }
+
+    /**
+     * Get formatted late penalty fee with Vietnamese currency
+     */
+    public function getFormattedLatePenaltyFeeAttribute(): string
+    {
+        return number_format($this->late_penalty_fee ?? 0, 0, '.', ',') . ' ₫';
+    }
+
+    /**
+     * Get late penalty fee label in Vietnamese
+     */
+    public function getLatePenaltyLabelAttribute(): string
+    {
+        $fee = $this->late_penalty_fee ?? 0;
+
+        if ($fee <= 0) {
+            return 'Không phạt';
+        }
+
+        return number_format($fee, 0, '.', ',') . ' ₫';
     }
 }

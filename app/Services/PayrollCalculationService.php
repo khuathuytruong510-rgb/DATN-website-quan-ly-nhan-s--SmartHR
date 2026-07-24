@@ -219,6 +219,14 @@ class PayrollCalculationService
 
         /*
         |--------------------------------------------------------------------------
+        | 15b. Tiền phạt đi muộn (tổng từ các ngày đi muộn trong tháng)
+        |--------------------------------------------------------------------------
+        */
+
+        $totalLatePenaltyFee = $attendances->sum('late_penalty_fee');
+
+        /*
+        |--------------------------------------------------------------------------
         | 16. Bảo hiểm (10.5% lương cơ bản)
         |--------------------------------------------------------------------------
         */
@@ -297,7 +305,8 @@ class PayrollCalculationService
             + $bonus
             - $insurance
             - $tax
-            - $deduction;
+            - $deduction
+            - $totalLatePenaltyFee;
                     /*
         |--------------------------------------------------------------------------
         | 20. Lưu bảng lương
@@ -370,6 +379,8 @@ class PayrollCalculationService
                 |----------------------------------------------------------
                 */
                 'deduction' => $deduction,
+
+                'late_penalty_fee' => round($totalLatePenaltyFee, 2),
 
                 'insurance' => round($insurance, 2),
 

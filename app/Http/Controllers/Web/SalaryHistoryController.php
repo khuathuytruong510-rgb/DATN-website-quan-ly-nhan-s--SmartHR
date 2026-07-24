@@ -57,6 +57,8 @@ class SalaryHistoryController extends Controller
             ? $new
             : ($new + $allowanceTotal + $rewards - $deductions - $tax - $insurance);
 
+        $latePenaltyFee = (float) ($salaryHistory->payroll->late_penalty_fee ?? 0);
+
         return view('salary_histories.show', compact(
             'salaryHistory',
             'old',
@@ -70,7 +72,8 @@ class SalaryHistoryController extends Controller
             'tax',
             'insurance',
             'net',
-            'isPayment'
+            'isPayment',
+            'latePenaltyFee'
         ));
     }
 
