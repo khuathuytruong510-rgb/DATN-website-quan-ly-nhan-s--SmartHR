@@ -150,6 +150,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/contracts/{contract}/renew', [SmartHrController::class, 'renewContract'])->name('contracts.renew');
         Route::post('/contracts/{contract}/renew', [SmartHrController::class, 'storeRenewalContract'])->name('contracts.storeRenewal');
         Route::post('/contracts/{contract}/sign', [SmartHrController::class, 'signContract'])->name('contracts.sign');
+        Route::post('/contracts/{contract}/sync-salary', [SmartHrController::class, 'syncContractSalary'])->name('contracts.sync_salary');
 
         Route::get('/contract-templates/content', [\App\Http\Controllers\Web\ContractTemplateController::class, 'templateContent'])->name('contract-templates.content');
         Route::resource('contract-templates', \App\Http\Controllers\Web\ContractTemplateController::class)->names('contract-templates');
@@ -302,6 +303,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/statistics/departments/export', [\App\Http\Controllers\Web\StatisticsController::class, 'exportDepartment'])->name('statistics.departments.export');
         Route::get('/api/statistics/trend', [\App\Http\Controllers\Web\StatisticsController::class, 'apiTrend'])->name('api.statistics.trend');
         Route::get('/api/statistics/distribution', [\App\Http\Controllers\Web\StatisticsController::class, 'apiDistribution'])->name('api.statistics.distribution');
+
+        // HR Dashboard tổng hợp
+        Route::get('/hr-dashboard', [\App\Http\Controllers\Web\HrDashboardController::class, 'index'])->name('hr-dashboard.index');
+        Route::get('/hr-dashboard/export', [\App\Http\Controllers\Web\HrDashboardController::class, 'export'])->name('hr-dashboard.export');
     });
 
     // Accountant portal (only for accountant role)

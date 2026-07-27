@@ -112,6 +112,7 @@
                             <a class="{{ request()->routeIs('payment_center.*') ? 'active' : '' }}" href="{{ route('payment_center.dashboard') }}">Trung tâm thanh toán</a>
                             <a class="{{ request()->routeIs('payment_center.history') ? 'active' : '' }}" href="{{ route('payment_center.history') }}">Lịch sử thanh toán</a>
                             <a class="{{ request()->routeIs('statistics.*') ? 'active' : '' }}" href="{{ route('statistics.index') }}">Thống kê & Báo cáo</a>
+                            <a class="{{ request()->routeIs('hr-dashboard.*') ? 'active' : '' }}" href="{{ route('hr-dashboard.index') }}">Báo cáo tổng hợp</a>
                         </details>
                         <a class="{{ request()->routeIs('notifications.*') ? 'active' : '' }}" href="{{ route('notifications.index') }}">Thông báo</a>
                         @if ($user->is_admin)

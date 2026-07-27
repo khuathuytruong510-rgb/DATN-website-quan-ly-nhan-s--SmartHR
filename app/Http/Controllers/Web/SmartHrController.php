@@ -897,7 +897,7 @@ class SmartHrController extends Controller
     {
         $data = $request->validate([
             'employee_id'     => ['required', 'exists:employees,id'],
-            'month'           => ['required', 'date_format:Y-m', Rule::unique('employee_evaluations')->where(fn($q) => $q->where('employee_id', $request->input('employee_id'))->where('id', '!=', $evaluation->id))],
+            'month'           => ['required', 'date_format:Y-m', Rule::unique('employee_evaluations')->where(fn($q) => $q->where('employee_id', $request->input('employee_id')))->ignore($evaluation->id)],
             'rating'          => ['required', 'integer', 'between:1,5'],
             'punctuality'     => ['required', 'integer', 'between:0,10'],
             'task_completion' => ['required', 'integer', 'between:0,30'],
