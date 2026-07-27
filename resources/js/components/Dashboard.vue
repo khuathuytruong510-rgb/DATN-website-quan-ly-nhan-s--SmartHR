@@ -52,14 +52,6 @@
           <p>{{ contract.employee?.name }} - {{ formatCurrency(contract.salary) }}</p>
         </div>
       </card>
-
-      <card>
-        <template #header>Hợp đồng sắp hết hạn</template>
-        <div v-for="contract in stats.expiringContracts" :key="contract.id" class="list-item">
-          <strong>{{ contract.employee?.name }}</strong>
-          <p>{{ contract.employee?.department?.name }} - {{ contract.employee?.position }} - Còn {{ daysRemaining(contract.end_date) }} ngày</p>
-        </div>
-      </card>
     </div>
   </div>
 </template>
@@ -88,13 +80,6 @@ export default {
         style: 'currency',
         currency: 'VND'
       }).format(value || 0);
-    },
-    daysRemaining(value) {
-      if (!value) return '—';
-      const end = new Date(value);
-      const today = new Date();
-      const diff = Math.ceil((end - today) / (1000 * 60 * 60 * 24));
-      return Math.max(diff, 0);
     }
   }
 }
