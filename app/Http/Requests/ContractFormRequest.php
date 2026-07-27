@@ -24,7 +24,7 @@ class ContractFormRequest extends FormRequest
             'sign_date' => ['nullable', 'date'],
             'start_date' => ['required', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-            'status' => ['nullable', 'in:draft,waiting_employee_signature,waiting_director_signature,active,expired,rejected,cancelled,terminated'],
+            'status' => ['nullable', 'in:draft,waiting_employee_signature,waiting_director_signature,active,expiring,expired,rejected,cancelled,terminated'],
             'base_salary' => ['nullable', 'numeric', 'min:0'],
             'allowance' => ['nullable', 'numeric', 'min:0'],
             'bonus' => ['nullable', 'numeric', 'min:0'],
