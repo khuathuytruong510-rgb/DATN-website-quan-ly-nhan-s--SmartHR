@@ -124,6 +124,150 @@ class SmartHrController extends Controller
         $user = auth()->user();
 
         if ($user->is_admin || $user->is_hr || $user->is_accountant) {
+            // 1. Tổng quan nhân sự
+            $hrOverview = [
+                'totalEmployees'     => Employee::count(),
+                'totalDepartments'   => Department::count(),
+                'totalPositions'     => Position::count(),
+                'activeEmployees'    => Employee::where('status', 'active')->count(),
+                'inactiveEmployees'  => Employee::where('status', 'inactive')->count(),
+                'probationEmployees' => Employee::whereHas('contracts', fn($q) => $q->where('contract_type', 'probation'))->count(),
+                'internEmployees'    => Employee::whereHas('contracts', fn($q) => $q->where('contract_type', 'internship'))->count(),
+            ];
+
+            // 2. Thống kê phòng ban
+            $deptCollection = Department::withCount(['employees' => fn($q) => $q->where('status', 'active')])->get();
+            $totalActive    = $deptCollection->sum('employees_count');
+            $maxDept        = $deptCollection->sortByDesc('employees_count')->first();
+            $minDept        = $deptCollection->where('employees_count', '>', 0)->sortBy('employees_count')->first();
+            $departmentStats = [
+                'departments'    => $deptCollection->map(fn($d) => [
+                    'name'       => $d->name,
+                    'count'      => $d->employees_count,
+                    'percentage' => $totalActive > 0 ? round(($d->employees_count / $totalActive) * 100, 1) : 0,
+                ])->sortByDesc('count')->values(),
+                'totalActive'    => $totalActive,
+                'maxDepartment'  => $maxDept?->name ?? 'N/A',
+                'maxCount'       => $maxDept?->employees_count ?? 0,
+                'minDepartment'  => $minDept?->name ?? 'N/A',
+                'minCount'       => $minDept?->employees_count ?? 0,
+            ];
+
+            // 3. Thống kê chấm công
+            $att = Attendance::query();
+            $attendanceStats = [
+                'totalWorkDays'    => (clone $att)->count(),
+                'presentDays'      => (clone $att)->whereNotIn('status', ['absent'])->count(),
+                'absentDays'       => (clone $att)->where('status', 'absent')->count(),
+                'totalLate'        => (clone $att)->where('late_minutes', '>', 0)->count(),
+                'totalEarlyLeave'  => (clone $att)->where('early_leave_minutes', '>', 0)->count(),
+                'totalOvertimeHours' => (clone $att)->sum('overtime_hours'),
+                'paidLeaves'       => LeaveRequest::where('status', 'approved')->sum('days'),
+                'unpaidLeaves'     => LeaveRequest::where('status', 'pending')->sum('days'),
+            ];
+
+            // 4. Thống kê lương
+            $pay      = Payroll::query();
+            $totalNet = (clone $pay)->sum('total_salary');
+            $payrollStats = [
+                'totalFund'       => $totalNet,
+                'avgSalary'       => (clone $pay)->avg('total_salary'),
+                'maxSalary'       => (clone $pay)->max('total_salary'),
+                'minSalary'       => (clone $pay)->min('total_salary'),
+                'totalAllowance'  => (clone $pay)->sum('allowance'),
+                'totalDeduction'  => (clone $pay)->sum('deduction'),
+                'totalInsurance'  => (clone $pay)->sum('insurance'),
+                'totalTax'        => (clone $pay)->sum('tax'),
+                'totalBonus'      => (clone $pay)->sum('bonus'),
+                'totalNet'        => $totalNet,
+                'departmentPayroll' => Payroll::select(
+                    'departments.name as department_name',
+                    DB::raw('SUM(total_salary) as total_net'),
+                    DB::raw('SUM(allowance) as total_allowance'),
+                    DB::raw('SUM(bonus) as total_bonus'),
+                    DB::raw('SUM(insurance) as total_insurance'),
+                    DB::raw('SUM(tax) as total_tax'),
+                    DB::raw('SUM(overtime_salary) as total_overtime'),
+                    DB::raw('COUNT(DISTINCT payrolls.employee_id) as emp_count')
+                )
+                ->join('employees', 'employees.id', '=', 'payrolls.employee_id')
+                ->join('departments', 'departments.id', '=', 'employees.department_id')
+                ->groupBy('departments.name')
+                ->orderByDesc('total_net')
+                ->get(),
+            ];
+
+            // 5. Thống kê hợp đồng
+            $contractStats = [
+                'total'        => Contract::count(),
+                'active'       => Contract::where('status', 'active')->count(),
+                'expiringSoon' => Contract::where('status', 'active')
+                    ->where('end_date', '>=', now())
+                    ->where('end_date', '<=', now()->addDays(30))->count(),
+                'expired'      => Contract::where('status', 'expired')
+                    ->orWhere(fn($q) => $q->where('status', 'active')->where('end_date', '<', now()))->count(),
+                'byType'       => Contract::select('contract_type', DB::raw('count(*) as count'))
+                    ->groupBy('contract_type')->pluck('count', 'contract_type'),
+            ];
+
+            // 6. Thống kê đơn từ
+            $requestStats = [
+                'totalLeave'    => LeaveRequest::count(),
+                'totalOvertime' => OvertimeRequest::count(),
+                'totalAdvance'  => SalaryAdvance::count(),
+                'totalSupport'  => SupportRequest::count(),
+                'pendingAll'    => LeaveRequest::where('status', 'pending')->count()
+                    + OvertimeRequest::where('status', 'pending')->count()
+                    + SalaryAdvance::where('status', 'pending')->count()
+                    + SupportRequest::where('status', 'pending')->count(),
+                'approvedAll'   => LeaveRequest::where('status', 'approved')->count()
+                    + OvertimeRequest::where('status', 'approved')->count()
+                    + SalaryAdvance::where('status', 'approved')->count()
+                    + SupportRequest::where('status', 'approved')->count(),
+                'rejectedAll'   => LeaveRequest::where('status', 'rejected')->count()
+                    + OvertimeRequest::where('status', 'rejected')->count()
+                    + SalaryAdvance::where('status', 'rejected')->count()
+                    + SupportRequest::where('status', 'rejected')->count(),
+            ];
+
+            // 7. Thống kê tài khoản
+            $accountStats = [
+                'total'     => User::count(),
+                'admin'     => User::where('is_admin', true)->count(),
+                'hr'        => User::where('is_hr', true)->count(),
+                'accountant'=> User::where('is_accountant', true)->count(),
+                'employee'  => User::where('is_admin', false)->where('is_hr', false)->where('is_accountant', false)->count(),
+                'locked'    => User::where('is_locked', true)->count(),
+                'active'    => User::where('is_locked', false)->count(),
+            ];
+
+            // 8. Tuyển dụng
+            $recruitmentStats = ['openPositions' => 0, 'totalApplications' => 0, 'hired' => 0, 'rejected' => 0];
+            try {
+                $recruitmentStats['openPositions']    = Recruitment::where('status', 'open')->count();
+                $recruitmentStats['totalApplications']= Recruitment::count();
+                $recruitmentStats['hired']            = Recruitment::where('status', 'hired')->count();
+                $recruitmentStats['rejected']         = Recruitment::where('status', 'rejected')->count();
+            } catch (\Exception $e) {}
+
+            // 9. Xu hướng 12 tháng
+            $monthlyPayrollTrend = collect();
+            $monthlyNewEmployees = collect();
+            for ($i = 11; $i >= 0; $i--) {
+                $date = Carbon::now()->subMonths($i);
+                $m    = (int) $date->format('m');
+                $y    = (int) $date->format('Y');
+                $p    = Payroll::where('month', $m)->where('year', $y)
+                    ->selectRaw('COALESCE(SUM(total_salary), 0) as t')->first();
+                $monthlyPayrollTrend->push(['label' => $date->format('m/Y'), 'total' => (float) $p->t]);
+
+                $s   = $date->copy()->startOfMonth();
+                $e   = $date->copy()->endOfMonth();
+                $cnt = Employee::where('start_date', '>=', $s)->where('start_date', '<=', $e)->count();
+                $monthlyNewEmployees->push(['label' => $date->format('m/Y'), 'count' => $cnt]);
+            }
+
+            // 10. Hợp đồng sắp hết hạn
             $expiringContracts = Contract::with(['employee.department'])
                 ->whereNotIn('status', ['expired', 'cancelled'])
                 ->whereNotNull('end_date')
@@ -131,14 +275,11 @@ class SmartHrController extends Controller
                 ->orderBy('end_date')
                 ->get();
 
-            return view('admin.dashboard', [
-                'departmentCount'   => Department::count(),
-                'employeeCount'     => Employee::count(),
-                'contractCount'     => Contract::count(),
-                'latestEmployees'   => Employee::with('department')->latest()->take(5)->get(),
-                'latestContracts'   => Contract::with('employee')->latest()->take(5)->get(),
-                'expiringContracts' => $expiringContracts,
-            ]);
+            return view('admin.dashboard', compact(
+                'hrOverview', 'departmentStats', 'attendanceStats', 'payrollStats',
+                'contractStats', 'requestStats', 'accountStats', 'recruitmentStats',
+                'monthlyPayrollTrend', 'monthlyNewEmployees', 'expiringContracts'
+            ));
         }
 
         return redirect()->route('me.dashboard');
