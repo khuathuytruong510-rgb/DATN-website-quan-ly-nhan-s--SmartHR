@@ -49,15 +49,48 @@ class ContractService
     {
         return DB::transaction(function () use ($actor, $parentContract, $data): Contract {
             $employee = $parentContract->employee ?? Employee::find($parentContract->employee_id);
-            $contract = Contract::create($this->buildPayload($actor, $employee, array_merge($data, [
-                'employee_id' => $parentContract->employee_id,
-                'parent_contract_id' => $parentContract->id,
-            ]), null));
 
-            $contract->parent_contract_id = $parentContract->id;
-            $contract->save();
+            // Ưu tiên lương từ bảng lương mới nhất nếu không có trong $data
+            if (empty($data['base_salary']) || (float) $data['base_salary'] === 0.0) {
+                $latestPayroll = $employee
+                    ? $employee->payrolls()->orderByDesc('year')->orderByDesc('month')->first()
+                    : null;
+                if ($latestPayroll && $latestPayroll->base_salary > 0) {
+                    $data['base_salary'] = $latestPayroll->base_salary;
+                    if (empty($data['allowance'])) {
+                        $data['allowance'] = $latestPayroll->allowance ?? $parentContract->allowance ?? 0;
+                    }
+                } else {
+                    // Kế thừa lương hợp đồng cũ
+                    $data['base_salary'] = $parentContract->base_salary ?? $parentContract->salary ?? 0;
+                    if (empty($data['allowance'])) {
+                        $data['allowance'] = $parentContract->allowance ?? 0;
+                    }
+                }
+            }
+
+            // Luôn gán employee_id và parent_contract_id từ hợp đồng gốc
+            $data['employee_id']        = $parentContract->employee_id;
+            $data['parent_contract_id'] = $parentContract->id;
+
+            $contract = Contract::create($this->buildPayload($actor, $employee, $data, null));
+
+            // Đảm bảo parent_contract_id được lưu (buildPayload đã nhận, nhưng ghi lại cho chắc)
+            if ($contract->parent_contract_id !== $parentContract->id) {
+                $contract->parent_contract_id = $parentContract->id;
+                $contract->save();
+            }
+
             $this->syncStatus($contract);
-            $this->log($contract, $actor, 'renewed', 'Gia hạn hợp đồng', ['parent_contract_id' => $parentContract->id]);
+
+            $this->log($contract, $actor, 'renewed', 'Gia hạn hợp đồng', [
+                'parent_contract_id' => $parentContract->id,
+                'parent_code'        => $parentContract->contract_code,
+                'new_base_salary'    => (float) $contract->base_salary,
+                'new_allowance'      => (float) $contract->allowance,
+                'new_start_date'     => $contract->start_date?->toDateString(),
+                'new_end_date'       => $contract->end_date?->toDateString(),
+            ]);
 
             return $contract->fresh();
         });
@@ -302,5 +335,101 @@ class ContractService
             'message' => $message,
             'details' => $details,
         ]);
+    }
+
+    // =========================================================
+    //  ĐỒNG BỘ LƯƠNG PAYROLL → HỢP ĐỒNG
+    // =========================================================
+
+    /**
+     * Cập nhật lương trực tiếp vào một hợp đồng cụ thể (bất kể trạng thái).
+     * Dùng khi user bấm "Đồng bộ lương" từ trang show/index của đúng hợp đồng đó.
+     */
+    public function syncSalaryToContract(User $actor, Contract $contract, \App\Models\Payroll $payroll): Contract
+    {
+        $oldBase      = (float) $contract->base_salary;
+        $newBase      = (float) $payroll->base_salary;
+        $oldAllowance = (float) $contract->allowance;
+        $newAllowance = (float) ($payroll->allowance ?? $contract->allowance);
+
+        // Không có gì thay đổi → trả về luôn, không cần ghi log thừa
+        if ($oldBase === $newBase && $oldAllowance === $newAllowance) {
+            return $contract;
+        }
+
+        return DB::transaction(function () use ($actor, $contract, $payroll, $oldBase, $newBase, $oldAllowance, $newAllowance): Contract {
+            $contract->base_salary = $newBase;
+            $contract->salary      = $newBase;
+            $contract->allowance   = $newAllowance;
+            $contract->save();
+
+            $this->log($contract, $actor, 'salary_synced', 'Cập nhật lương từ bảng lương', [
+                'payroll_id'      => $payroll->id,
+                'payroll_period'  => $payroll->month . '/' . $payroll->year,
+                'old_base_salary' => $oldBase,
+                'new_base_salary' => $newBase,
+                'old_allowance'   => $oldAllowance,
+                'new_allowance'   => $newAllowance,
+            ]);
+
+            return $contract->fresh();
+        });
+    }
+
+    /**
+     * Tìm hợp đồng đang hiệu lực (hoặc chờ ký) của nhân viên rồi đồng bộ lương.
+     * Dùng cho các luồng tự động (ví dụ: sau khi duyệt bảng lương).
+     */
+    public function syncSalaryFromPayroll(User $actor, \App\Models\Payroll $payroll): ?Contract
+    {
+        // Mở rộng: tìm hợp đồng active, expiring, hoặc đang chờ ký
+        $contract = Contract::where('employee_id', $payroll->employee_id)
+            ->whereIn('status', [
+                Contract::STATUS_ACTIVE,
+                'expiring',
+                Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE,
+                Contract::STATUS_WAITING_DIRECTOR_SIGNATURE,
+            ])
+            ->latest('id')
+            ->first();
+
+        if (! $contract) {
+            return null;
+        }
+
+        return $this->syncSalaryToContract($actor, $contract, $payroll);
+    }
+
+    /**
+     * Kiểm tra chênh lệch lương payroll vs hợp đồng đang hiệu lực / chờ ký.
+     */
+    public function detectSalaryMismatch(\App\Models\Payroll $payroll): array
+    {
+        $contract = Contract::where('employee_id', $payroll->employee_id)
+            ->whereIn('status', [
+                Contract::STATUS_ACTIVE,
+                'expiring',
+                Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE,
+                Contract::STATUS_WAITING_DIRECTOR_SIGNATURE,
+            ])
+            ->latest('id')
+            ->first();
+
+        if (! $contract) {
+            return ['has_mismatch' => false, 'contract' => null];
+        }
+
+        $contractBase = (float) ($contract->base_salary ?? $contract->salary ?? 0);
+        $payrollBase  = (float) ($payroll->base_salary ?? 0);
+        $diff         = $payrollBase - $contractBase;
+
+        return [
+            'has_mismatch'  => abs($diff) > 0,
+            'contract'      => $contract,
+            'contract_base' => $contractBase,
+            'payroll_base'  => $payrollBase,
+            'diff'          => $diff,
+            'diff_pct'      => $contractBase > 0 ? round($diff / $contractBase * 100, 1) : 0,
+        ];
     }
 }

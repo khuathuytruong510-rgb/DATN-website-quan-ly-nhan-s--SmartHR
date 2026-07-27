@@ -16,16 +16,23 @@ use App\Models\Payroll;
 use App\Models\Notification;
 use App\Models\Position;
 use App\Models\User;
+use App\Models\OvertimeRequest;
+use App\Models\Recruitment;
+use App\Models\SalaryAdvance;
+use App\Models\SupportRequest;
 use App\Traits\HasLeaveLimit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Carbon\Carbon;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use App\Mail\PayrollConfirmationMail;
 use App\Services\ContractService;
+use App\Services\EvaluationService;
 use App\Services\PayrollCalculationService;
 use App\Support\ContractFixedTerms;
 use Illuminate\Support\Facades\Mail;
@@ -117,6 +124,155 @@ class SmartHrController extends Controller
         $user = auth()->user();
 
         if ($user->is_admin || $user->is_hr || $user->is_accountant) {
+            // 1. Tổng quan nhân sự
+            $hrOverview = [
+                'totalEmployees' => Employee::count(),
+                'totalDepartments' => Department::count(),
+                'totalPositions' => Position::count(),
+                'activeEmployees' => Employee::where('status', 'active')->count(),
+                'inactiveEmployees' => Employee::where('status', 'inactive')->count(),
+                'probationEmployees' => Employee::whereHas('contract', fn($q) => $q->where('contract_type', 'probation'))->count(),
+                'internEmployees' => Employee::whereHas('contract', fn($q) => $q->where('contract_type', 'intern'))->count(),
+            ];
+
+            // 2. Thống kê phòng ban
+            $deptCollection = Department::withCount(['employees' => fn($q) => $q->where('status', 'active')])->get();
+            $totalActive = $deptCollection->sum('employees_count');
+            $maxDept = $deptCollection->sortByDesc('employees_count')->first();
+            $minDept = $deptCollection->where('employees_count', '>', 0)->sortBy('employees_count')->first();
+            $departmentStats = [
+                'departments' => $deptCollection->map(fn($d) => [
+                    'name' => $d->name,
+                    'count' => $d->employees_count,
+                    'percentage' => $totalActive > 0 ? round(($d->employees_count / $totalActive) * 100, 1) : 0,
+                ])->sortByDesc('count')->values(),
+                'totalActive' => $totalActive,
+                'maxDepartment' => $maxDept?->name ?? 'N/A',
+                'maxCount' => $maxDept?->employees_count ?? 0,
+                'minDepartment' => $minDept?->name ?? 'N/A',
+                'minCount' => $minDept?->employees_count ?? 0,
+            ];
+
+            // 3. Thống kê chấm công (toàn bộ)
+            $att = Attendance::query();
+            $attendanceStats = [
+                'totalWorkDays' => (clone $att)->count(),
+                'presentDays' => (clone $att)->whereNotIn('status', ['absent'])->count(),
+                'absentDays' => (clone $att)->where('status', 'absent')->count(),
+                'totalLate' => (clone $att)->where('late_minutes', '>', 0)->count(),
+                'totalEarlyLeave' => (clone $att)->where('early_leave_minutes', '>', 0)->count(),
+                'totalOvertimeHours' => (clone $att)->sum('overtime_hours'),
+                'paidLeaves' => LeaveRequest::where('status', 'approved')->sum('days'),
+                'unpaidLeaves' => LeaveRequest::where('status', 'pending')->sum('days'),
+            ];
+
+            // 4. Thống kê lương (toàn bộ)
+            $pay = Payroll::query();
+            $totalNet = (clone $pay)->sum('total_salary');
+            $payrollStats = [
+                'totalFund' => $totalNet,
+                'avgSalary' => (clone $pay)->avg('total_salary'),
+                'maxSalary' => (clone $pay)->max('total_salary'),
+                'minSalary' => (clone $pay)->min('total_salary'),
+                'totalAllowance' => (clone $pay)->sum('allowance'),
+                'totalDeduction' => (clone $pay)->sum('deduction'),
+                'totalInsurance' => (clone $pay)->sum('insurance'),
+                'totalTax' => (clone $pay)->sum('tax'),
+                'totalBonus' => (clone $pay)->sum('bonus'),
+                'totalNet' => $totalNet,
+                'departmentPayroll' => Payroll::select(
+                    'departments.name as department_name',
+                    DB::raw('SUM(total_salary) as total_net'),
+                    DB::raw('SUM(allowance) as total_allowance'),
+                    DB::raw('SUM(bonus) as total_bonus'),
+                    DB::raw('SUM(insurance) as total_insurance'),
+                    DB::raw('SUM(tax) as total_tax'),
+                    DB::raw('SUM(overtime_salary) as total_overtime'),
+                    DB::raw('COUNT(DISTINCT payrolls.employee_id) as emp_count')
+                )
+                ->join('employees', 'employees.id', '=', 'payrolls.employee_id')
+                ->join('departments', 'departments.id', '=', 'employees.department_id')
+                ->groupBy('departments.name')
+                ->orderByDesc('total_net')
+                ->get(),
+            ];
+
+            // 5. Thống kê hợp đồng
+            $contractStats = [
+                'total' => Contract::count(),
+                'active' => Contract::where('status', 'active')->count(),
+                'expiringSoon' => Contract::where('status', 'active')
+                    ->where('end_date', '>=', now())
+                    ->where('end_date', '<=', now()->addDays(30))->count(),
+                'expired' => Contract::where('status', 'expired')
+                    ->orWhere(fn($q) => $q->where('status', 'active')->where('end_date', '<', now()))->count(),
+                'byType' => Contract::select('contract_type', DB::raw('count(*) as count'))
+                    ->groupBy('contract_type')->pluck('count', 'contract_type'),
+            ];
+
+            // 6. Thống kê đơn từ (toàn bộ)
+            $requestStats = [
+                'totalLeave' => LeaveRequest::count(),
+                'totalOvertime' => OvertimeRequest::count(),
+                'totalAdvance' => SalaryAdvance::count(),
+                'totalSupport' => SupportRequest::count(),
+                'pendingAll' => LeaveRequest::where('status', 'pending')->count()
+                    + OvertimeRequest::where('status', 'pending')->count()
+                    + SalaryAdvance::where('status', 'pending')->count()
+                    + SupportRequest::where('status', 'pending')->count(),
+                'approvedAll' => LeaveRequest::where('status', 'approved')->count()
+                    + OvertimeRequest::where('status', 'approved')->count()
+                    + SalaryAdvance::where('status', 'approved')->count()
+                    + SupportRequest::where('status', 'approved')->count(),
+                'rejectedAll' => LeaveRequest::where('status', 'rejected')->count()
+                    + OvertimeRequest::where('status', 'rejected')->count()
+                    + SalaryAdvance::where('status', 'rejected')->count()
+                    + SupportRequest::where('status', 'rejected')->count(),
+            ];
+
+            // 7. Thống kê tài khoản
+            $accountStats = [
+                'total' => User::count(),
+                'admin' => User::where('is_admin', true)->count(),
+                'hr' => User::where('is_hr', true)->count(),
+                'accountant' => User::where('is_accountant', true)->count(),
+                'employee' => User::where('is_admin', false)->where('is_hr', false)->where('is_accountant', false)->count(),
+                'locked' => User::where('is_locked', true)->count(),
+                'active' => User::where('is_locked', false)->count(),
+            ];
+
+            // 8. Tuyển dụng
+            $recruitmentStats = [
+                'openPositions' => 0,
+                'totalApplications' => 0,
+                'hired' => 0,
+                'rejected' => 0,
+            ];
+            try {
+                $recruitmentStats['openPositions'] = Recruitment::where('status', 'open')->count();
+                $recruitmentStats['totalApplications'] = Recruitment::count();
+                $recruitmentStats['hired'] = Recruitment::where('status', 'hired')->count();
+                $recruitmentStats['rejected'] = Recruitment::where('status', 'rejected')->count();
+            } catch (\Exception $e) {}
+
+            // 9. Xu hướng 12 tháng
+            $monthlyPayrollTrend = collect();
+            $monthlyNewEmployees = collect();
+            for ($i = 11; $i >= 0; $i--) {
+                $date = Carbon::now()->subMonths($i);
+                $m = (int) $date->format('m');
+                $y = (int) $date->format('Y');
+                $p = Payroll::where('month', $m)->where('year', $y)
+                    ->selectRaw('COALESCE(SUM(total_salary), 0) as t')->first();
+                $monthlyPayrollTrend->push(['label' => $date->format('m/Y'), 'total' => (float) $p->t]);
+
+                $s = $date->copy()->startOfMonth();
+                $e = $date->copy()->endOfMonth();
+                $cnt = Employee::where('start_date', '>=', $s)->where('start_date', '<=', $e)->count();
+                $monthlyNewEmployees->push(['label' => $date->format('m/Y'), 'count' => $cnt]);
+            }
+
+            // 10. Hợp đồng sắp hết hạn (dùng cho sidebar/bảng)
             $expiringContracts = Contract::with(['employee.department'])
                 ->whereNotIn('status', ['expired', 'cancelled'])
                 ->whereNotNull('end_date')
@@ -124,14 +280,11 @@ class SmartHrController extends Controller
                 ->orderBy('end_date')
                 ->get();
 
-            return view('admin.dashboard', [
-                'departmentCount' => Department::count(),
-                'employeeCount' => Employee::count(),
-                'contractCount' => Contract::count(),
-                'latestEmployees' => Employee::with('department')->latest()->take(5)->get(),
-                'latestContracts' => Contract::with('employee')->latest()->take(5)->get(),
-                'expiringContracts' => $expiringContracts,
-            ]);
+            return view('admin.dashboard', compact(
+                'hrOverview', 'departmentStats', 'attendanceStats', 'payrollStats',
+                'contractStats', 'requestStats', 'accountStats', 'recruitmentStats',
+                'monthlyPayrollTrend', 'monthlyNewEmployees', 'expiringContracts'
+            ));
         }
 
         return redirect()->route('me.dashboard');
@@ -638,46 +791,88 @@ class SmartHrController extends Controller
             ->with('success', "Đã tính lương cho {$count} nhân viên cho {$monthInput}.");
     }
 
-    public function evaluations(): View
+    public function evaluations(Request $request): View
     {
-        return view('hr.evaluations.index', [
-            'evaluations' => EmployeeEvaluation::with(['employee', 'evaluator'])->latest()->paginate(10),
-        ]);
+        $search         = trim((string) $request->query('search', ''));
+        $filterMonth    = trim((string) $request->query('month', ''));
+        $filterStatus   = trim((string) $request->query('status', ''));
+        $filterClass    = trim((string) $request->query('classification', ''));
+
+        $query = EmployeeEvaluation::with(['employee.department', 'evaluator']);
+
+        if ($search !== '') {
+            $query->whereHas('employee', fn($q) => $q->where('name', 'like', '%' . $search . '%'));
+        }
+        if ($filterMonth !== '') {
+            $query->where('month', $filterMonth);
+        }
+        if ($filterStatus !== '') {
+            $query->where('status', $filterStatus);
+        }
+        if ($filterClass !== '') {
+            $query->where('classification', $filterClass);
+        }
+
+        $evaluations = $query->orderByDesc('id')->paginate(15)->withQueryString();
+
+        $stats = [
+            'total'     => EmployeeEvaluation::count(),
+            'pending'   => EmployeeEvaluation::where('status', 'pending')->count(),
+            'approved'  => EmployeeEvaluation::where('status', 'approved')->count(),
+            'excellent' => EmployeeEvaluation::where('classification', 'Xuất sắc')->count(),
+            'good'      => EmployeeEvaluation::where('classification', 'Tốt')->count(),
+            'average'   => EmployeeEvaluation::where('classification', 'Trung bình')->count(),
+            'weak'      => EmployeeEvaluation::where('classification', 'Yếu')->count(),
+            'avg_score' => round(EmployeeEvaluation::avg('score_total') ?? 0, 1),
+        ];
+
+        return view('hr.evaluations.index', compact(
+            'evaluations', 'stats',
+            'search', 'filterMonth', 'filterStatus', 'filterClass'
+        ));
     }
 
-    public function createEvaluation(): View
+    public function createEvaluation(Request $request): View
     {
+        $svc        = new EvaluationService();
+        $month      = $request->input('month', now()->format('Y-m'));
+        $employeeId = $request->input('employee_id');
+        $monthlyStats = null;
+        $suggested    = null;
+        if ($employeeId) {
+            $monthlyStats = $svc->getMonthlyStats((int)$employeeId, $month);
+            $suggested    = $svc->suggestScores((int)$employeeId, $month);
+        }
         return view('hr.evaluations.form', [
-            'evaluation' => new EmployeeEvaluation(),
-            'employees' => Employee::orderBy('name')->get(),
+            'evaluation'   => new EmployeeEvaluation(),
+            'employees'    => Employee::orderBy('name')->get(),
+            'month'        => $month,
+            'monthlyStats' => $monthlyStats,
+            'suggested'    => $suggested,
         ]);
     }
 
     public function storeEvaluation(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'employee_id' => ['required', 'exists:employees,id'],
-            'month' => ['required', 'date_format:Y-m', Rule::unique('employee_evaluations')->where(function ($query) use ($request) {
-                return $query->where('employee_id', $request->input('employee_id'));
-            })],
-            'rating' => ['required', 'integer', 'between:1,5'],
-            'punctuality' => ['required', 'integer', 'between:0,10'],
+            'employee_id'     => ['required', 'exists:employees,id'],
+            'month'           => ['required', 'date_format:Y-m', Rule::unique('employee_evaluations')->where(fn($q) => $q->where('employee_id', $request->input('employee_id')))],
+            'rating'          => ['required', 'integer', 'between:1,5'],
+            'punctuality'     => ['required', 'integer', 'between:0,10'],
             'task_completion' => ['required', 'integer', 'between:0,30'],
-            'quality' => ['required', 'integer', 'between:0,20'],
+            'quality'         => ['required', 'integer', 'between:0,20'],
             'technical_skill' => ['required', 'integer', 'between:0,10'],
-            'responsibility' => ['required', 'integer', 'between:0,10'],
-            'teamwork' => ['required', 'integer', 'between:0,10'],
-            'attitude' => ['required', 'integer', 'between:0,10'],
-            'summary' => ['nullable', 'string'],
-            'comments' => ['nullable', 'string'],
+            'responsibility'  => ['required', 'integer', 'between:0,10'],
+            'teamwork'        => ['required', 'integer', 'between:0,10'],
+            'attitude'        => ['required', 'integer', 'between:0,10'],
+            'summary'         => ['nullable', 'string'],
+            'comments'        => ['nullable', 'string'],
         ]);
 
-        $data['evaluator_id'] = Auth::id();
-        $data['score_total'] = $this->calculateEvaluationTotal($data);
+        $data['evaluator_id']   = Auth::id();
+        $data['score_total']    = $this->calculateEvaluationTotal($data);
         $data['classification'] = $this->classifyEvaluationScore($data['score_total']);
-        $data['status'] = 'pending';
-        $data['approved_by'] = null;
-        $data['approved_at'] = null;
+        $data['status']         = 'pending';
 
         EmployeeEvaluation::create($data);
 
@@ -686,36 +881,37 @@ class SmartHrController extends Controller
 
     public function editEvaluation(EmployeeEvaluation $evaluation): View
     {
+        $svc          = new EvaluationService();
+        $monthlyStats = $svc->getMonthlyStats($evaluation->employee_id, $evaluation->month);
+        $suggested    = $svc->suggestScores($evaluation->employee_id, $evaluation->month);
         return view('hr.evaluations.form', [
-            'evaluation' => $evaluation,
-            'employees' => Employee::orderBy('name')->get(),
+            'evaluation'   => $evaluation,
+            'employees'    => Employee::orderBy('name')->get(),
+            'month'        => $evaluation->month,
+            'monthlyStats' => $monthlyStats,
+            'suggested'    => $suggested,
         ]);
     }
 
     public function updateEvaluation(Request $request, EmployeeEvaluation $evaluation): RedirectResponse
     {
         $data = $request->validate([
-            'employee_id' => ['required', 'exists:employees,id'],
-            'month' => ['required', 'date_format:Y-m', Rule::unique('employee_evaluations')->where(function ($query) use ($request, $evaluation) {
-                return $query->where('employee_id', $request->input('employee_id'))->where('id', '!=', $evaluation->id);
-            })],
-            'rating' => ['required', 'integer', 'between:1,5'],
-            'punctuality' => ['required', 'integer', 'between:0,10'],
+            'employee_id'     => ['required', 'exists:employees,id'],
+            'month'           => ['required', 'date_format:Y-m', Rule::unique('employee_evaluations')->where(fn($q) => $q->where('employee_id', $request->input('employee_id'))->where('id', '!=', $evaluation->id))],
+            'rating'          => ['required', 'integer', 'between:1,5'],
+            'punctuality'     => ['required', 'integer', 'between:0,10'],
             'task_completion' => ['required', 'integer', 'between:0,30'],
-            'quality' => ['required', 'integer', 'between:0,20'],
+            'quality'         => ['required', 'integer', 'between:0,20'],
             'technical_skill' => ['required', 'integer', 'between:0,10'],
-            'responsibility' => ['required', 'integer', 'between:0,10'],
-            'teamwork' => ['required', 'integer', 'between:0,10'],
-            'attitude' => ['required', 'integer', 'between:0,10'],
-            'summary' => ['nullable', 'string'],
-            'comments' => ['nullable', 'string'],
+            'responsibility'  => ['required', 'integer', 'between:0,10'],
+            'teamwork'        => ['required', 'integer', 'between:0,10'],
+            'attitude'        => ['required', 'integer', 'between:0,10'],
+            'summary'         => ['nullable', 'string'],
+            'comments'        => ['nullable', 'string'],
         ]);
 
-        $data['score_total'] = $this->calculateEvaluationTotal($data);
+        $data['score_total']    = $this->calculateEvaluationTotal($data);
         $data['classification'] = $this->classifyEvaluationScore($data['score_total']);
-        $data['status'] = 'pending';
-        $data['approved_by'] = null;
-        $data['approved_at'] = null;
 
         $evaluation->update($data);
 
@@ -731,20 +927,35 @@ class SmartHrController extends Controller
 
     public function showEvaluation(EmployeeEvaluation $evaluation): View
     {
-        return view('hr.evaluations.show', [
-            'evaluation' => $evaluation->load(['employee.department', 'evaluator', 'approvedBy']),
-        ]);
+        $svc = new EvaluationService();
+        $evaluation->load(['employee.department', 'evaluator', 'approvedBy']);
+        $monthlyStats = $svc->getMonthlyStats($evaluation->employee_id, $evaluation->month);
+        return view('hr.evaluations.show', compact('evaluation', 'monthlyStats'));
     }
 
     public function approveEvaluation(EmployeeEvaluation $evaluation): RedirectResponse
     {
         $evaluation->update([
-            'status' => 'approved',
+            'status'      => 'approved',
             'approved_by' => Auth::id(),
             'approved_at' => now(),
         ]);
 
         return redirect()->route('evaluations.index')->with('success', 'Đã duyệt đánh giá thành công.');
+    }
+
+    /** API AJAX: trả về dữ liệu thực tế + điểm đề xuất */
+    public function evaluationSuggest(Request $request)
+    {
+        $request->validate([
+            'employee_id' => ['required', 'exists:employees,id'],
+            'month'       => ['required', 'date_format:Y-m'],
+        ]);
+        $svc = new EvaluationService();
+        return response()->json([
+            'stats'     => $svc->getMonthlyStats((int)$request->employee_id, $request->month),
+            'suggested' => $svc->suggestScores((int)$request->employee_id, $request->month),
+        ]);
     }
 
     public function benefits(Request $request): View
@@ -1350,36 +1561,35 @@ class SmartHrController extends Controller
 
     public function showContract(Contract $contract): View
     {
-        // Eager load related employee and department
-        $contract->loadMissing(['employee.department']);
+        $contract->loadMissing(['employee.department', 'logs', 'renewals', 'parentContract']);
 
-        // Latest payroll for the employee (if any)
+        // Bảng lương gần nhất (theo year desc, month desc)
         $payroll = null;
         if ($contract->employee) {
-            $payroll = $contract->employee->payrolls()->latest()->first();
+            $payroll = $contract->employee->payrolls()
+                ->orderByDesc('year')->orderByDesc('month')->first();
         }
 
-        // Employee benefits (with benefit details)
         $benefits = collect();
         if ($contract->employee) {
             $benefits = $contract->employee->employeeBenefits()->with('benefit')->get();
         }
 
-        // Days remaining until end_date (0 if already expired or no end_date)
         $daysRemaining = null;
         if ($contract->end_date) {
-            $daysRemaining = max(0, now()->diffInDays($contract->end_date));
+            $daysRemaining = (int) now()->diffInDays($contract->end_date, false);
         }
 
-        // Status badge class (uses classes declared in layout)
         $statusBadge = 'badge';
-        if ($contract->status === 'expired' || $contract->end_date && $contract->end_date->isPast()) {
+        if ($contract->status === 'expired' || ($contract->end_date && $contract->end_date->isPast())) {
             $statusBadge = 'badge expired';
         } elseif ($contract->status === 'pending') {
             $statusBadge = 'badge pending';
         }
 
-        return view('contracts.show', compact('contract', 'payroll', 'benefits', 'daysRemaining', 'statusBadge'));
+        return view('contracts.show', compact(
+            'contract', 'payroll', 'benefits', 'daysRemaining', 'statusBadge'
+        ));
     }
 
     public function editContract(Contract $contract): View
@@ -1440,29 +1650,53 @@ class SmartHrController extends Controller
             abort(403);
         }
 
+        // Lương mới nhất từ bảng lương (ưu tiên hơn lương hợp đồng cũ)
+        $latestPayroll     = null;
+        $proposedBase      = (float) ($contract->salary ?? $contract->base_salary ?? 0);
+        $proposedAllowance = (float) ($contract->allowance ?? 0);
+
+        if ($contract->employee) {
+            $latestPayroll = $contract->employee->payrolls()
+                ->orderByDesc('year')->orderByDesc('month')->first();
+            if ($latestPayroll) {
+                $proposedBase      = (float) ($latestPayroll->base_salary ?: $proposedBase);
+                $proposedAllowance = (float) ($latestPayroll->allowance  ?: $proposedAllowance);
+            }
+        }
+
+        // Ngày bắt đầu mới = ngày kết thúc HĐ cũ + 1 (hoặc hôm nay)
+        $newStart = $contract->end_date
+            ? $contract->end_date->addDay()->toDateString()
+            : now()->toDateString();
+        $newEnd = Carbon::parse($newStart)->addYear()->toDateString();
+
         return view('contracts.form', [
             'contract' => new Contract([
-                'parent_contract_id' => $contract->id,
-                'employee_id' => $contract->employee_id,
-                'contract_code' => $this->generateContractCode(),
-                'status' => 'waiting_employee',
-                'contract_status' => 'waiting_employee',
-                'base_salary' => $contract->salary ?? 0,
-                'allowance' => $contract->allowance ?? 0,
-                'bonus' => $contract->bonus ?? 0,
-                'contract_type' => $contract->contract_type,
-                'start_date' => now()->toDateString(),
-                'end_date' => now()->addYear()->toDateString(),
-                'notes' => $contract->notes,
+                'parent_contract_id'                  => $contract->id,
+                'employee_id'                         => $contract->employee_id,
+                'contract_code'                       => $this->generateContractCode(),
+                'status'                              => 'waiting_employee',
+                'contract_status'                     => 'waiting_employee',
+                'base_salary'                         => $proposedBase,
+                'allowance'                           => $proposedAllowance,
+                'bonus'                               => $contract->bonus ?? 0,
+                'contract_type'                       => $contract->contract_type,
+                'start_date'                          => $newStart,
+                'end_date'                            => $newEnd,
+                'notes'                               => $contract->notes,
+                'workplace'                           => $contract->workplace,
+                'working_schedule'                    => $contract->working_schedule,
+                'payment_method'                      => $contract->payment_method,
                 'allowed_unpaid_leave_days_per_month' => $contract->allowed_unpaid_leave_days_per_month ?? 1,
                 'allowed_makeup_attendance_per_month' => $contract->allowed_makeup_attendance_per_month ?? 3,
-                'allowed_maternity_leave_days' => $contract->allowed_maternity_leave_days ?? 180,
+                'allowed_maternity_leave_days'        => $contract->allowed_maternity_leave_days ?? 180,
             ]),
-            'employees' => Employee::orderBy('name')->get(),
-            'signers' => User::where('is_admin', true)->orWhere('is_hr', true)->orderBy('name')->get(),
-            'positions' => Position::orderBy('name')->get(),
-            'isEdit' => false,
-            'renewingFrom' => $contract,
+            'employees'     => Employee::orderBy('name')->get(),
+            'signers'       => User::where('is_admin', true)->orWhere('is_hr', true)->orderBy('name')->get(),
+            'positions'     => Position::orderBy('name')->get(),
+            'isEdit'        => false,
+            'renewingFrom'  => $contract,
+            'latestPayroll' => $latestPayroll,
         ]);
     }
 
@@ -1473,9 +1707,29 @@ class SmartHrController extends Controller
         }
 
         $data = $this->prepareContractData($request, null);
-        $contractService->renewContract(Auth::user(), $contract, $data);
 
-        return redirect()->route('contracts.index')->with('success', 'Gia hạn hợp đồng thành công.');
+        // Gán parent_contract_id từ route nếu form không gửi lên
+        if (empty($data['parent_contract_id'])) {
+            $data['parent_contract_id'] = $contract->id;
+        }
+
+        $renewed = $contractService->renewContract(Auth::user(), $contract, $data);
+
+        $successMsg = sprintf(
+            'Gia hạn hợp đồng thành công. Mã HĐ mới: %s (lương CB: %s₫).',
+            $renewed->contract_code,
+            number_format($renewed->base_salary, 0, ',', '.')
+        );
+
+        if ($request->ajax() || $request->wantsJson() || $request->expectsJson()) {
+            return response()->json([
+                'success'  => true,
+                'message'  => $successMsg,
+                'redirect' => route('contracts.show', $renewed),
+            ]);
+        }
+
+        return redirect()->route('contracts.show', $renewed)->with('success', $successMsg);
     }
 
     public function signContract(Contract $contract, Request $request, ContractService $contractService): RedirectResponse
@@ -1491,6 +1745,41 @@ class SmartHrController extends Controller
         $contractService->signContract($user, $contract, $party);
 
         return back()->with('success', 'Ký hợp đồng thành công.');
+    }
+
+    /** Đồng bộ lương hợp đồng theo bảng lương mới nhất */
+    public function syncContractSalary(Contract $contract, ContractService $contractService): RedirectResponse
+    {
+        if (! $this->canManageContracts()) {
+            abort(403);
+        }
+
+        $employee = $contract->employee;
+        if (! $employee) {
+            return back()->with('error', 'Không tìm thấy thông tin nhân viên.');
+        }
+
+        $payroll = $employee->payrolls()
+            ->orderByDesc('year')
+            ->orderByDesc('month')
+            ->first();
+
+        if (! $payroll) {
+            return back()->with('error', 'Nhân viên chưa có bảng lương nào để đồng bộ.');
+        }
+
+        // Đồng bộ trực tiếp vào hợp đồng hiện tại (bất kể trạng thái),
+        // không chỉ active/expiring — vì user đang ở trang show của đúng hợp đồng đó
+        $updated = $contractService->syncSalaryToContract(Auth::user(), $contract, $payroll);
+
+        return back()->with('success', sprintf(
+            'Đã cập nhật lương hợp đồng [%s] theo bảng lương T%s/%s: lương CB %s₫, phụ cấp %s₫.',
+            $updated->contract_code,
+            $payroll->month,
+            $payroll->year,
+            number_format($updated->base_salary, 0, ',', '.'),
+            number_format($updated->allowance,   0, ',', '.')
+        ));
     }
 
     private function validateDepartment(Request $request): array
