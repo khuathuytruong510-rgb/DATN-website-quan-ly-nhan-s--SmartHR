@@ -52,7 +52,8 @@ class PayrollPaymentWorkflowService
 
     public function canConfirm(Payroll $payroll): bool
     {
-        return $payroll->status === self::WAITING_CONFIRMATION;
+        return in_array($payroll->status, [self::WAITING_CONFIRMATION, 'approved'], true)
+            && $payroll->confirmation_status !== 'issue_reported';
     }
 
     public function canPay(Payroll $payroll): bool
@@ -195,6 +196,14 @@ class PayrollPaymentWorkflowService
             return $payroll;
         }
 
+        if ($payroll->confirmation_status === 'issue_reported') {
+            throw new RuntimeException(
+                $auto
+                    ? 'Bỏ qua: phiếu đang có báo cáo sự cố, chờ khắc phục.'
+                    : 'Bảng lương đang có báo cáo sự cố. Vui lòng chờ Admin/HR/Kế toán khắc phục trước khi xác nhận.'
+            );
+        }
+
         if ($payroll->status !== self::WAITING_CONFIRMATION && $payroll->status !== 'approved') {
             throw new RuntimeException('Bảng lương không ở trạng thái chờ xác nhận.');
         }
@@ -224,6 +233,10 @@ class PayrollPaymentWorkflowService
         $items = Payroll::query()
             ->whereIn('status', [self::WAITING_CONFIRMATION, 'approved'])
             ->where(function ($q) {
+                $q->whereNull('confirmation_status')
+                    ->orWhere('confirmation_status', '!=', 'issue_reported');
+            })
+            ->where(function ($q) {
                 $q->where(function ($q2) {
                     $q2->whereNotNull('confirmation_deadline')
                         ->where('confirmation_deadline', '<=', now());
@@ -236,8 +249,12 @@ class PayrollPaymentWorkflowService
             ->get();
 
         foreach ($items as $payroll) {
-            $this->confirm($payroll, null, true);
-            $count++;
+            try {
+                $this->confirm($payroll, null, true);
+                $count++;
+            } catch (RuntimeException) {
+                // Phiếu đang sự cố hoặc không hợp lệ — bỏ qua, không làm fail cả batch.
+            }
         }
 
         return $count;

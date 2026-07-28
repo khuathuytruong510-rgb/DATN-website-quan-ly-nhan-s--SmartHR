@@ -21,48 +21,68 @@
                     </p>
                 </div>
 
-                <form method="POST" action="{{ route('payroll.generate') }}">
-                    @csrf
+                @php
+                    $canBulkApprove = auth()->user()->is_admin || auth()->user()->is_hr;
+                    $pendingCount = $payrolls->where('status', 'pending')->count();
+                @endphp
 
-                    <div class="row">
-
-                        <div class="col-md-3">
-                            <label>Tháng</label>
-                            <select name="month" class="form-select">
-                                @for($i=1;$i<=12;$i++)
-                                    <option value="{{ $i }}" {{ $month==$i?'selected':'' }}>
-                                        Tháng {{ $i }}
-                                    </option>
-                                @endfor
-                            </select>
+                <div class="d-flex flex-column gap-2 align-items-stretch" style="min-width:min(520px,100%);">
+                    <form method="POST" action="{{ route('payroll.generate') }}">
+                        @csrf
+                        <div class="row g-2">
+                            <div class="col-md-3">
+                                <label>Tháng</label>
+                                <select name="month" class="form-select">
+                                    @for($i=1;$i<=12;$i++)
+                                        <option value="{{ $i }}" {{ $month==$i?'selected':'' }}>
+                                            Tháng {{ $i }}
+                                        </option>
+                                    @endfor
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label>Năm</label>
+                                <select name="year" class="form-select">
+                                    @for($y=2025;$y<=2035;$y++)
+                                        <option value="{{ $y }}" {{ $year==$y?'selected':'' }}>
+                                            {{ $y }}
+                                        </option>
+                                    @endfor
+                                </select>
+                            </div>
+                            <div class="col-md-6 d-flex align-items-end gap-2 flex-wrap">
+                                <button class="btn btn-primary">
+                                    <i class="bi bi-calculator"></i>
+                                    Tính lương
+                                </button>
+                                <a class="btn btn-outline-secondary"
+                                   href="{{ route('payroll.print', ['month' => $month, 'year' => $year]) }}"
+                                   target="_blank">
+                                    <i class="bi bi-printer"></i>
+                                    In bảng lương
+                                </a>
+                            </div>
                         </div>
+                    </form>
 
-                        <div class="col-md-3">
-                            <label>Năm</label>
-                            <select name="year" class="form-select">
-                                @for($y=2025;$y<=2035;$y++)
-                                    <option value="{{ $y }}" {{ $year==$y?'selected':'' }}>
-                                        {{ $y }}
-                                    </option>
-                                @endfor
-                            </select>
-                        </div>
-
-                        <div class="col-md-3 d-flex align-items-end">
-
-                            <button class="btn btn-primary w-100">
-
-                                <i class="bi bi-calculator"></i>
-
-                                Tính lương
-
+                    @if($canBulkApprove)
+                        <form method="POST" action="{{ route('payroll.approve_all') }}"
+                              onsubmit="return confirm('Duyệt toàn bộ {{ $pendingCount }} bảng lương đang chờ duyệt tháng {{ sprintf('%02d/%d', $month, $year) }}? Hệ thống sẽ gửi xác nhận cho nhân viên.');">
+                            @csrf
+                            <input type="hidden" name="month" value="{{ $month }}">
+                            <input type="hidden" name="year" value="{{ $year }}">
+                            <button type="submit" class="btn btn-success"
+                                    @disabled($pendingCount < 1)
+                                    title="{{ $pendingCount < 1 ? 'Không có phiếu chờ duyệt' : 'Duyệt tất cả phiếu pending' }}">
+                                <i class="bi bi-check2-all"></i>
+                                Duyệt toàn bộ
+                                @if($pendingCount > 0)
+                                    ({{ $pendingCount }})
+                                @endif
                             </button>
-
-                        </div>
-
-                    </div>
-
-                </form>
+                        </form>
+                    @endif
+                </div>
 
             </div>
 

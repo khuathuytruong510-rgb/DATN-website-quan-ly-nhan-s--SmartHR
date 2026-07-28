@@ -2,9 +2,12 @@
 
 @section('content')
 <div class="container-fluid px-4">
-    <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+    <div class="d-flex justify-content-between align-items-center mt-4 mb-3 flex-wrap gap-2">
         <h1 class="mb-0">Thống kê & Báo cáo lương</h1>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{{ route('statistics.export', ['month' => $month, 'year' => $year]) }}" class="btn btn-success btn-sm">
+                <i class="bi bi-file-earmark-excel"></i> Xuất Excel
+            </a>
             <a href="{{ route('statistics.trend', ['months' => 12]) }}" class="btn btn-outline-primary btn-sm">
                 <i class="bi bi-graph-up"></i> Xu hướng
             </a>
@@ -37,7 +40,28 @@
                 <div class="col-auto">
                     <button class="btn btn-sm btn-primary">Xem thống kê</button>
                 </div>
+                <div class="col-auto">
+                    <a id="stats-export-link"
+                       href="{{ route('statistics.export', ['month' => $month, 'year' => $year]) }}"
+                       class="btn btn-sm btn-outline-success">
+                        <i class="bi bi-download"></i> Xuất Excel tháng đang chọn
+                    </a>
+                </div>
             </form>
+            <script>
+                (function () {
+                    const form = document.currentScript.previousElementSibling;
+                    const link = document.getElementById('stats-export-link');
+                    if (!form || !link) return;
+                    const sync = () => {
+                        const month = form.querySelector('[name=month]')?.value || '{{ $month }}';
+                        const year = form.querySelector('[name=year]')?.value || '{{ $year }}';
+                        link.href = @json(url('/statistics/export')) + '?month=' + encodeURIComponent(month) + '&year=' + encodeURIComponent(year);
+                    };
+                    form.addEventListener('change', sync);
+                    sync();
+                })();
+            </script>
         </div>
     </div>
 

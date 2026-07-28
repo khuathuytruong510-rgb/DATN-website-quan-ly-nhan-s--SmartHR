@@ -196,7 +196,7 @@
                         </form>
                     </div>
                 </header>
-                <section id="app" class="content">
+                <section class="content">
                     @hasSection('breadcrumb')
                         <nav aria-label="breadcrumb" style="margin-bottom:12px;">
                             <ol style="list-style:none; padding:0; margin:0; display:flex; gap:8px; align-items:center; font-size:14px; color:var(--muted);">
@@ -205,13 +205,12 @@
                         </nav>
                     @endif
                     @if (session('success'))
-                        <alert type="success">{{ session('success') }}</alert>
+                        <div class="alert">{{ session('success') }}</div>
                     @endif
                     @if (session('error'))
-                        <alert type="error">{{ session('error') }}</alert>
+                        <div class="alert" style="background:#fee2e2;color:#991b1b;">{{ session('error') }}</div>
                     @endif
                     @yield('content')
-                    
                 </section>
             </main>
         </div>

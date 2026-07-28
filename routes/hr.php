@@ -25,10 +25,9 @@ Route::post('/attendance', [AttendanceController::class, 'store']);
 Route::put('/attendance/{id}', [AttendanceController::class, 'update']);
 Route::delete('/attendance/{id}', [AttendanceController::class, 'destroy']);
 
+// Payroll web controller trả Blade; CRUD JSON store/update không còn trên HR\PayrollController.
 Route::get('/payroll', [PayrollController::class, 'index']);
 Route::get('/payroll/{id}', [PayrollController::class, 'show']);
-Route::post('/payroll', [PayrollController::class, 'store']);
-Route::put('/payroll/{id}', [PayrollController::class, 'update']);
 Route::delete('/payroll/{id}', [PayrollController::class, 'destroy']);
 
 Route::get('/leave-requests', [LeaveRequestController::class, 'index']);

@@ -164,6 +164,88 @@ class PayrollController extends Controller
     }
 
     /**
+     * Duyệt toàn bộ bảng lương đang chờ duyệt trong tháng/năm.
+     */
+    public function approveAll(Request $request)
+    {
+        $user = $request->user();
+        if (! $user || (! $user->is_admin && ! $user->is_hr)) {
+            abort(403, 'Chỉ Admin/HR được duyệt bảng lương.');
+        }
+
+        $data = $request->validate([
+            'month' => ['required', 'integer', 'min:1', 'max:12'],
+            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
+        ]);
+
+        $pending = Payroll::query()
+            ->where('month', $data['month'])
+            ->where('year', $data['year'])
+            ->where('status', 'pending')
+            ->orderBy('id')
+            ->get();
+
+        if ($pending->isEmpty()) {
+            return back()->with('error', 'Không có bảng lương nào đang chờ duyệt trong tháng này.');
+        }
+
+        $ok = 0;
+        $failed = 0;
+        foreach ($pending as $payroll) {
+            try {
+                $this->workflow->approve($payroll, $user);
+                $ok++;
+            } catch (\Throwable) {
+                $failed++;
+            }
+        }
+
+        $msg = "Đã duyệt {$ok} bảng lương. Đang chờ nhân viên xác nhận.";
+        if ($failed > 0) {
+            $msg .= " {$failed} phiếu lỗi/bỏ qua.";
+        }
+
+        return redirect()
+            ->route('payroll.index', ['month' => $data['month'], 'year' => $data['year']])
+            ->with('success', $msg);
+    }
+
+    /**
+     * Bản in bảng lương tháng — trình Giám đốc duyệt.
+     */
+    public function printSheet(Request $request)
+    {
+        $month = (int) ($request->month ?? now()->month);
+        $year = (int) ($request->year ?? now()->year);
+
+        $payrolls = Payroll::with(['employee.department'])
+            ->where('month', $month)
+            ->where('year', $year)
+            ->orderBy('id')
+            ->get();
+
+        $totals = [
+            'base_salary' => $payrolls->sum('base_salary'),
+            'working_salary' => $payrolls->sum('working_salary'),
+            'overtime_salary' => $payrolls->sum('overtime_salary'),
+            'allowance' => $payrolls->sum('allowance'),
+            'bonus' => $payrolls->sum('bonus'),
+            'insurance' => $payrolls->sum('insurance'),
+            'tax' => $payrolls->sum('tax'),
+            'total_salary' => $payrolls->sum('total_salary'),
+        ];
+
+        return view('hr.payroll.print', [
+            'payrolls' => $payrolls,
+            'month' => $month,
+            'year' => $year,
+            'totals' => $totals,
+            'printedAt' => now(),
+            'printedBy' => $request->user(),
+        ]);
+    }
+
+    /**
      * Giữ route cũ — chuyển sang approve chuẩn
      */
     public function approveWithPayment(Payroll $payroll)
