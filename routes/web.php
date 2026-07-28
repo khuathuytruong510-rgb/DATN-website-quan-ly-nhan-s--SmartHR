@@ -171,6 +171,12 @@ Route::middleware('auth')->group(function () {
             Route::post('/payroll/generate', [PayrollController::class, 'generate'])
                 ->name('payroll.generate');
 
+            // In bảng lương trình Giám đốc + duyệt toàn bộ (đặt trước {payroll})
+            Route::get('/payroll/print', [PayrollController::class, 'printSheet'])
+                ->name('payroll.print');
+            Route::post('/payroll/approve-all', [PayrollController::class, 'approveAll'])
+                ->name('payroll.approve_all');
+
             // Yêu cầu đổi STK/QR — đặt trước {payroll}
             Route::get('/payroll/bank-requests', [\App\Http\Controllers\HR\SalaryReceiveChangeRequestController::class, 'index'])
                 ->name('payroll.bank_requests.index');
@@ -272,6 +278,7 @@ Route::middleware('auth')->group(function () {
 
         // Statistics & Reports
         Route::get('/statistics', [\App\Http\Controllers\Web\StatisticsController::class, 'index'])->name('statistics.index');
+        Route::get('/statistics/export', [\App\Http\Controllers\Web\StatisticsController::class, 'exportExcel'])->name('statistics.export');
         Route::get('/statistics/trend', [\App\Http\Controllers\Web\StatisticsController::class, 'trend'])->name('statistics.trend');
         Route::get('/statistics/departments', [\App\Http\Controllers\Web\StatisticsController::class, 'departmentReport'])->name('statistics.departments');
         Route::get('/statistics/departments/export', [\App\Http\Controllers\Web\StatisticsController::class, 'exportDepartment'])->name('statistics.departments.export');

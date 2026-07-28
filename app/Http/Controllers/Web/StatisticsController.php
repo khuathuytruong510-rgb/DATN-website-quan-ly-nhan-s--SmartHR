@@ -61,6 +61,25 @@ class StatisticsController extends Controller
         ]);
     }
 
+    /**
+     * Xuất bảng thống kê lương tháng ra Excel (.xls mở được bằng Excel).
+     */
+    public function exportExcel(Request $request)
+    {
+        $month = $request->integer('month', (int) now()->format('m'));
+        $year = $request->integer('year', (int) now()->format('Y'));
+
+        $html = $this->stats->exportSalaryStatisticsExcel($month, $year);
+        $filename = sprintf('thong_ke_luong_%02d_%d.xls', $month, $year);
+
+        return response($html, 200, [
+            'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+        ]);
+    }
+
     public function apiTrend(Request $request)
     {
         $months = $request->integer('months', 12);

@@ -13,7 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
-use App\Services\PayrollService;
+use App\Services\PayrollCalculationService;
 use App\Models\ActivityLog;
 
 
@@ -25,7 +25,12 @@ class AccountantController extends Controller
     {
         $total = Payroll::count();
         $pending = Payroll::where('status', 'pending')->count();
-        $approved = Payroll::where('status', 'approved')->count();
+        $approved = Payroll::whereIn('status', [
+            'waiting_confirmation',
+            'ready_for_payment',
+            'paid',
+            'approved',
+        ])->count();
 
         return view('accountant.dashboard', compact('total', 'pending', 'approved'));
     }
@@ -84,7 +89,7 @@ class AccountantController extends Controller
         return redirect()->route('accountant.payroll.show', $payroll)->with('success', 'Đã gửi email đến ' . $employee->email);
     }
 
-    public function recalculatePayroll(Payroll $payroll)
+    public function recalculatePayroll(Payroll $payroll, PayrollCalculationService $service)
     {
         if ($payroll->locked) {
             return redirect()->route('accountant.payroll.show', $payroll)->with('error', 'Bảng lương đang bị khoá.');
@@ -95,10 +100,8 @@ class AccountantController extends Controller
             return back()->with('error', 'Nhân viên không tồn tại');
         }
 
-        $service = new PayrollService();
-        $monthParts = explode('-', $payroll->month);
-        $year = (int)($monthParts[0] ?? $payroll->year ?? now()->year);
-        $month = (int)($monthParts[1] ?? $payroll->month);
+        $month = (int) $payroll->month;
+        $year = (int) ($payroll->year ?? now()->year);
 
         $newPayroll = $service->calculate($employee, $month, $year);
 
@@ -162,7 +165,7 @@ class AccountantController extends Controller
         return view('accountant.payroll.generate');
     }
 
-    public function generatePayroll(Request $request)
+    public function generatePayroll(Request $request, PayrollCalculationService $service)
     {
         $monthInput = $request->input('month', now()->format('Y-m'));
 
@@ -174,8 +177,7 @@ class AccountantController extends Controller
         $year = (int) $year;
         $month = (int) $month;
 
-        $service = new PayrollService();
-        $employees = \App\Models\Employee::where('status', 'active')->get();
+        $employees = Employee::where('status', 'active')->get();
         $count = 0;
 
         foreach ($employees as $employee) {

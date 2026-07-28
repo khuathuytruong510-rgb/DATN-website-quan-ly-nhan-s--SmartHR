@@ -1,21 +1,15 @@
 import { createApp } from 'vue';
-import AlertComponent from './components/Alert.vue';
+import Dashboard from './components/Dashboard.vue';
 
-const app = createApp({});
+// Chỉ mount Vue khi trang có dashboard. Các trang Blade khác không biên dịch Vue → nhanh hơn.
+const dashEl = document.getElementById('vue-dashboard');
+if (dashEl) {
+    let stats = {};
+    try {
+        stats = JSON.parse(dashEl.dataset.stats || '{}');
+    } catch {
+        stats = {};
+    }
 
-app.component('Alert', AlertComponent);
-
-// Auto-register all Vue components
-const components = import.meta.glob('./components/**/*.vue', { eager: true });
-Object.entries(components).forEach(([path, component]) => {
-    const name = path
-        .split('/')
-        .pop()
-        .replace(/\.vue$/, '');
-    app.component(name, component.default || component);
-});
-
-// Only mount if #app exists to avoid interfering with auth pages
-if (document.getElementById('app')) {
-    app.mount('#app');
+    createApp(Dashboard, { stats }).mount(dashEl);
 }

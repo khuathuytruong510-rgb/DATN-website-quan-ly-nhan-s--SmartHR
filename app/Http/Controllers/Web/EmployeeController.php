@@ -153,6 +153,14 @@ class EmployeeController extends Controller
         return view('employee.payroll.index', ['payrolls' => $payrolls]);
     }
 
+    /**
+     * Lịch sử thanh toán của NV — dùng chung trang lịch sử lương đã thanh toán.
+     */
+    public function paymentHistory()
+    {
+        return redirect()->route('me.salary_histories');
+    }
+
     public function evaluations(): View
     {
         $user = auth()->user();
