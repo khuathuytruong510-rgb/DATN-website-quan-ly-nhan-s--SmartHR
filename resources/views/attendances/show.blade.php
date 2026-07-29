@@ -64,6 +64,7 @@
                                         <tr><th>Tổng giờ làm</th><td>{{ $workHoursLabel }}</td></tr>
                                         <tr><th>Tăng ca</th><td>{{ $overtimeLabel }}</td></tr>
                                         <tr><th>Đi muộn</th><td>{{ $attendance->late_minutes ?? 0 }} phút</td></tr>
+                                        <tr><th>Tiền phạt đi muộn</th><td class="text-danger fw-bold">{{ $attendance->formatted_late_penalty_fee }}</td></tr>
                                         <tr><th>Về sớm</th><td>{{ $attendance->early_leave_minutes ?? 0 }} phút</td></tr>
                                         <tr><th>Trạng thái</th><td>
                                             @php

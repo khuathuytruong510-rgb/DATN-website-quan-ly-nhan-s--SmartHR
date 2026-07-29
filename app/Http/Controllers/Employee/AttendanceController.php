@@ -205,6 +205,7 @@ class AttendanceController extends Controller
             'metrics' => [
                 'work_hours' => $attendance->work_hours,
                 'late_minutes' => $attendance->late_minutes,
+                'late_penalty_fee' => $attendance->late_penalty_fee,
                 'early_leave_minutes' => $attendance->early_leave_minutes,
                 'overtime_hours' => $attendance->overtime_hours,
                 'status' => $attendance->status_label,
@@ -320,6 +321,7 @@ class AttendanceController extends Controller
                 'total_early_leave_days' => $stats['total_early_leave_days'],
                 'total_work_hours' => round($stats['total_work_hours'], 2),
                 'total_late_minutes' => $stats['total_late_minutes'],
+                'total_late_penalty_fee' => round($stats['total_late_penalty_fee'], 2),
                 'total_overtime_hours' => round($stats['total_overtime_hours'], 2),
                 'average_work_hours_per_day' => round($stats['average_work_hours_per_day'], 2),
             ],
@@ -382,6 +384,7 @@ class AttendanceController extends Controller
                 'early_leave_days' => $stats['total_early_leave_days'],
                 'total_hours' => round($stats['total_work_hours'], 2),
                 'total_late_minutes' => $stats['total_late_minutes'],
+                'total_late_penalty_fee' => round($stats['total_late_penalty_fee'], 2),
                 'overtime_hours' => round($stats['total_overtime_hours'], 2),
                 'average_daily_hours' => round($stats['average_work_hours_per_day'], 2),
             ],

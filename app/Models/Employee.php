@@ -5,11 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Benefit;
+use App\Models\Contract;
 use App\Models\EmployeeBenefit;
 use App\Models\EmployeeEvaluation;
 use App\Models\Position;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Employee extends Model
 {
@@ -61,9 +63,19 @@ class Employee extends Model
         return $this->hasMany(Attendance::class);
     }
 
+    public function faceProfile(): HasOne
+    {
+        return $this->hasOne(FaceProfile::class);
+    }
+
     public function payrolls(): HasMany
     {
         return $this->hasMany(Payroll::class);
+    }
+
+    public function contracts(): HasMany
+    {
+        return $this->hasMany(Contract::class);
     }
 
     public function leaveRequests(): HasMany

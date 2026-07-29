@@ -116,6 +116,12 @@
                 <span style="color:#64748b;">Khấu trừ</span>
                 <strong style="color:#dc2626;">− {{ number_format($deductions, 0, ',', '.') }} ₫</strong>
             </div>
+            @if(($latePenaltyFee ?? 0) > 0)
+                <div style="margin-bottom:12px;display:flex;justify-content:space-between;gap:12px;">
+                    <span style="color:#64748b;">Phạt đi muộn</span>
+                    <strong style="color:#dc2626;">− {{ number_format($latePenaltyFee, 0, ',', '.') }} ₫</strong>
+                </div>
+            @endif
             <div style="margin-bottom:12px;display:flex;justify-content:space-between;gap:12px;">
                 <span style="color:#64748b;">Thuế</span>
                 <strong style="color:#dc2626;">− {{ number_format($tax, 0, ',', '.') }} ₫</strong>

@@ -43,6 +43,12 @@
                         <td style="padding: 12px; border: 1px solid #e5e7eb; background: #f8fafc;"><strong>Khấu trừ</strong></td>
                         <td style="padding: 12px; border: 1px solid #e5e7eb; text-align: right;">{{ number_format($payroll->deduction ?? 0, 0, '.', ',') }} VNĐ</td>
                     </tr>
+                    @if(($payroll->late_penalty_fee ?? 0) > 0)
+                    <tr>
+                        <td style="padding: 12px; border: 1px solid #e5e7eb; background: #fef2f2; color:#991b1b;"><strong>Phạt đi muộn</strong></td>
+                        <td style="padding: 12px; border: 1px solid #e5e7eb; text-align: right; color:#dc2626;">−{{ number_format($payroll->late_penalty_fee ?? 0, 0, '.', ',') }} VNĐ</td>
+                    </tr>
+                    @endif
                     <tr>
                         <td style="padding: 12px; border: 1px solid #e5e7eb; background: #f8fafc;"><strong>Bảo hiểm</strong></td>
                         <td style="padding: 12px; border: 1px solid #e5e7eb; text-align: right;">{{ number_format($payroll->insurance ?? 0, 0, '.', ',') }} VNĐ</td>

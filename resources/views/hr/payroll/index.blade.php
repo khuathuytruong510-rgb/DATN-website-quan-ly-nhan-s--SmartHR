@@ -135,6 +135,8 @@
 
                             <th class="text-end">Thuế</th>
 
+                            <th class="text-end">Phạt đi muộn</th>
+
                             <th class="text-end">Thực nhận</th>
 
                             <th class="text-center">Hành động</th>
@@ -343,6 +345,24 @@
 
     <td class="text-end">
 
+        @if(($payroll->late_penalty_fee ?? 0) > 0)
+
+            <span class="text-danger fw-semibold">
+
+                − {{ number_format($payroll->late_penalty_fee) }}
+
+            </span>
+
+        @else
+
+            -
+
+        @endif
+
+    </td>
+
+    <td class="text-end">
+
         <span class="fw-bold text-success fs-5">
             {{ number_format($payroll->total_salary) }} VNĐ
         </span>
@@ -389,7 +409,7 @@
 
 <tr>
 
-    <td colspan="16" class="text-center py-5 text-muted">
+    <td colspan="17" class="text-center py-5 text-muted">
 
         Chưa có dữ liệu bảng lương.
 

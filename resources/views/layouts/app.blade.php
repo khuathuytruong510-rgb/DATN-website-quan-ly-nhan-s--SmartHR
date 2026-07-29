@@ -103,7 +103,8 @@
                             $payrollActive = request()->routeIs('payroll.*')
                                 || request()->routeIs('salary_histories.*')
                                 || request()->routeIs('salary_payments.*')
-                                || request()->routeIs('statistics.*');
+                                || request()->routeIs('statistics.*')
+                                || request()->routeIs('hr-dashboard.*');
                         @endphp
                         <details class="nav-group" {{ $payrollActive ? 'open' : '' }}>
                             <summary class="nav-summary {{ $payrollActive ? 'active' : '' }}">Lương</summary>
@@ -115,6 +116,7 @@
                             @endif
                             <a class="{{ request()->routeIs('salary_payments.*') ? 'active' : '' }}" href="{{ route('salary_payments.index') }}">Lịch sử thanh toán</a>
                             <a class="{{ request()->routeIs('statistics.*') ? 'active' : '' }}" href="{{ route('statistics.index') }}">Thống kê & Báo cáo</a>
+                            <a class="{{ request()->routeIs('hr-dashboard.*') ? 'active' : '' }}" href="{{ route('hr-dashboard.index') }}">Báo cáo tổng hợp</a>
                         </details>
                         <a class="{{ request()->routeIs('notifications.*') ? 'active' : '' }}" href="{{ route('notifications.index') }}">Thông báo</a>
                         @if ($user->is_admin)

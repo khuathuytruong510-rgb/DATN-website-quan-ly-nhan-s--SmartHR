@@ -86,10 +86,11 @@ class PayrollPaymentWorkflowService
             $insurance = (float) ($data['insurance'] ?? $payroll->insurance ?? 0);
             $tax = (float) ($data['tax'] ?? $payroll->tax ?? 0);
             $deduction = (float) ($data['deduction'] ?? $payroll->deduction ?? 0);
+            $latePenaltyFee = (float) ($data['late_penalty_fee'] ?? $payroll->late_penalty_fee ?? 0);
             $baseSalary = (float) ($data['base_salary'] ?? $payroll->base_salary ?? 0);
 
             $total = round(
-                $workingSalary + $overtimeSalary + $allowance + $bonus - $insurance - $tax - $deduction,
+                $workingSalary + $overtimeSalary + $allowance + $bonus - $insurance - $tax - $deduction - $latePenaltyFee,
                 2
             );
 
@@ -106,6 +107,7 @@ class PayrollPaymentWorkflowService
                 'insurance' => $insurance,
                 'tax' => $tax,
                 'deduction' => $deduction,
+                'late_penalty_fee' => $latePenaltyFee,
                 'total_salary' => $total,
                 'status' => self::WAITING_CONFIRMATION,
                 'confirmation_status' => 'pending',
