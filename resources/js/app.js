@@ -1,11 +1,10 @@
+import * as bootstrap from 'bootstrap';
 import { createApp } from 'vue';
-import AlertComponent from './components/Alert.vue';
+
+window.bootstrap = bootstrap;
 
 const app = createApp({});
 
-app.component('Alert', AlertComponent);
-
-// Auto-register all Vue components
 const components = import.meta.glob('./components/**/*.vue', { eager: true });
 Object.entries(components).forEach(([path, component]) => {
     const name = path
@@ -15,7 +14,6 @@ Object.entries(components).forEach(([path, component]) => {
     app.component(name, component.default || component);
 });
 
-// Only mount if #app exists to avoid interfering with auth pages
 if (document.getElementById('app')) {
     app.mount('#app');
 }

@@ -79,6 +79,7 @@ class PayrollPaymentWorkflowService
 
         return DB::transaction(function () use ($payroll, $data, $actor) {
             $workingSalary = (float) ($data['working_salary'] ?? $payroll->working_salary ?? 0);
+            $paidLeaveSalary = (float) ($payroll->paid_leave_days ?? 0) * (float) ($payroll->daily_salary ?? 0);
             $overtimeSalary = (float) ($data['overtime_salary'] ?? $payroll->overtime_salary ?? 0);
             $allowance = (float) ($data['allowance'] ?? $payroll->allowance ?? 0);
             $bonus = (float) ($data['bonus'] ?? $payroll->bonus ?? 0);
@@ -89,7 +90,7 @@ class PayrollPaymentWorkflowService
             $baseSalary = (float) ($data['base_salary'] ?? $payroll->base_salary ?? 0);
 
             $total = round(
-                $workingSalary + $overtimeSalary + $allowance + $bonus - $insurance - $tax - $deduction - $latePenaltyFee,
+                $workingSalary + $paidLeaveSalary + $overtimeSalary + $allowance + $bonus - $insurance - $tax - $deduction - $latePenaltyFee,
                 2
             );
 

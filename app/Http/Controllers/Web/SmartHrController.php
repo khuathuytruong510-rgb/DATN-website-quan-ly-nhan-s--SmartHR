@@ -566,16 +566,22 @@ class SmartHrController extends Controller
 
     public function employees(Request $request)
     {
-        if ($request->expectsJson()) {
-            $employees = Employee::with('department')->latest()->get();
+        $showInactive = $request->boolean('show_inactive');
 
-            return response()->json([
-                'employees' => $employees,
-            ]);
+        $query = Employee::with('department')->latest();
+
+        if (! $showInactive) {
+            $query->active();
+        }
+
+        if ($request->expectsJson()) {
+            $employees = $query->get();
+            return response()->json(['employees' => $employees]);
         }
 
         return view('employees.index', [
-            'employees' => Employee::with('department')->latest()->paginate(10),
+            'employees' => $query->paginate(15)->withQueryString(),
+            'showInactive' => $showInactive,
         ]);
     }
 

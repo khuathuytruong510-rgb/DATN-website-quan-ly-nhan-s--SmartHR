@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Benefit;
@@ -9,6 +10,7 @@ use App\Models\Contract;
 use App\Models\EmployeeBenefit;
 use App\Models\EmployeeEvaluation;
 use App\Models\Position;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -105,6 +107,69 @@ class Employee extends Model
     public function salaryPayments(): HasMany
     {
         return $this->hasMany(SalaryPayment::class, 'employee_id');
+    }
+
+    public function activeContract(): HasOne
+    {
+        return $this->hasOne(Contract::class)
+            ->where('status', 'active')
+            ->latest('end_date');
+    }
+
+    public function latestContract(): HasOne
+    {
+        return $this->hasOne(Contract::class)->latest('end_date');
+    }
+
+    /**
+     * Kiểm tra nhân viên có đang hoạt động không:
+     * - status = 'active'
+     * - hợp đồng active còn hạn (end_date >= today)
+     */
+    public function isActive(): bool
+    {
+        if ($this->status !== 'active') {
+            return false;
+        }
+
+        $contract = $this->activeContract;
+        if (! $contract) {
+            return false;
+        }
+
+        if ($contract->end_date && $contract->end_date->lt(Carbon::today())) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Scope: chỉ lấy nhân viên đang hoạt động (status active + hợp đồng còn hạn)
+     */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('status', 'active')
+            ->whereHas('activeContract', function ($q) {
+                $q->where(function ($w) {
+                    $w->whereNull('end_date')
+                      ->orWhere('end_date', '>=', Carbon::today()->toDateString());
+                });
+            });
+    }
+
+    /**
+     * Scope: lấy nhân viên đã hết hợp đồng hoặc inactive
+     */
+    public function scopeInactive(Builder $query): Builder
+    {
+        return $query->where(function ($q) {
+            $q->where('status', '!=', 'active')
+              ->orWhereDoesntHave('activeContract')
+              ->orWhereHas('activeContract', function ($w) {
+                  $w->where('end_date', '<', Carbon::today()->toDateString());
+              });
+        });
     }
 
     /**

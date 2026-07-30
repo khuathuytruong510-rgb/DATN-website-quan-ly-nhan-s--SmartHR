@@ -11,82 +11,81 @@ use App\Services\AttendanceCalculationService;
 class AttendanceTestSeeder extends Seeder
 {
     public function run(): void
-
     {
-        Attendance::truncate();
-        $attendanceService = app(AttendanceCalculationService::class);
+        $now = Carbon::now();
+        $month = (int) $this->command->ask('Tháng cần tạo dữ liệu?', $now->month);
+        $year  = (int) $this->command->ask('Năm?', $now->year);
 
-        $employees = Employee::orderBy('id')->get();
+        $start = Carbon::create($year, $month, 1);
+        $end   = $start->copy()->endOfMonth();
 
-        if ($employees->count() == 0) {
+        Attendance::whereMonth('date', $month)->whereYear('date', $year)->delete();
+
+        $employees = Employee::where('status', 'active')->orderBy('id')->get();
+        if ($employees->isEmpty()) {
             $this->command->error('Không có nhân viên.');
             return;
         }
 
-        // Số ngày công mong muốn của từng nhân viên
-        $workingDays = [
-            18,
-            21,
-            24,
-            26,
-            28,
-            30,
-        ];
+        $attendanceService = app(AttendanceCalculationService::class);
 
-        foreach ($employees as $index => $employee) {
+        $totalCreated = 0;
 
-            $days = $workingDays[$index] ?? rand(20, 26);
+        foreach ($employees as $employee) {
+            $currentDate = $start->copy();
 
-            for ($i = 1; $i <= $days; $i++) {
+            while ($currentDate <= $end) {
+                if ($currentDate->isSaturday() || $currentDate->isSunday()) {
+                    $currentDate->addDay();
+                    continue;
+                }
 
-                // Nếu >30 thì quay vòng từ ngày 1
-                $day = $i > 30 ? $i - 30 : $i;
+                $roll = rand(1, 100);
+                if ($roll <= 10) {
+                    $currentDate->addDay();
+                    continue;
+                }
 
-                $date = Carbon::create(2026, 6, $day);
+                if ($roll <= 20) {
+                    $status = 'late';
+                    $inMinute = rand(10, 45);
+                } elseif ($roll <= 28) {
+                    $status = 'leave';
+                    $inMinute = 0;
+                } else {
+                    $status = 'present';
+                    $inMinute = 0;
+                }
 
-                // Giờ vào ngẫu nhiên
-                $checkInHour = 8;
-                $checkInMinute = collect([0, 5, 10, 15, 20, 25])->random();
+                $checkIn  = null;
+                $checkOut = null;
 
-                $checkIn = Carbon::create(
-                    2026,
-                    6,
-                    $day,
-                    $checkInHour,
-                    $checkInMinute
-                );
-
-                // Giờ ra ngẫu nhiên
-                $checkOut = $checkIn->copy();
-
-                $checkOut->setTime(
-                    collect([17,18,19])->random(),
-                    collect([0,15,30])->random()
-                );
-
-                $workHours = round(
-                    $checkOut->diffInMinutes($checkIn) / 60 - 1.5,
-                    2
-                );
+                if ($status !== 'leave') {
+                    $checkIn = Carbon::create($year, $month, $currentDate->day, 8, $inMinute, 0);
+                    $outHour = collect([17, 17, 17, 18, 18])->random();
+                    $outMin  = collect([0, 0, 15, 30, 30])->random();
+                    $checkOut = Carbon::create($year, $month, $currentDate->day, $outHour, $outMin, 0);
+                }
 
                 $attendance = Attendance::create([
+                    'employee_id' => $employee->id,
+                    'date'        => $currentDate->toDateString(),
+                    'check_in'    => $checkIn?->format('H:i:s'),
+                    'check_out'   => $checkOut?->format('H:i:s'),
+                    'status'      => $status,
+                    'notes'       => match ($status) {
+                        'late'  => 'Đến muộn ' . $inMinute . ' phút',
+                        'leave' => 'Nghỉ phép',
+                        default => 'Đúng giờ',
+                    },
+                ]);
 
-    'employee_id' => $employee->id,
-
-    'date' => $date,
-
-    'check_in' => $checkIn->format('H:i:s'),
-
-    'check_out' => $checkOut->format('H:i:s'),
-
-    'status' => 'present',
-
-]);
-
-$attendanceService->updateAttendanceMetrics($attendance);
+                $attendanceService->updateAttendanceMetrics($attendance);
+                $totalCreated++;
+                $currentDate->addDay();
             }
         }
 
-        $this->command->info('Đã tạo dữ liệu chấm công test.');
+        $this->command->info("Đã tạo {$totalCreated} bản ghi chấm công cho tháng {$month}/{$year}.");
     }
 }

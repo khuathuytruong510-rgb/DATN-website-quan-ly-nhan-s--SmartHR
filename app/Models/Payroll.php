@@ -92,6 +92,7 @@ class Payroll extends Model
     public function getTotalWithCalculationsAttribute(): int|float
     {
         $totalIncome = ($this->working_salary ?? 0)
+            + ($this->paid_leave_salary ?? 0)
             + ($this->overtime_salary ?? 0)
             + ($this->allowance ?? 0)
             + ($this->bonus ?? 0);
@@ -104,6 +105,14 @@ class Payroll extends Model
             - ($this->late_penalty_fee ?? 0),
             2
         );
+    }
+
+    /**
+     * Lương nghỉ phép có lương (paid_leave_days × daily_salary)
+     */
+    public function getPaidLeaveSalaryAttribute(): float
+    {
+        return round(($this->paid_leave_days ?? 0) * ($this->daily_salary ?? 0), 2);
     }
 
     /**

@@ -13,7 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
-use App\Services\PayrollService;
+use App\Services\PayrollCalculationService as PayrollService;
 use App\Models\ActivityLog;
 
 
@@ -32,7 +32,7 @@ class AccountantController extends Controller
 
     public function payrollIndex(Request $request): View
     {
-        $query = Payroll::with('employee')->orderByDesc('month');
+        $query = Payroll::with('employee.positionDetail')->orderByDesc('month');
 
         if ($q = $request->input('q')) {
             $query->where(function($w) use ($q) {
@@ -55,7 +55,7 @@ class AccountantController extends Controller
 
     public function payrollShow(Payroll $payroll): View
     {
-        $payroll->load('employee');
+        $payroll->load('employee.positionDetail');
         return view('accountant.payroll.show', compact('payroll'));
     }
 
@@ -96,9 +96,8 @@ class AccountantController extends Controller
         }
 
         $service = new PayrollService();
-        $monthParts = explode('-', $payroll->month);
-        $year = (int)($monthParts[0] ?? $payroll->year ?? now()->year);
-        $month = (int)($monthParts[1] ?? $payroll->month);
+        $year = (int) ($payroll->year ?? now()->year);
+        $month = (int) ($payroll->month ?? now()->month);
 
         $newPayroll = $service->calculate($employee, $month, $year);
 
@@ -123,7 +122,7 @@ class AccountantController extends Controller
 
     public function sendAllPayrolls(Request $request)
     {
-        $payrolls = Payroll::with('employee')->orderByDesc('month')->get();
+        $payrolls = Payroll::with('employee.positionDetail')->orderByDesc('month')->get();
         $sent = 0; $failed = 0;
 
         foreach ($payrolls as $p) {
@@ -175,7 +174,7 @@ class AccountantController extends Controller
         $month = (int) $month;
 
         $service = new PayrollService();
-        $employees = \App\Models\Employee::where('status', 'active')->get();
+        $employees = Employee::active()->get();
         $count = 0;
 
         foreach ($employees as $employee) {
@@ -193,7 +192,7 @@ class AccountantController extends Controller
 
     public function payrollFeedback(): View
     {
-        $issues = Payroll::with('employee')
+        $issues = Payroll::with('employee.positionDetail')
             ->where('confirmation_status', 'issue_reported')
             ->whereNotNull('issue_report')
             ->orderByDesc('issue_reported_at')

@@ -20,7 +20,7 @@ class PayrollController extends Controller
         $month = $request->month ?? now()->month;
         $year = $request->year ?? now()->year;
 
-        $payrolls = Payroll::with('employee')
+        $payrolls = Payroll::with('employee.positionDetail')
             ->where('month', $month)
             ->where('year', $year)
             ->orderByDesc('id')
@@ -39,7 +39,7 @@ class PayrollController extends Controller
      */
     public function issues()
     {
-        $issues = Payroll::with('employee')
+        $issues = Payroll::with('employee.positionDetail')
             ->where('confirmation_status', 'issue_reported')
             ->whereNotNull('issue_report')
             ->orderByDesc('issue_reported_at')
@@ -57,7 +57,7 @@ class PayrollController extends Controller
         $month = $request->month ?? now()->month;
         $year = $request->year ?? now()->year;
 
-        foreach (Employee::all() as $employee) {
+        foreach (Employee::active()->get() as $employee) {
             $service->calculate($employee, (int) $month, (int) $year);
         }
 
@@ -68,7 +68,7 @@ class PayrollController extends Controller
 
     public function show(Payroll $payroll)
     {
-        $payroll->load(['employee', 'salaryPayment', 'paidByUser']);
+        $payroll->load(['employee.positionDetail', 'salaryPayment', 'paidByUser']);
 
         return view('hr.payroll.show', [
             'payroll' => $payroll,

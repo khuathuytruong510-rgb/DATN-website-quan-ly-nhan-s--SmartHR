@@ -6,117 +6,109 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Chấm Công') - SmartHR</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <style>
+        :root { --primary: #2563eb; --danger: #dc2626; --sidebar-bg: #1e3a5f; --line: #e5e7eb; }
+        body { margin: 0; background: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .emp-shell { display: flex; min-height: 100vh; }
+        .emp-sidebar {
+            width: 260px; min-width: 260px; background: var(--sidebar-bg); color: #cbd5e1;
+            position: fixed; top: 0; left: 0; bottom: 0; z-index: 1040;
+            display: flex; flex-direction: column; overflow-y: auto;
+        }
+        .emp-sidebar-brand { padding: 24px 20px 16px; border-bottom: 1px solid rgba(255,255,255,.1); }
+        .emp-sidebar-brand h2 { margin: 0; font-size: 24px; font-weight: 800; color: #fff; }
+        .emp-sidebar-brand p { margin: 4px 0 0; font-size: 12px; color: #94a3b8; }
+        .emp-sidebar-nav { flex: 1; padding: 12px 10px; }
+        .emp-sidebar-nav .nav-link {
+            display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 8px;
+            color: #cbd5e1; font-size: 14px; font-weight: 500; transition: background .15s, color .15s;
+        }
+        .emp-sidebar-nav .nav-link:hover { background: rgba(255,255,255,.08); color: #fff; }
+        .emp-sidebar-nav .nav-link.active { background: var(--primary); color: #fff; }
+        .emp-sidebar-nav .nav-link i { font-size: 16px; width: 20px; text-align: center; }
+        .emp-main { flex: 1; margin-left: 260px; }
+        .emp-topbar {
+            background: #fff; border-bottom: 1px solid var(--line);
+            padding: 16px 28px; display: flex; justify-content: space-between; align-items: center;
+            position: sticky; top: 0; z-index: 1030;
+        }
+        .emp-content { padding: 24px 28px; }
+        @media (max-width: 991.98px) {
+            .emp-sidebar { transform: translateX(-100%); }
+            .emp-sidebar.show { transform: translateX(0); }
+            .emp-main { margin-left: 0; }
+        }
+    </style>
 </head>
-<body class="bg-gray-50">
-    <div class="flex">
-        <!-- Sidebar -->
-        <aside class="w-64 bg-white shadow-md h-screen fixed">
-            <div class="p-6 border-b">
-                <h1 class="text-2xl font-bold text-blue-600">SmartHR</h1>
-                <p class="text-sm text-gray-600 mt-1">Quản lý nhân sự</p>
+<body>
+    <div class="emp-shell">
+        <aside class="emp-sidebar" id="empSidebar">
+            <div class="emp-sidebar-brand">
+                <h2>SmartHR</h2>
+                <p>Cổng nhân viên</p>
             </div>
-            <nav class="mt-6 px-4">
-                <ul class="space-y-2">
-                    <li>
-                        <a href="{{ route('me.dashboard') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.dashboard') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-house me-2"></i> Dashboard</a>
-                    </li>
-                    <li>
-                        <a href="{{ route('me.profile') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.profile*') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-person me-2"></i> Hồ sơ</a>
-                    </li>
-                    <li>
-                        <a href="{{ route('me.attendance') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.attendance*') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-geo-alt me-2"></i> Chấm công</a>
-                    </li>
-                    <li>
-                        <a href="{{ route('me.attendance') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.attendance*') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-calendar3 me-2"></i> Lịch sử chấm công</a>
-                    </li>
-                    <li>
-                        <a href="{{ route('me.leave_requests') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.leave_requests*') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-journal-text me-2"></i> Đơn xin nghỉ</a>
-                    </li>
-                    <li>
-                        <a href="{{ route('me.overtime_requests') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.overtime_requests*') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-clock me-2"></i> Đăng ký tăng ca</a>
-                    </li>
-                    <li>
-                        <a href="{{ route('me.payrolls') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.payrolls') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-cash-stack me-2"></i> Bảng lương</a>
-                    </li>
-                    <li>
-                        <a href="{{ route('me.contracts') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.contracts') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-file-earmark-text me-2"></i> Hợp đồng</a>
-                    </li>
-                    <li>
-                        <a href="{{ route('me.evaluations') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.evaluations') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-star me-2"></i> Đánh giá</a>
-                    </li>
-                    <li>
-                        <a href="{{ route('me.benefits') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.benefits') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-gift me-2"></i> Phúc lợi</a>
-                    </li>
-                    <li>
-                        <a href="{{ route('me.notifications') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.notifications') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-bell me-2"></i> Thông báo</a>
-                    </li>
-                    <li>
-                        <a href="{{ route('me.schedule') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.schedule') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-calendar-week me-2"></i> Lịch làm việc</a>
-                    </li>
-                    <li>
-                        <a href="{{ route('me.support_requests') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.support_requests*') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-ticket-detailed me-2"></i> Yêu cầu hỗ trợ</a>
-                    </li>
-                    <li>
-                        <a href="{{ route('me.password.change') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.password.*') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-lock me-2"></i> Đổi mật khẩu</a>
-                    </li>
-                    <li>
-                        <a href="{{ route('me.activity_logs') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.activity_logs') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-journal-text me-2"></i> Nhật ký hoạt động</a>
-                    </li>
-                </ul>
+            <nav class="emp-sidebar-nav">
+                <a class="nav-link {{ request()->routeIs('me.dashboard') ? 'active' : '' }}" href="{{ route('me.dashboard') }}"><i class="bi bi-house-fill"></i> Dashboard</a>
+                <a class="nav-link {{ request()->routeIs('me.profile*') ? 'active' : '' }}" href="{{ route('me.profile') }}"><i class="bi bi-person-fill"></i> Hồ sơ</a>
+                <a class="nav-link {{ request()->routeIs('me.attendance*') ? 'active' : '' }}" href="{{ route('me.attendance') }}"><i class="bi bi-geo-alt-fill"></i> Chấm công</a>
+                <a class="nav-link {{ request()->routeIs('me.leave_requests*') ? 'active' : '' }}" href="{{ route('me.leave_requests') }}"><i class="bi bi-journal-text"></i> Đơn xin nghỉ</a>
+                <a class="nav-link {{ request()->routeIs('me.overtime_requests*') ? 'active' : '' }}" href="{{ route('me.overtime_requests') }}"><i class="bi bi-clock"></i> Đăng ký tăng ca</a>
+                <a class="nav-link {{ request()->routeIs('me.payrolls') ? 'active' : '' }}" href="{{ route('me.payrolls') }}"><i class="bi bi-cash-stack"></i> Bảng lương</a>
+                <a class="nav-link {{ request()->routeIs('me.contracts') ? 'active' : '' }}" href="{{ route('me.contracts') }}"><i class="bi bi-file-earmark-text"></i> Hợp đồng</a>
+                <a class="nav-link {{ request()->routeIs('me.evaluations') ? 'active' : '' }}" href="{{ route('me.evaluations') }}"><i class="bi bi-star-fill"></i> Đánh giá</a>
+                <a class="nav-link {{ request()->routeIs('me.benefits') ? 'active' : '' }}" href="{{ route('me.benefits') }}"><i class="bi bi-gift-fill"></i> Phúc lợi</a>
+                <a class="nav-link {{ request()->routeIs('me.notifications') ? 'active' : '' }}" href="{{ route('me.notifications') }}"><i class="bi bi-bell-fill"></i> Thông báo</a>
+                <a class="nav-link {{ request()->routeIs('me.schedule*') ? 'active' : '' }}" href="{{ route('me.schedule') }}"><i class="bi bi-calendar-week"></i> Lịch làm việc</a>
+                <a class="nav-link {{ request()->routeIs('me.support_requests*') ? 'active' : '' }}" href="{{ route('me.support_requests') }}"><i class="bi bi-ticket-detailed"></i> Yêu cầu hỗ trợ</a>
+                <a class="nav-link {{ request()->routeIs('me.password.*') ? 'active' : '' }}" href="{{ route('me.password.change') }}"><i class="bi bi-lock-fill"></i> Đổi mật khẩu</a>
+                <a class="nav-link {{ request()->routeIs('me.activity_logs') ? 'active' : '' }}" href="{{ route('me.activity_logs') }}"><i class="bi bi-journal-text"></i> Nhật ký hoạt động</a>
             </nav>
         </aside>
 
-        <!-- Main Content -->
-        <main class="ml-64 flex-1">
-            <!-- Top Bar -->
-            <div class="bg-white shadow">
-                <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-                    <div>
-                        <h2 class="text-2xl font-bold text-gray-800">SmartHR Dashboard</h2>
-                        <p class="text-sm text-gray-600">Hệ thống quản lý nhân sự</p>
-                    </div>
-                    <div class="flex items-center space-x-4">
-                        <span class="text-gray-700"><strong>{{ Auth::user()->name }}</strong></span>
-                        <form method="POST" action="{{ route('logout') }}" class="inline">
-                            @csrf
-                            <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
-                                Đăng xuất
-                            </button>
-                        </form>
-                    </div>
+        <main class="emp-main">
+            <div class="emp-topbar">
+                <div>
+                    <button class="btn d-lg-none" type="button" onclick="document.getElementById('empSidebar').classList.toggle('show')" style="border:none;background:transparent;font-size:24px;padding:4px 8px;">
+                        <i class="bi bi-list"></i>
+                    </button>
+                    <strong>{{ Auth::user()->name }}</strong>
                 </div>
+                <form method="POST" action="{{ route('logout') }}" class="d-inline">
+                    @csrf
+                    <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-box-arrow-right me-1"></i> Đăng xuất</button>
+                </form>
             </div>
-
-            <!-- Page Content -->
-            <div class="p-6">
+            <div class="emp-content">
                 @hasSection('breadcrumb')
-                    <nav aria-label="breadcrumb" style="margin-bottom:12px;">
-                        <ol style="list-style:none; padding:0; margin:0; display:flex; gap:8px; align-items:center; font-size:14px; color:#64748b;">
+                    <nav aria-label="breadcrumb" style="margin-bottom:16px;">
+                        <ol class="breadcrumb" style="background:transparent;padding:0;margin:0;font-size:14px;">
                             @yield('breadcrumb')
                         </ol>
                     </nav>
                 @endif
 
                 @if ($errors->any())
-                    <div class="mb-6 bg-red-50 border-l-4 border-red-400 p-4 rounded">
-                        <h3 class="text-red-800 font-semibold">Lỗi</h3>
-                        <ul class="text-red-700 text-sm mt-2">
+                    <div class="alert alert-danger alert-dismissible fade show">
+                        <ul style="margin:0;padding-left:18px;">
                             @foreach ($errors->all() as $error)
                                 <li>{{ $error }}</li>
                             @endforeach
                         </ul>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
                 @endif
 
                 @if (session('success'))
-                    <div class="mb-6 bg-green-50 border-l-4 border-green-400 p-4 rounded">
-                        <p class="text-green-800">{{ session('success') }}</p>
+                    <div class="alert alert-success alert-dismissible fade show">
+                        {{ session('success') }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
                 @endif
 
                 @if (session('error'))
-                    <div class="mb-6 bg-red-50 border-l-4 border-red-400 p-4 rounded">
-                        <p class="text-red-800">{{ session('error') }}</p>
+                    <div class="alert alert-danger alert-dismissible fade show">
+                        {{ session('error') }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
                 @endif
 
@@ -126,4 +118,3 @@
     </div>
 </body>
 </html>
-

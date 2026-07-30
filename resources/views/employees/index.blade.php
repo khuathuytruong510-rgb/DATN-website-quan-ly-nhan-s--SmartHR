@@ -6,7 +6,15 @@
         <h1>👥 Nhân viên</h1>
         <p class="muted">Quản lý thông tin nhân viên và vị trí.</p>
     </div>
-    <a class="btn btn-primary" href="{{ route('employees.create') }}">+ Tạo nhân viên</a>
+    <div class="d-flex gap-2">
+        <a class="btn {{ $showInactive ? 'btn-outline-secondary' : 'btn-primary' }}" href="{{ route('employees.index') }}">
+            Đang hoạt động
+        </a>
+        <a class="btn {{ $showInactive ? 'btn-danger' : 'btn-outline-secondary' }}" href="{{ route('employees.index', ['show_inactive' => 1]) }}">
+            Đã nghỉ / Hết HĐ
+        </a>
+        <a class="btn btn-primary" href="{{ route('employees.create') }}">+ Tạo nhân viên</a>
+    </div>
 </div>
 
 <div class="card">
