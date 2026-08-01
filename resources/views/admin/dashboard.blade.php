@@ -5,12 +5,12 @@
 @section('content')
     @php
         $dashboardStats = [
-            'departments'       => $hrOverview['totalDepartments'] ?? 0,
-            'employees'         => $hrOverview['totalEmployees'] ?? 0,
-            'contracts'         => $contractStats['total'] ?? 0,
-            'latestEmployees'   => [],
-            'latestContracts'   => [],
-            'expiringContracts' => $expiringContracts ?? [],
+            'departments' => $departmentCount,
+            'employees' => $employeeCount,
+            'contracts' => $contractCount,
+            'latestEmployees' => $latestEmployees,
+            'latestContracts' => $latestContracts,
+            'expiringContracts' => $expiringContracts,
         ];
     @endphp
 
