@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\LeaveRequest;
 use App\Models\Payroll;
 
 class PayrollCalculationService
@@ -54,13 +55,9 @@ class PayrollCalculationService
         | 1. Lương cơ bản theo chức vụ
         |--------------------------------------------------------------------------
         */
-
         $baseSalary = match ($employee->position) {
-
             'Giám Đốc' => 13000000,
-
             'Trưởng Phòng Nhân Sự' => 10400000,
-
             default => 7800000,
         };
 
@@ -69,11 +66,8 @@ class PayrollCalculationService
         | 2. Quy định công chuẩn
         |--------------------------------------------------------------------------
         */
-
         $requiredWorkingDays = 26;
-
         $dailySalary = $baseSalary / $requiredWorkingDays;
-
         $hourSalary = $dailySalary / 8;
 
         /*
@@ -81,7 +75,6 @@ class PayrollCalculationService
         | 3. Lấy dữ liệu chấm công
         |--------------------------------------------------------------------------
         */
-
         $attendances = Attendance::where('employee_id', $employee->id)
             ->whereMonth('date', $month)
             ->whereYear('date', $year)
@@ -92,11 +85,8 @@ class PayrollCalculationService
         | 4. Đếm số ngày làm thực tế
         |--------------------------------------------------------------------------
         */
-
         $actualWorkingDays = 0;
-
         foreach ($attendances as $attendance) {
-
             if (
                 $attendance->check_in &&
                 $attendance->check_out &&
@@ -108,198 +98,104 @@ class PayrollCalculationService
 
         /*
         |--------------------------------------------------------------------------
-        | 5. Công tính lương (tối đa 26)
+        | 5. Lấy dữ liệu Nghỉ phép đã được duyệt (status = 'approved')
         |--------------------------------------------------------------------------
         */
+        $approvedLeaveRequests = LeaveRequest::where('employee_id', $employee->id)
+            ->where('status', 'approved')
+            ->where(function ($query) use ($month, $year) {
+                $query->whereMonth('start_date', $month)->whereYear('start_date', $year)
+                    ->orWhereMonth('end_date', $month)->whereYear('end_date', $year);
+            })
+            ->get();
 
-        $workingDays = min(
-            $actualWorkingDays,
-            $requiredWorkingDays
-        );
+        $paidLeaveDays = 0;   // Nghỉ hưởng lương (Phép năm - annual)
+        $unpaidLeaveDays = 0; // Nghỉ không hưởng lương (Sick, Unpaid, Personal...)
+
+        foreach ($approvedLeaveRequests as $leave) {
+            if ($leave->type === 'annual') {
+                $paidLeaveDays += $leave->days;
+            } else {
+                $unpaidLeaveDays += $leave->days;
+            }
+        }
 
         /*
         |--------------------------------------------------------------------------
-        | 6. Ngày tăng ca
+        | 6. Tổng số ngày công tính lương (Thực tế + Nghỉ phép năm, tối đa 26)
         |--------------------------------------------------------------------------
         */
-
-        $overtimeDays = max(
-            0,
-            $actualWorkingDays - $requiredWorkingDays
-        );
+        $payableDays = $actualWorkingDays + $paidLeaveDays;
+        $workingDays = min($payableDays, $requiredWorkingDays);
 
         /*
         |--------------------------------------------------------------------------
-        | 7. Tổng giờ tăng ca
+        | 7. Ngày tăng ca
         |--------------------------------------------------------------------------
         */
+        $overtimeDays = max(0, $actualWorkingDays - $requiredWorkingDays);
 
+        /*
+        |--------------------------------------------------------------------------
+        | 8. Tổng giờ tăng ca
+        |--------------------------------------------------------------------------
+        */
         $overtimeHours = $attendances->sum('overtime_hours');
-
-        /*
-        |--------------------------------------------------------------------------
-        | 8. Nghỉ phép
-        |--------------------------------------------------------------------------
-        */
-
-        $paidLeaveDays = 0;
-
-        $unpaidLeaveDays = max(
-            0,
-            $requiredWorkingDays - $workingDays
-        );
 
         /*
         |--------------------------------------------------------------------------
         | 9. Lương ngày công
         |--------------------------------------------------------------------------
         */
-
-        $workingSalary =
-            $workingDays
-            * $dailySalary;
+        $workingSalary = $workingDays * $dailySalary;
 
         /*
         |--------------------------------------------------------------------------
-        | 10. Tiền tăng ca theo ngày (150%)
+        | 10. Tiền tăng ca (150%)
         |--------------------------------------------------------------------------
         */
-
-        $overtimeDaySalary =
-            $overtimeDays
-            * $dailySalary
-            * 1.5;
+        $overtimeDaySalary = $overtimeDays * $dailySalary * 1.5;
+        $overtimeHourSalary = $overtimeHours * $hourSalary * 1.5;
+        $totalOvertimeSalary = $overtimeDaySalary + $overtimeHourSalary;
 
         /*
         |--------------------------------------------------------------------------
-        | 11. Tiền tăng ca theo giờ (150%)
+        | 11. Phụ cấp & Thưởng
+        | (Thưởng 500k nếu tổng ngày công tính lương >= 26)
         |--------------------------------------------------------------------------
         */
-
-        $overtimeHourSalary =
-            $overtimeHours
-            * $hourSalary
-            * 1.5;
-
-        /*
-        |--------------------------------------------------------------------------
-        | 12. Tổng tiền tăng ca
-        |--------------------------------------------------------------------------
-        */
-
-        $totalOvertimeSalary =
-            $overtimeDaySalary
-            + $overtimeHourSalary;
-                    /*
-        |--------------------------------------------------------------------------
-        | 13. Phụ cấp
-        |--------------------------------------------------------------------------
-        */
-
         $allowance = 500000;
+        $bonus = ($payableDays >= 26) ? 500000 : 0;
 
         /*
         |--------------------------------------------------------------------------
-        | 14. Thưởng
-        | Làm đủ hoặc trên 26 công được thưởng 500.000
+        | 12. Khấu trừ & Tiền phạt đi muộn
         |--------------------------------------------------------------------------
         */
-
-        $bonus = $actualWorkingDays >= 26
-            ? 500000
-            : 0;
-
-        /*
-        |--------------------------------------------------------------------------
-        | 15. Khấu trừ khác
-        |--------------------------------------------------------------------------
-        */
-
         $deduction = 0;
-
-        /*
-        |--------------------------------------------------------------------------
-        | 15b. Tiền phạt đi muộn (tổng từ các ngày đi muộn trong tháng)
-        |--------------------------------------------------------------------------
-        */
-
         $totalLatePenaltyFee = $attendances->sum('late_penalty_fee');
 
         /*
         |--------------------------------------------------------------------------
-        | 16. Bảo hiểm (10.5% lương cơ bản)
+        | 13. Bảo hiểm (10.5% lương cơ bản)
         |--------------------------------------------------------------------------
         */
-
         $insurance = $baseSalary * 0.105;
 
         /*
         |--------------------------------------------------------------------------
-        | 17. Thu nhập trước thuế
+        | 14. Thuế TNCN
         |--------------------------------------------------------------------------
         */
-
-        $taxableIncome =
-            $workingSalary
-            + $totalOvertimeSalary
-            + $allowance
-            + $bonus
-            - $insurance;
+        $taxableIncome = $workingSalary + $totalOvertimeSalary + $allowance + $bonus - $insurance;
+        $tax = $this->calculateTax($taxableIncome);
 
         /*
         |--------------------------------------------------------------------------
-        | 18. Thuế thu nhập cá nhân
+        | 15. Lương thực nhận
         |--------------------------------------------------------------------------
         */
-
-        if ($taxableIncome <= 5000000) {
-
-            $tax = 0;
-
-        } elseif ($taxableIncome <= 10000000) {
-
-            $tax = ($taxableIncome - 5000000) * 0.05;
-
-        } elseif ($taxableIncome <= 18000000) {
-
-            $tax =
-                250000
-                + (($taxableIncome - 10000000) * 0.10);
-
-        } elseif ($taxableIncome <= 32000000) {
-
-            $tax =
-                1050000
-                + (($taxableIncome - 18000000) * 0.15);
-
-        } elseif ($taxableIncome <= 52000000) {
-
-            $tax =
-                3150000
-                + (($taxableIncome - 32000000) * 0.20);
-
-        } elseif ($taxableIncome <= 80000000) {
-
-            $tax =
-                7150000
-                + (($taxableIncome - 52000000) * 0.25);
-
-        } else {
-
-            $tax =
-                14150000
-                + (($taxableIncome - 80000000) * 0.30);
-
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | 19. Lương thực nhận
-        |--------------------------------------------------------------------------
-        */
-
-        $totalSalary =
-            $workingSalary
+        $totalSalary = $workingSalary
             + $totalOvertimeSalary
             + $allowance
             + $bonus
@@ -307,94 +203,39 @@ class PayrollCalculationService
             - $tax
             - $deduction
             - $totalLatePenaltyFee;
-                    /*
+
+        /*
         |--------------------------------------------------------------------------
-        | 20. Lưu bảng lương
+        | 16. Lưu / Cập nhật bảng lương
         |--------------------------------------------------------------------------
         */
-
         return Payroll::updateOrCreate(
-
             [
                 'employee_id' => $employee->id,
                 'month'       => $month,
                 'year'        => $year,
             ],
-
             [
-
-                'base_salary' => $baseSalary,
-
-                'daily_salary' => round($dailySalary, 2),
-
+                'base_salary'           => $baseSalary,
+                'daily_salary'          => round($dailySalary, 2),
                 'required_working_days' => $requiredWorkingDays,
-
-                /*
-                |----------------------------------------------------------
-                | Lưu số ngày làm thực tế
-                | (VD: làm 30 ngày thì DB lưu 30)
-                | Blade sẽ hiển thị 26/26
-                |----------------------------------------------------------
-                */
-                'working_days' => $actualWorkingDays,
-
-                'paid_leave_days' => $paidLeaveDays,
-
-                'unpaid_leave_days' => $unpaidLeaveDays,
-
-                /*
-                |----------------------------------------------------------
-                | Lương ngày công (chỉ tối đa 26 ngày)
-                |----------------------------------------------------------
-                */
-                'working_salary' => round($workingSalary, 2),
-
-                /*
-                |----------------------------------------------------------
-                | Tăng ca
-                |----------------------------------------------------------
-                */
-                'overtime_days' => $overtimeDays,
-
-                'overtime_hours' => round($overtimeHours, 2),
-
-                'overtime_day_salary' => round($overtimeDaySalary, 2),
-
-                'overtime_hour_salary' => round($overtimeHourSalary, 2),
-
-                'overtime_salary' => round($totalOvertimeSalary, 2),
-
-                /*
-                |----------------------------------------------------------
-                | Phụ cấp - Thưởng
-                |----------------------------------------------------------
-                */
-                'allowance' => $allowance,
-
-                'bonus' => $bonus,
-
-                /*
-                |----------------------------------------------------------
-                | Khấu trừ
-                |----------------------------------------------------------
-                */
-                'deduction' => $deduction,
-
-                'late_penalty_fee' => round($totalLatePenaltyFee, 2),
-
-                'insurance' => round($insurance, 2),
-
-                'tax' => round($tax, 2),
-
-                /*
-                |----------------------------------------------------------
-                | Thực nhận
-                |----------------------------------------------------------
-                */
-                'total_salary' => round($totalSalary, 2),
-
+                'working_days'          => $actualWorkingDays,
+                'paid_leave_days'       => $paidLeaveDays,
+                'unpaid_leave_days'     => $unpaidLeaveDays,
+                'working_salary'        => round($workingSalary, 2),
+                'overtime_days'         => $overtimeDays,
+                'overtime_hours'        => round($overtimeHours, 2),
+                'overtime_day_salary'   => round($overtimeDaySalary, 2),
+                'overtime_hour_salary'  => round($overtimeHourSalary, 2),
+                'overtime_salary'       => round($totalOvertimeSalary, 2),
+                'allowance'             => $allowance,
+                'bonus'                 => $bonus,
+                'deduction'             => $deduction,
+                'late_penalty_fee'      => round($totalLatePenaltyFee, 2),
+                'insurance'             => round($insurance, 2),
+                'tax'                   => round($tax, 2),
+                'total_salary'          => round($totalSalary, 2),
             ]
-
         );
     }
 }
