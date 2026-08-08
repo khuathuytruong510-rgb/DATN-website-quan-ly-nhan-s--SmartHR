@@ -222,6 +222,7 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/evaluations', [SmartHrController::class, 'evaluations'])->name('evaluations.index');
         Route::get('/evaluations/create', [SmartHrController::class, 'createEvaluation'])->name('evaluations.create');
+        Route::get('/evaluations/suggest', [SmartHrController::class, 'evaluationSuggest'])->name('evaluations.suggest');
         Route::post('/evaluations', [SmartHrController::class, 'storeEvaluation'])->name('evaluations.store');
         Route::get('/evaluations/{evaluation}', [SmartHrController::class, 'showEvaluation'])->name('evaluations.show');
         Route::get('/evaluations/{evaluation}/edit', [SmartHrController::class, 'editEvaluation'])->name('evaluations.edit');
