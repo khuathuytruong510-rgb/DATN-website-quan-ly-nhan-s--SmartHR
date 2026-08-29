@@ -33,11 +33,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/logout', [SmartHrController::class, 'logout'])->name('logout');
 
     // API: Lấy thông tin vị trí theo ID (must be before {name})
-    Route::get('/api/positions/id/{id}', [SmartHrController::class, 'getPositionById'])->name('api.positions.get_by_id');
+    Route::get('/api/positions/id/{id}', [SmartHrController::class, 'getPositionById'])->name('api.positions.get_by_id')->middleware(\App\Http\Middleware\EnsureAdminOrHr::class);
     // API: Lấy thông tin vị trí theo tên
-    Route::get('/api/positions/{name}', [SmartHrController::class, 'getPositionByName'])->name('api.positions.get');
+    Route::get('/api/positions/{name}', [SmartHrController::class, 'getPositionByName'])->name('api.positions.get')->middleware(\App\Http\Middleware\EnsureAdminOrHr::class);
     // API: Tạo mã nhân viên tiếp theo
-    Route::get('/api/employees/next-code', [SmartHrController::class, 'getNextEmployeeCode'])->name('api.employees.next_code');
+    Route::get('/api/employees/next-code', [SmartHrController::class, 'getNextEmployeeCode'])->name('api.employees.next_code')->middleware(\App\Http\Middleware\EnsureAdminOrHr::class);
 
     Route::get('/admin', [SmartHrController::class, 'dashboard'])
         ->name('admin.dashboard');
@@ -60,6 +60,7 @@ Route::middleware('auth')->group(function () {
     // Stop impersonation (any authenticated user can stop if impersonating)
     Route::post('/impersonation/stop', [SmartHrController::class, 'stopImpersonation'])->name('impersonation.stop');
 
+    Route::get('/me/unlinked', [EmployeeController::class, 'unlinked'])->name('me.unlinked')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me', [EmployeeController::class, 'dashboard'])->name('me.dashboard')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/profile', [EmployeeController::class, 'profile'])->name('me.profile')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     
@@ -70,9 +71,22 @@ Route::middleware('auth')->group(function () {
     Route::get('/me/attendance', [EmployeeController::class, 'attendanceIndex'])->name('me.attendance')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/attendance/create', [EmployeeController::class, 'attendanceCreate'])->name('me.attendance.create')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::post('/me/attendance', [EmployeeController::class, 'attendanceStore'])->name('me.attendance.store')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::post('/me/attendance/{attendance}/adjust', [EmployeeController::class, 'requestAttendanceAdjustment'])->name('me.attendance.adjust')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::put('/me/attendance/{attendance}', [EmployeeController::class, 'attendanceUpdate'])->name('me.attendance.update')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
-    Route::get('/me/contracts', [EmployeeController::class, 'contracts'])->name('me.contracts');
+    Route::match(['patch', 'delete'], '/me/attendance/{attendance}', fn () => abort(403, 'Không được sửa hoặc xóa bản ghi chấm công.'))->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::match(['put', 'patch', 'delete'], '/me/payroll/{payroll}', fn () => abort(403, 'Nhân viên không được sửa trạng thái bảng lương.'))->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::match(['put', 'patch', 'delete'], '/me/contracts/{contract}', fn () => abort(403, 'Nhân viên không được sửa hợp đồng.'))->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::match(['put', 'patch', 'delete'], '/me/leave-requests/{leaveRequest}', fn () => abort(403, 'Không được sửa hoặc xóa đơn nghỉ. Dùng hủy đơn.'))->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::match(['put', 'patch', 'delete'], '/me/overtime-requests/{overtimeRequest}', fn () => abort(403, 'Không được sửa hoặc xóa đăng ký tăng ca.'))->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::match(['put', 'patch', 'delete'], '/me/support-requests/{supportRequest}', fn () => abort(403, 'Không được sửa trạng thái hoặc xóa yêu cầu hỗ trợ.'))->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::match(['put', 'patch', 'delete'], '/me/salary-histories/{salaryHistory}', fn () => abort(403, 'Không được sửa lịch sử lương.'))->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/contracts', [EmployeeController::class, 'contracts'])->name('me.contracts')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::post('/me/contracts/{contract}/sign', [EmployeeController::class, 'signContract'])->name('me.contracts.sign')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/payroll', [EmployeeController::class, 'payrolls'])->name('me.payrolls')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/payroll/{payroll}/history', [EmployeeController::class, 'payrollHistory'])->name('me.payroll.history')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/payroll/{payroll}', [EmployeeController::class, 'payrollShow'])->name('me.payroll.show')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/contracts/{contract}', [EmployeeController::class, 'contractShow'])->name('me.contracts.show')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/attendance/{attendance}', [EmployeeController::class, 'attendanceShow'])->name('me.attendance.show')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::post('/me/payroll/{payroll}/confirm', [\App\Http\Controllers\Web\PayrollConfirmationController::class, 'confirm'])->name('me.payroll.confirm')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::post('/me/payroll/{payroll}/report-issue', [\App\Http\Controllers\Web\PayrollConfirmationController::class, 'reportIssue'])->name('me.payroll.report_issue')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::post('/me/payroll/bank-change-request', [\App\Http\Controllers\Web\PayrollConfirmationController::class, 'requestBankChange'])->name('me.payroll.bank_change')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
@@ -81,23 +95,25 @@ Route::middleware('auth')->group(function () {
     Route::get('/me/leave-requests', [EmployeeController::class, 'leaveIndex'])->name('me.leave_requests')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/leave-requests/create', [EmployeeController::class, 'leaveCreate'])->name('me.leave_requests.create')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::post('/me/leave-requests', [EmployeeController::class, 'leaveStore'])->name('me.leave_requests.store')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::post('/me/leave-requests/{leaveRequest}/cancel', [EmployeeController::class, 'cancelLeave'])->name('me.leave_requests.cancel')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/notifications', [EmployeeController::class, 'notifications'])->name('me.notifications')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::post('/me/notifications/{notification}/read', [EmployeeController::class, 'markNotificationRead'])->name('me.notifications.read')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
 
     Route::get('/me/schedule', [EmployeeController::class, 'schedule'])->name('me.schedule')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
 
     // Employee payment history
     Route::get('/me/payment-history', [EmployeeController::class, 'paymentHistory'])->name('me.payment_history')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
 
-    // Employee salary advances (own)
-    Route::get('/me/salary-advances', [\App\Http\Controllers\Web\SalaryAdvanceController::class, 'index'])->name('me.salary_advances')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
-    Route::get('/me/salary-advances/create', [\App\Http\Controllers\Web\SalaryAdvanceController::class, 'create'])->name('me.salary_advances.create')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
-    Route::post('/me/salary-advances', [\App\Http\Controllers\Web\SalaryAdvanceController::class, 'store'])->name('me.salary_advances.store')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/salary-advances', fn () => redirect()->route('me.payrolls'))->name('me.salary_advances')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/salary-advances/create', fn () => redirect()->route('me.payrolls'))->name('me.salary_advances.create')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::post('/me/salary-advances', fn () => redirect()->route('me.payrolls'))->name('me.salary_advances.store')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
 
     // Employee support requests
     Route::get('/me/support-requests', [\App\Http\Controllers\Web\SupportRequestController::class, 'index'])->name('me.support_requests')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/support-requests/create', [\App\Http\Controllers\Web\SupportRequestController::class, 'create'])->name('me.support_requests.create')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::post('/me/support-requests', [\App\Http\Controllers\Web\SupportRequestController::class, 'store'])->name('me.support_requests.store')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/support-requests/{supportRequest}', [\App\Http\Controllers\Web\SupportRequestController::class, 'show'])->name('me.support_requests.show')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::post('/me/support-requests/{supportRequest}/follow-up', [\App\Http\Controllers\Web\SupportRequestController::class, 'followUp'])->name('me.support_requests.follow_up')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
 
     // Overtime requests
     Route::get('/me/overtime-requests', [\App\Http\Controllers\Web\OvertimeRequestController::class, 'index'])->name('me.overtime_requests')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
@@ -113,7 +129,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/me/activity-logs', [\App\Http\Controllers\Web\ActivityLogController::class, 'index'])->name('me.activity_logs')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
 
     // Employee-facing salary history (own records)
-    Route::get('/me/salary-histories', [\App\Http\Controllers\Web\SalaryHistoryController::class, 'meIndex'])->name('me.salary_histories');
+    Route::get('/me/salary-histories', [\App\Http\Controllers\Web\SalaryHistoryController::class, 'meIndex'])->name('me.salary_histories')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/salary-histories/{salaryHistory}', [\App\Http\Controllers\Web\SalaryHistoryController::class, 'meShow'])
         ->name('me.salary_histories.show')
         ->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
@@ -158,6 +174,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/attendance', [SmartHrController::class, 'attendance'])->name('attendance.index');
         Route::get('/attendance/create', [SmartHrController::class, 'createAttendance'])->name('attendance.create');
         Route::post('/attendance', [SmartHrController::class, 'storeAttendance'])->name('attendance.store');
+        Route::post('/attendance/adjustments/{adjustment}/approve', [SmartHrController::class, 'approveAttendanceAdjustment'])->name('attendance.adjustments.approve');
+        Route::post('/attendance/adjustments/{adjustment}/reject', [SmartHrController::class, 'rejectAttendanceAdjustment'])->name('attendance.adjustments.reject');
         Route::get('/attendance/{attendance}/edit', [SmartHrController::class, 'editAttendance'])->name('attendance.edit');
         Route::put('/attendance/{attendance}', [SmartHrController::class, 'updateAttendance'])->name('attendance.update');
         Route::delete('/attendance/{attendance}', [SmartHrController::class, 'destroyAttendance'])->name('attendance.destroy');
@@ -171,10 +189,16 @@ Route::middleware('auth')->group(function () {
             // Tính lương
             Route::post('/payroll/generate', [PayrollController::class, 'generate'])
                 ->name('payroll.generate');
+            Route::post('/payroll/period/lock', [PayrollController::class, 'lockPeriod'])
+                ->name('payroll.period.lock');
+            Route::post('/payroll/period/unlock', [PayrollController::class, 'unlockPeriod'])
+                ->name('payroll.period.unlock');
 
             // In bảng lương trình Giám đốc + duyệt toàn bộ (đặt trước {payroll})
             Route::get('/payroll/print', [PayrollController::class, 'printSheet'])
                 ->name('payroll.print');
+            Route::post('/payroll/review-all', [PayrollController::class, 'reviewAll'])
+                ->name('payroll.review_all');
             Route::post('/payroll/approve-all', [PayrollController::class, 'approveAll'])
                 ->name('payroll.approve_all');
 
@@ -206,14 +230,16 @@ Route::middleware('auth')->group(function () {
             Route::get('/payroll/{payroll}', [PayrollController::class, 'show'])
                 ->name('payroll.show');
 
-            // Duyệt bảng lương (HR/Admin)
+            // HR kiểm tra dữ liệu; Giám đốc phê duyệt cuối
+            Route::post('/payroll/{payroll}/review', [PayrollController::class, 'review'])
+                ->name('payroll.review');
             Route::post('/payroll/{payroll}/approve', [PayrollController::class, 'approve'])
                 ->name('payroll.approve');
 
             Route::post('/payroll/{payroll}/approve-with-payment', [PayrollController::class, 'approveWithPayment'])
                 ->name('payroll.approve_with_payment');
 
-            // Thanh toán lương (Kế toán/Admin)
+            // Thanh toán lương (Kế toán)
             Route::get('/payroll/{payroll}/payment', [\App\Http\Controllers\HR\PayrollPaymentController::class, 'show'])
                 ->name('payroll.payment.show');
             Route::post('/payroll/{payroll}/payment/bank', [\App\Http\Controllers\HR\PayrollPaymentController::class, 'updateBank'])

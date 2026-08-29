@@ -8,8 +8,11 @@ Route::post('/auth/login', [\App\Http\Controllers\Auth\AuthController::class, 'l
 Route::middleware('api.auth')->group(function () {
     Route::post('/auth/logout', [\App\Http\Controllers\Auth\AuthController::class, 'logout']);
 
-    require __DIR__ . '/admin.php';
-    require __DIR__ . '/hr.php';
+    Route::middleware(\App\Http\Middleware\EnsureAdminOrHr::class)->group(function () {
+        require __DIR__ . '/admin.php';
+        require __DIR__ . '/hr.php';
+    });
+
     require __DIR__ . '/employee.php';
 });
 
