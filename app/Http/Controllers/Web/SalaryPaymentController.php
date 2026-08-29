@@ -42,10 +42,14 @@ class SalaryPaymentController extends Controller
 
     public function pay(ProcessSalaryPaymentRequest $request, SalaryPayment $salaryPayment)
     {
+        if (! $request->user()?->is_accountant) {
+            abort(403, 'Chỉ Kế toán được thanh toán lương.');
+        }
+
         $salaryPayment->loadMissing('payroll');
 
         if ($salaryPayment->payroll_id && $salaryPayment->payroll) {
-            if ($salaryPayment->payroll->status === PayrollPaymentWorkflowService::READY_FOR_PAYMENT) {
+            if (in_array($salaryPayment->payroll->status, PayrollPaymentWorkflowService::payableStatuses(), true)) {
                 return redirect()
                     ->route('payroll.payment.show', $salaryPayment->payroll)
                     ->with('info', 'Vui lòng thanh toán theo quy trình bảng lương (xác nhận → thanh toán).');

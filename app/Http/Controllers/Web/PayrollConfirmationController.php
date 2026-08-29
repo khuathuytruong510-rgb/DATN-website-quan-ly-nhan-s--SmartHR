@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
-use App\Models\Notification;
 use App\Models\Payroll;
 use App\Services\PayrollPaymentWorkflowService;
 use Illuminate\Http\RedirectResponse;
@@ -20,13 +19,18 @@ class PayrollConfirmationController extends Controller
 
     protected function currentEmployee(): Employee
     {
-        return Employee::where('email', auth()->user()->email)->firstOrFail();
+        $employee = auth()->user()?->linkedEmployee();
+        if (! $employee) {
+            abort(403, 'Tài khoản chưa gắn hồ sơ nhân viên.');
+        }
+
+        return $employee;
     }
 
     protected function authorizePayroll(Payroll $payroll): void
     {
-        if ($payroll->employee_id !== $this->currentEmployee()->id) {
-            abort(403);
+        if ((int) $payroll->employee_id !== (int) $this->currentEmployee()->id) {
+            abort(403, 'Bạn chỉ được thao tác phiếu lương của chính mình.');
         }
     }
 
@@ -77,37 +81,31 @@ class PayrollConfirmationController extends Controller
     {
         $this->authorizePayroll($payroll);
 
-        if ($payroll->status === 'paid') {
-            return redirect()->route('me.payrolls')->with('error', 'Phiếu lương đã thanh toán và không thể báo cáo sự cố.');
-        }
-
         $data = $request->validate([
+            'issue_types' => ['nullable', 'array'],
+            'issue_types.*' => ['in:working_days,allowance,deduction,overtime,other'],
             'issue_report' => ['required', 'string', 'max:1000'],
         ]);
 
-        $payroll->loadMissing('employee');
+        $typeLabels = [
+            'working_days' => 'Sai ngày công',
+            'allowance' => 'Sai phụ cấp',
+            'deduction' => 'Sai khấu trừ',
+            'overtime' => 'Sai OT',
+            'other' => 'Khác',
+        ];
+        $types = collect($data['issue_types'] ?? [])
+            ->map(fn ($type) => $typeLabels[$type] ?? $type)
+            ->implode(', ');
+        $issue = trim(($types ? "Loại lỗi: {$types}\n" : '').$data['issue_report']);
 
-        $payroll->update([
-            'issue_report' => $data['issue_report'],
-            'issue_reported_at' => now(),
-            'confirmation_status' => 'issue_reported',
-        ]);
+        try {
+            $this->workflow->reportIssue($payroll, $issue, $request->user());
+        } catch (\Throwable $e) {
+            return redirect()->route('me.payrolls')->with('error', $e->getMessage());
+        }
 
-        $employeeName = optional($payroll->employee)->name ?? 'Nhân viên';
-        $period = sprintf('%02d/%d', $payroll->month, $payroll->year);
-
-        Notification::create([
-            'sender_id' => auth()->id(),
-            'target' => 'hr',
-            'title' => "Báo sự cố lương — {$employeeName}",
-            'message' => "Nhân viên {$employeeName} báo sự cố phiếu lương tháng {$period} (mã #{$payroll->id}):\n{$data['issue_report']}",
-            'data' => [
-                'payroll_id' => $payroll->id,
-                'type' => 'payroll_issue',
-            ],
-        ]);
-
-        return redirect()->route('me.payrolls')->with('success', 'Đã gửi báo cáo sự cố đến Admin / HR / Kế toán.');
+        return redirect()->route('me.payrolls')->with('success', 'Đã gửi báo cáo sự cố đến HR / Kế toán.');
     }
 
     public function requestBankChange(Request $request): RedirectResponse
