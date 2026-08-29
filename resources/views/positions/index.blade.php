@@ -23,7 +23,6 @@
                             <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Phòng ban</th>
                             <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Mô tả</th>
                             <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Trạng thái</th>
-                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Thao tác</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -34,10 +33,6 @@
                                 <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $position['department'] }}</td>
                                 <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $position['description'] }}</td>
                                 <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $position['status'] }}</td>
-                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
-                                    <a href="#" class="btn btn-link">Sửa</a> /
-                                    <a href="#" class="btn btn-link">Xóa</a>
-                                </td>
                             </tr>
                         @endforeach
                     </tbody>

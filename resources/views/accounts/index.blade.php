@@ -35,7 +35,10 @@
                             <td>{{ $user->email }}</td>
                             <td>
                                 @if ($user->is_admin)
-                                    <span class="badge">Admin</span>
+                                    <span class="badge">Admin (hệ thống)</span>
+                                @endif
+                                @if ($user->is_director)
+                                    <span class="badge">Giám đốc</span>
                                 @endif
                                 @if ($user->is_hr)
                                     <span class="badge">HR</span>
@@ -43,7 +46,7 @@
                                 @if ($user->is_accountant)
                                     <span class="badge">Kế toán</span>
                                 @endif
-                                @if (! $user->is_admin && ! $user->is_hr && ! $user->is_accountant)
+                                @if (! $user->is_admin && ! $user->is_director && ! $user->is_hr && ! $user->is_accountant)
                                     <span class="badge">Người dùng</span>
                                 @endif
                             </td>

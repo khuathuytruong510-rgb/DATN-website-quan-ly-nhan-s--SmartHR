@@ -423,31 +423,6 @@
     </div>
     @endif
 
-    {{-- 6. THỐNG KÊ TUYỂN DỤNG --}}
-    <div class="card mb-4">
-        <div class="card-header"><h6 class="mb-0"><i class="bi bi-people"></i> Thống kê tuyển dụng</h6></div>
-        <div class="card-body">
-            <div class="row text-center">
-                <div class="col-md-3">
-                    <div class="fs-2 fw-bold text-primary">{{ $recruitmentStats['openPositions'] }}</div>
-                    <div class="text-muted small">Vị trí đang tuyển</div>
-                </div>
-                <div class="col-md-3">
-                    <div class="fs-2 fw-bold text-info">{{ $recruitmentStats['totalApplications'] }}</div>
-                    <div class="text-muted small">Hồ sơ ứng tuyển</div>
-                </div>
-                <div class="col-md-3">
-                    <div class="fs-2 fw-bold text-success">{{ $recruitmentStats['hired'] }}</div>
-                    <div class="text-muted small">Nhân viên đã tuyển</div>
-                </div>
-                <div class="col-md-3">
-                    <div class="fs-2 fw-bold text-danger">{{ $recruitmentStats['rejected'] }}</div>
-                    <div class="text-muted small">Hồ sơ bị từ chối</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     {{-- 7. THỐNG KÊ ĐƠN TỪ --}}
     <div class="row g-4 mb-4">
         <div class="col-lg-7">
@@ -533,6 +508,10 @@
                     <div class="text-muted small">Admin</div>
                 </div>
                 <div class="col-md-2">
+                    <div class="fs-3 fw-bold" style="color:#7c3aed;">{{ $accountStats['director'] ?? 0 }}</div>
+                    <div class="text-muted small">Giám đốc</div>
+                </div>
+                <div class="col-md-2">
                     <div class="fs-3 fw-bold text-info">{{ $accountStats['hr'] }}</div>
                     <div class="text-muted small">HR</div>
                 </div>
@@ -584,18 +563,28 @@
 
 @push('scripts')
 @php
-    $trendLabels = $monthlyPayrollTrend->pluck('label')->toArray();
-    $trendData = $monthlyPayrollTrend->pluck('total')->map(fn($v) => round($v / 1000000, 1))->toArray();
-    $deptPayLabels = $payrollStats['departmentPayroll']->pluck('department_name')->toArray();
-    $deptPayData = $payrollStats['departmentPayroll']->pluck('total_net')->map(fn($v) => round($v / 1000000, 1))->toArray();
-    $ctLabels = $contractStats['byType']->keys()->map(fn($k) => match($k) {
+    $monthlyPayrollTrend = collect($monthlyPayrollTrend);
+    $monthlyNewEmployees = collect($monthlyNewEmployees);
+    $deptPayroll = collect($payrollStats['departmentPayroll'] ?? []);
+    $departments = collect($departmentStats['departments'] ?? []);
+    $contractByType = collect($contractStats['byType'] ?? []);
+
+    $trendLabels = $monthlyPayrollTrend->pluck('label')->values()->all();
+    $trendData = $monthlyPayrollTrend->pluck('total')->map(fn ($v) => round($v / 1000000, 1))->values()->all();
+    $newEmpLabels = $monthlyNewEmployees->pluck('label')->values()->all();
+    $newEmpData = $monthlyNewEmployees->pluck('count')->values()->all();
+    $deptLabels = $departments->pluck('name')->values()->all();
+    $deptCounts = $departments->pluck('count')->values()->all();
+    $deptPayLabels = $deptPayroll->pluck('department_name')->values()->all();
+    $deptPayData = $deptPayroll->pluck('total_net')->map(fn ($v) => round($v / 1000000, 1))->values()->all();
+    $ctLabels = $contractByType->keys()->map(fn ($k) => match ($k) {
         'intern' => 'Thực tập',
         'probation' => 'Thử việc',
         'indefinite' => 'Chính thức',
         'fixed_term' => 'XDH',
-        default => ucfirst($k),
-    })->toArray();
-    $ctData = $contractStats['byType']->values()->toArray();
+        default => ucfirst((string) $k),
+    })->values()->all();
+    $ctData = $contractByType->values()->all();
 @endphp
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
@@ -606,9 +595,9 @@ document.addEventListener('DOMContentLoaded', function() {
         new Chart(pieCtx, {
             type: 'doughnut',
             data: {
-                labels: @json($departmentStats['departments']->pluck('name')),
+                labels: @json($deptLabels),
                 datasets: [{
-                    data: @json($departmentStats['departments']->pluck('count')),
+                    data: @json($deptCounts),
                     backgroundColor: [
                         '#0d6efd','#198754','#ffc107','#dc3545','#6f42c1',
                         '#0dcaf0','#fd7e14','#20c997','#6610f2','#d63384',
@@ -633,10 +622,10 @@ document.addEventListener('DOMContentLoaded', function() {
         new Chart(barCtx, {
             type: 'bar',
             data: {
-                labels: @json($departmentStats['departments']->pluck('name')),
+                labels: @json($deptLabels),
                 datasets: [{
                     label: 'Số nhân viên',
-                    data: @json($departmentStats['departments']->pluck('count')),
+                    data: @json($deptCounts),
                     backgroundColor: '#0d6efd',
                     borderRadius: 6
                 }]
@@ -656,7 +645,7 @@ document.addEventListener('DOMContentLoaded', function() {
         new Chart(trendCtx, {
             type: 'line',
             data: {
-                labels: @json($monthlyPayrollTrend->pluck('label')),
+                labels: @json($trendLabels),
                 datasets: [{
                     label: 'Quỹ lương (triệu VNĐ)',
                     data: @json($trendData),
@@ -681,7 +670,7 @@ document.addEventListener('DOMContentLoaded', function() {
         new Chart(deptPayCtx, {
             type: 'bar',
             data: {
-                labels: @json($payrollStats['departmentPayroll']->pluck('department_name')),
+                labels: @json($deptPayLabels),
                 datasets: [{
                     label: 'Tổng lương (triệu VNĐ)',
                     data: @json($deptPayData),
@@ -747,10 +736,10 @@ document.addEventListener('DOMContentLoaded', function() {
         new Chart(neCtx, {
             type: 'bar',
             data: {
-                labels: @json($monthlyNewEmployees->pluck('label')),
+                labels: @json($newEmpLabels),
                 datasets: [{
                     label: 'Nhân viên mới',
-                    data: @json($monthlyNewEmployees->pluck('count')),
+                    data: @json($newEmpData),
                     backgroundColor: '#198754',
                     borderRadius: 6
                 }]

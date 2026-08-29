@@ -43,13 +43,20 @@
             </div>
 
             <div class="field">
-                <label for="role">Vai trò</label>
+                <label for="role">Vai trò hệ thống</label>
+                @php
+                    $currentRole = old('role', isset($user) && $user->id
+                        ? ($user->is_admin ? 'admin' : ($user->is_director ? 'director' : ($user->is_hr ? 'hr' : ($user->is_accountant ? 'accountant' : 'employee'))))
+                        : 'employee');
+                @endphp
                 <select id="role" name="role" required>
-                    <option value="employee" {{ old('role', isset($user) ? ($user->is_admin ? 'admin' : ($user->is_hr ? 'hr' : ($user->is_accountant ? 'accountant' : 'employee'))) : 'employee') === 'employee' ? 'selected' : '' }}>Nhân viên</option>
-                    <option value="hr" {{ old('role', isset($user) ? ($user->is_hr ? 'hr' : ($user->is_admin ? 'admin' : ($user->is_accountant ? 'accountant' : 'employee'))) : 'employee') === 'hr' ? 'selected' : '' }}>HR</option>
-                    <option value="accountant" {{ old('role', isset($user) ? ($user->is_accountant ? 'accountant' : ($user->is_admin ? 'admin' : ($user->is_hr ? 'hr' : 'employee'))) : 'employee') === 'accountant' ? 'selected' : '' }}>Kế toán</option>
-                    <option value="admin" {{ old('role', isset($user) ? ($user->is_admin ? 'admin' : ($user->is_hr ? 'hr' : ($user->is_accountant ? 'accountant' : 'employee'))) : 'employee') === 'admin' ? 'selected' : '' }}>Admin</option>
+                    <option value="employee" {{ $currentRole === 'employee' ? 'selected' : '' }}>Nhân viên</option>
+                    <option value="hr" {{ $currentRole === 'hr' ? 'selected' : '' }}>HR</option>
+                    <option value="accountant" {{ $currentRole === 'accountant' ? 'selected' : '' }}>Kế toán</option>
+                    <option value="director" {{ $currentRole === 'director' ? 'selected' : '' }}>Giám đốc</option>
+                    <option value="admin" {{ $currentRole === 'admin' ? 'selected' : '' }}>Admin (quản trị hệ thống)</option>
                 </select>
+                <p class="muted" style="margin:6px 0 0;font-size:13px;">Admin quản trị CNTT. Giám đốc phê duyệt nghiệp vụ. Không gán cả hai cho cùng một người.</p>
                 @error('role')<span class="error">{{ $message }}</span>@enderror
             </div>
 

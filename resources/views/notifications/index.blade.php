@@ -8,7 +8,7 @@
             <h1>Thông báo</h1>
             <p class="muted">Các thông báo hiện tại sẽ xuất hiện tại đây.</p>
         </div>
-        @if (auth()->user()->is_admin || auth()->user()->is_hr)
+        @if (auth()->user()->is_hr || auth()->user()->is_director)
             <a href="{{ route('notifications.create') }}" class="btn primary">Tạo thông báo</a>
         @endif
     </div>
