@@ -97,60 +97,59 @@ class FaceAttendanceController extends Controller
         }
 
         $today = Carbon::today();
-        $attendance = Attendance::firstOrCreate([
-            'employee_id' => $employee->id,
-            'date' => $today,
-        ]);
-
         $latitude = $data['latitude'] ?? null;
         $longitude = $data['longitude'] ?? null;
         $notes = $data['notes'] ?? null;
         $ipAddress = $request->ip();
 
-        if (!$attendance->check_in) {
-            $attendance->update([
-                'check_in' => Carbon::now(),
-                'check_in_latitude' => $latitude,
-                'check_in_longitude' => $longitude,
-                'check_in_location' => $this->formatCoordinates($latitude, $longitude),
-                'check_in_ip_address' => $ipAddress,
-                'check_in_notes' => $notes,
-                'attendance_method' => 'face',
-                'attendance_status' => 'check_in',
-            ]);
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($employee, $today, $latitude, $longitude, $notes, $ipAddress) {
+            $attendance = Attendance::lockForEmployeeDate($employee->id, $today);
+
+            if (!$attendance->check_in) {
+                $attendance->update([
+                    'check_in' => Carbon::now(),
+                    'check_in_latitude' => $latitude,
+                    'check_in_longitude' => $longitude,
+                    'check_in_location' => $this->formatCoordinates($latitude, $longitude),
+                    'check_in_ip_address' => $ipAddress,
+                    'check_in_notes' => $notes,
+                    'attendance_method' => 'face',
+                    'attendance_status' => 'check_in',
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Chấm công vào bằng khuôn mặt thành công.',
+                    'attendance' => $attendance->fresh(),
+                ]);
+            }
+
+            if (!$attendance->check_out) {
+                $attendance->update([
+                    'check_out' => Carbon::now(),
+                    'check_out_latitude' => $latitude,
+                    'check_out_longitude' => $longitude,
+                    'check_out_location' => $this->formatCoordinates($latitude, $longitude),
+                    'check_out_ip_address' => $ipAddress,
+                    'check_out_notes' => $notes,
+                    'attendance_method' => 'face',
+                    'attendance_status' => 'check_out',
+                ]);
+
+                $attendance = $this->calculationService->updateAttendanceMetrics($attendance);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Chấm công ra bằng khuôn mặt thành công.',
+                    'attendance' => $attendance,
+                ]);
+            }
 
             return response()->json([
-                'success' => true,
-                'message' => 'Chấm công vào bằng khuôn mặt thành công.',
-                'attendance' => $attendance->fresh(),
-            ]);
-        }
-
-        if (!$attendance->check_out) {
-            $attendance->update([
-                'check_out' => Carbon::now(),
-                'check_out_latitude' => $latitude,
-                'check_out_longitude' => $longitude,
-                'check_out_location' => $this->formatCoordinates($latitude, $longitude),
-                'check_out_ip_address' => $ipAddress,
-                'check_out_notes' => $notes,
-                'attendance_method' => 'face',
-                'attendance_status' => 'check_out',
-            ]);
-
-            $attendance = $this->calculationService->updateAttendanceMetrics($attendance);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Chấm công ra bằng khuôn mặt thành công.',
-                'attendance' => $attendance,
-            ]);
-        }
-
-        return response()->json([
-            'success' => false,
-            'message' => 'Bạn đã chấm công vào và ra đủ trong ngày.',
-        ], 400);
+                'success' => false,
+                'message' => 'Bạn đã chấm công vào và ra đủ trong ngày.',
+            ], 400);
+        });
     }
 
     private function formatCoordinates(?float $latitude, ?float $longitude): ?string

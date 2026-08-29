@@ -7,6 +7,7 @@ use App\Models\Attendance;
 use App\Models\Employee;
 use App\Services\AttendanceCalculationService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class SimpleAttendanceController extends Controller
@@ -49,52 +50,45 @@ class SimpleAttendanceController extends Controller
         $today = Carbon::today();
         $now = Carbon::now();
 
-        // Get or create today's attendance record
-        $attendance = Attendance::firstOrCreate([
-            'employee_id' => $employee->id,
-            'date' => $today,
-        ]);
+        return DB::transaction(function () use ($employee, $today, $now) {
+            $attendance = Attendance::lockForEmployeeDate($employee->id, $today);
 
-        // Determine if this is check-in or check-out
-        if (!$attendance->check_in) {
-            // First press - Check In
-            $attendance->update([
-                'check_in' => $now,
+            if (!$attendance->check_in) {
+                $attendance->update([
+                    'check_in' => $now,
+                ]);
+
+                $message = 'Chấm công vào lúc ' . $now->format('H:i:s') . ' thành công!';
+                $status = 'checked_in';
+            } elseif (!$attendance->check_out) {
+                $attendance->update([
+                    'check_out' => $now,
+                ]);
+
+                $attendance = $this->calculationService->updateAttendanceMetrics($attendance);
+
+                $message = 'Chấm công ra lúc ' . $now->format('H:i:s') . ' thành công!';
+                $status = 'checked_out';
+            } else {
+                $message = 'Bạn đã hoàn thành chấm công hôm nay.';
+                $status = 'completed';
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'status' => $status,
+                'attendance' => [
+                    'check_in' => $attendance->check_in?->format('H:i:s'),
+                    'check_out' => $attendance->check_out?->format('H:i:s'),
+                    'work_hours' => $attendance->work_hours,
+                    'late_minutes' => $attendance->late_minutes,
+                    'early_leave_minutes' => $attendance->early_leave_minutes,
+                    'overtime_hours' => $attendance->overtime_hours,
+                    'status_label' => $attendance->status_label ?? $attendance->status,
+                ],
             ]);
-
-            $message = 'Chấm công vào lúc ' . $now->format('H:i:s') . ' thành công!';
-            $status = 'checked_in';
-        } elseif (!$attendance->check_out) {
-            // Second press - Check Out + Calculate metrics
-            $attendance->update([
-                'check_out' => $now,
-            ]);
-
-            // Calculate all metrics after check-out
-            $attendance = $this->calculationService->updateAttendanceMetrics($attendance);
-
-            $message = 'Chấm công ra lúc ' . $now->format('H:i:s') . ' thành công!';
-            $status = 'checked_out';
-        } else {
-            // Already checked in and out
-            $message = 'Bạn đã hoàn thành chấm công hôm nay.';
-            $status = 'completed';
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => $message,
-            'status' => $status,
-            'attendance' => [
-                'check_in' => $attendance->check_in?->format('H:i:s'),
-                'check_out' => $attendance->check_out?->format('H:i:s'),
-                'work_hours' => $attendance->work_hours,
-                'late_minutes' => $attendance->late_minutes,
-                'early_leave_minutes' => $attendance->early_leave_minutes,
-                'overtime_hours' => $attendance->overtime_hours,
-                'status_label' => $attendance->status_label ?? $attendance->status,
-            ],
-        ]);
+        });
     }
 
     /**
