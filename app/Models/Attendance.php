@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class Attendance extends Model
@@ -102,6 +104,45 @@ class Attendance extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function adjustmentRequests()
+    {
+        return $this->hasMany(AttendanceAdjustmentRequest::class);
+    }
+
+    /**
+     * Khóa bản ghi chấm công trong ngày để tránh double check-in.
+     */
+    public static function lockForEmployeeDate(int $employeeId, $date): self
+    {
+        $dateString = $date instanceof Carbon ? $date->toDateString() : (string) $date;
+
+        $row = static::query()
+            ->where('employee_id', $employeeId)
+            ->whereDate('date', $dateString)
+            ->lockForUpdate()
+            ->first();
+
+        if ($row) {
+            return $row;
+        }
+
+        try {
+            $created = static::create([
+                'employee_id' => $employeeId,
+                'date' => $dateString,
+                'status' => 'absent',
+            ]);
+
+            return static::query()->whereKey($created->id)->lockForUpdate()->firstOrFail();
+        } catch (QueryException) {
+            return static::query()
+                ->where('employee_id', $employeeId)
+                ->whereDate('date', $dateString)
+                ->lockForUpdate()
+                ->firstOrFail();
+        }
     }
 
     public function approver(): BelongsTo
