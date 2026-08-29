@@ -130,7 +130,7 @@
 <body>
     <div class="toolbar">
         <div>
-            <strong>Bản in trình Giám đốc duyệt</strong>
+            <strong>Bản in trình Giám đốc phê duyệt</strong>
             <span style="opacity:.8;margin-left:8px;">Tháng {{ sprintf('%02d/%d', $month, $year) }}</span>
         </div>
         <div style="display:flex;gap:8px;">
@@ -184,15 +184,7 @@
                         <td class="num">{{ number_format((float) $p->bonus, 0, ',', '.') }}</td>
                         <td class="num">{{ number_format((float) $p->insurance + (float) $p->tax, 0, ',', '.') }}</td>
                         <td class="num"><strong>{{ number_format((float) $p->total_salary, 0, ',', '.') }}</strong></td>
-                        <td class="center">
-                            @switch($p->status)
-                                @case('pending') Chờ duyệt @break
-                                @case('waiting_confirmation') Chờ NV @break
-                                @case('ready_for_payment') Chờ TT @break
-                                @case('paid') Đã TT @break
-                                @default {{ $p->status }}
-                            @endswitch
-                        </td>
+                        <td class="center">{{ $workflow->statusLabel($p->status) }}</td>
                     </tr>
                 @empty
                     <tr>
@@ -218,8 +210,8 @@
         </table>
 
         <div class="note">
-            <strong>Ghi chú:</strong> Bảng lương tổng hợp dùng để trình Giám đốc xem xét và phê duyệt.
-            Sau khi Giám đốc duyệt, HR tiếp tục gửi xác nhận cho từng nhân viên theo quy trình thanh toán lương.
+            <strong>Ghi chú:</strong> Bảng lương tổng hợp sau khi HR xác nhận nghiệp vụ, dùng để Giám đốc phê duyệt cuối.
+            Sau khi phê duyệt cuối, hệ thống phát hành phiếu và gửi xác nhận cho từng nhân viên.
         </div>
 
         <div class="signs">
@@ -236,7 +228,7 @@
             </div>
             <div>
                 <div class="role">Giám đốc</div>
-                <div class="hint">(Duyệt — Ký, họ tên)</div>
+                <div class="hint">(Phê duyệt cuối — Ký, họ tên)</div>
                 <div class="space"></div>
             </div>
         </div>

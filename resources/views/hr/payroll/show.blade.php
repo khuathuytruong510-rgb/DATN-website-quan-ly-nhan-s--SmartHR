@@ -12,18 +12,24 @@
             <a href="{{ route('payroll.salary_history', $payroll) }}" class="btn">Lịch sử lương</a>
 
             @php $user = auth()->user(); @endphp
-            @if(($user->is_admin || $user->is_hr) && $workflow->canApprove($payroll))
+            @if($workflow->actorCanReview($user, $payroll))
+                <form method="POST" action="{{ route('payroll.review', $payroll) }}">
+                    @csrf
+                    <button type="submit" class="btn primary" onclick="return confirm('Xác nhận đã kiểm tra dữ liệu bảng lương này?')">Kiểm tra dữ liệu</button>
+                </form>
+            @endif
+            @if($workflow->actorCanFinalApprove($user, $payroll))
                 <form method="POST" action="{{ route('payroll.approve', $payroll) }}">
                     @csrf
-                    <button type="submit" class="btn primary" onclick="return confirm('Duyệt bảng lương này?')">Duyệt</button>
+                    <button type="submit" class="btn primary" onclick="return confirm('Phê duyệt cuối bảng lương này?')">Phê duyệt cuối</button>
                 </form>
             @endif
 
-            @if(($user->is_admin || $user->is_hr || $user->is_accountant) && $workflow->canRemediateIssue($payroll))
+            @if(auth()->user()->is_hr && $workflow->canRemediateIssue($payroll))
                 <a href="{{ route('payroll.issues.fix_form', $payroll) }}" class="btn primary">Khắc phục</a>
             @endif
 
-            @if(($user->is_admin || $user->is_accountant) && $workflow->canPay($payroll))
+            @if($user->is_accountant && $workflow->canPay($payroll))
                 <a href="{{ route('payroll.payment.show', $payroll) }}" class="btn" style="background:#bbf7d0;color:#166534;border:1px solid #86efac;">Thanh toán</a>
             @endif
         </div>
@@ -58,7 +64,7 @@
                     @endif
                 </p>
             </div>
-            @if($payroll->confirmation_status === 'issue_reported' && $payroll->issue_report)
+            @if(($payroll->confirmation_status === 'issue_reported' || $payroll->status === 'payroll_issue') && $payroll->issue_report)
                 <div style="margin-bottom:14px;padding:12px;border-radius:10px;background:#fff7ed;border:1px solid #fed7aa;">
                     <span style="color:#9a3412;font-size:13px;font-weight:600;">Nội dung sự cố</span>
                     <p style="margin:6px 0 0;white-space:pre-wrap;">{{ $payroll->issue_report }}</p>

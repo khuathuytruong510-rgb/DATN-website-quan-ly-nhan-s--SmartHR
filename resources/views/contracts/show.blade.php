@@ -10,7 +10,7 @@
         </div>
         <div class="d-flex gap-2">
             <a class="btn btn-outline-secondary" href="{{ route('contracts.index') }}">Quay lại</a>
-            @if(auth()->user()?->is_admin || auth()->user()?->is_hr)
+            @if(auth()->user()?->canManageHr())
                 <a class="btn btn-outline-secondary" href="{{ route('contracts.edit', $contract) }}">Sửa</a>
                 <a class="btn btn-outline-info" href="{{ route('contracts.renew', $contract) }}">Gia hạn</a>
             @endif
@@ -194,15 +194,21 @@
                         @endif
                     </div>
 
-                    @if(auth()->user()?->is_admin || auth()->user()?->is_hr || optional($contract->employee)->email === auth()->user()?->email)
+                    @if(optional($contract->employee)->email === auth()->user()?->email && ! $contract->employee_signed_at)
                     <form action="{{ route('contracts.sign', $contract) }}" method="POST" class="mb-2">
                         @csrf
-                        <input type="hidden" name="party" value="{{ optional($contract->employee)->email === auth()->user()?->email ? 'employee' : 'director' }}">
-                        <button class="btn btn-primary w-100" type="submit">✍️ Ký hợp đồng</button>
+                        <input type="hidden" name="party" value="employee">
+                        <button class="btn btn-primary w-100" type="submit">✍️ Nhân viên ký hợp đồng</button>
+                    </form>
+                    @elseif(auth()->user()?->is_director && $contract->employee_signed_at && ! $contract->director_signed_at)
+                    <form action="{{ route('contracts.sign', $contract) }}" method="POST" class="mb-2">
+                        @csrf
+                        <input type="hidden" name="party" value="director">
+                        <button class="btn btn-primary w-100" type="submit">✍️ Giám đốc ký hợp đồng</button>
                     </form>
                     @endif
 
-                    @if(in_array($contract->status, ['active','expiring','expired']) && (auth()->user()?->is_admin || auth()->user()?->is_hr))
+                    @if(in_array($contract->status, ['active','expiring','expired']) && auth()->user()?->canManageHr())
                     <a href="{{ route('contracts.renew', $contract) }}" class="btn btn-outline-success w-100">🔄 Gia hạn hợp đồng</a>
                     @endif
                 </div>
@@ -269,7 +275,7 @@
                         </tbody>
                     </table>
 
-                    @if($hasDif && (auth()->user()?->is_admin || auth()->user()?->is_hr))
+                    @if($hasDif && auth()->user()?->canManageHr())
                     <form method="POST" action="{{ route('contracts.sync_salary', $contract) }}" class="mb-2">
                         @csrf
                         <button type="submit" class="btn btn-warning w-100"

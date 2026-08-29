@@ -10,8 +10,8 @@
 
 <div class="page-head">
     <div>
-        <h1>Quản lý bảng lương</h1>
-        <p class="muted">Danh sách bảng lương</p>
+        <h1>Bảng lương</h1>
+        <p class="muted">Phiếu đã tính và trạng thái workflow. Tính lại chỉ với nháp / đã tính / sự cố. Thanh toán nằm ở mục Thanh toán lương.</p>
     </div>
     <div class="actions">
         <a class="btn primary" href="{{ route('accountant.payroll.generate') }}">Tính lương</a>
@@ -23,8 +23,11 @@
         <input name="q" placeholder="Tìm theo tên/ email/ tháng" value="{{ request('q') }}">
         <select name="status">
             <option value="">Tất cả trạng thái</option>
-            <option value="pending" {{ request('status')=='pending' ? 'selected' : '' }}>Chờ duyệt</option>
-            <option value="approved" {{ request('status')=='approved' ? 'selected' : '' }}>Đã duyệt</option>
+            <option value="calculated" {{ request('status')=='calculated' ? 'selected' : '' }}>Kế toán đã tính — chờ HR</option>
+            <option value="hr_checked" {{ request('status')=='hr_checked' ? 'selected' : '' }}>HR đã kiểm tra — chờ Giám đốc</option>
+            <option value="director_approved" {{ request('status')=='director_approved' ? 'selected' : '' }}>Giám đốc đã duyệt — chờ NV</option>
+            <option value="payroll_issue" {{ request('status')=='payroll_issue' ? 'selected' : '' }}>Sự cố lương</option>
+            <option value="employee_confirmed" {{ request('status')=='employee_confirmed' ? 'selected' : '' }}>NV đã xác nhận — chờ TT</option>
             <option value="paid" {{ request('status')=='paid' ? 'selected' : '' }}>Đã trả</option>
         </select>
         <button class="btn" type="submit">Tìm</button>
@@ -46,31 +49,21 @@
             <tbody>
                 @foreach($payrolls as $p)
                     <tr>
-                        <td>{{ $p->month }}</td>
+                        <td>{{ $p->display_month }}</td>
                         <td>{{ optional($p->employee)->name }}<br><small class="muted">{{ optional($p->employee)->email }}</small></td>
                         <td>{{ number_format($p->total_salary ?? 0,0, '.', ',') }} VNĐ</td>
                         <td>
-                            @if($p->status === 'pending')<span class="badge pending">Chờ duyệt</span>
-                            @elseif($p->status === 'approved')<span class="badge">Đã duyệt</span>
-                            @elseif($p->status === 'paid')<span class="badge bg-success">Đã trả</span>
-                            @endif
+                            <span class="badge">{{ $workflow->statusLabel($p->status) }}</span>
                         </td>
                         <td style="text-align:right; display:flex; gap:8px; justify-content:flex-end;">
                             <a class="btn" href="{{ route('accountant.payroll.show', $p) }}">Xem</a>
+                            @if(in_array($p->status, \App\Services\PayrollPaymentWorkflowService::recalculableStatuses(), true))
                             <form method="POST" action="{{ route('accountant.payroll.recalculate', $p) }}" style="display:inline;">
                                 @csrf
                                 <button class="btn" type="submit">Tính lại</button>
                             </form>
-                            @if(!$p->locked)
-                                <form method="POST" action="{{ route('accountant.payroll.lock', $p) }}" style="display:inline;">
-                                    @csrf
-                                    <button class="btn" type="submit">Khoá</button>
-                                </form>
-                            @else
-                                <form method="POST" action="{{ route('accountant.payroll.unlock', $p) }}" style="display:inline;">
-                                    @csrf
-                                    <button class="btn" type="submit">Mở khoá</button>
-                                </form>
+                            @elseif($workflow->canPay($p))
+                            <a class="btn primary" href="{{ route('payroll.payment.show', $p) }}">Thanh toán</a>
                             @endif
                         </td>
                     </tr>

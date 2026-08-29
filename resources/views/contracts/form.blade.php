@@ -298,12 +298,12 @@
     <div class="actions" style="margin-top:0;margin-bottom:0;">
         <button class="btn primary" type="submit">{{ isset($renewingFrom) ? '🔄 Tạo hợp đồng gia hạn' : 'Lưu' }}</button>
         @if(!isset($renewingFrom))
-            <button class="btn primary" type="submit" name="sign_and_save" value="1" style="background:#059669;">Lưu &amp; Ký</button>
             <button class="btn" type="button" id="exportContractButton">Xuất file hợp đồng</button>
             <button class="btn" type="submit" name="send_email" value="1">Lưu &amp; Gửi Email</button>
         @endif
         <a class="btn" href="{{ route('contracts.index') }}">Hủy</a>
     </div>
+    <p class="muted" style="margin:10px 0 0;font-size:13px;">Sau khi lưu, hợp đồng ở trạng thái chờ nhân viên ký. Nhân viên đăng nhập và ký, rồi Giám đốc ký thì hợp đồng mới có hiệu lực. HR không ký thay nhân viên.</p>
 
     </div>{{-- end scroll wrapper --}}
     </div>{{-- end flex --}}

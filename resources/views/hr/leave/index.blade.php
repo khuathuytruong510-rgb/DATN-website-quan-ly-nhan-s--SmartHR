@@ -15,19 +15,19 @@
 <div class="page-head">
     <div>
         <h1>Quản Lý Đơn Nghỉ Phép</h1>
-        <p class="muted">Quản lý trạng thái và thao tác với đơn nghỉ phép.</p>
+        <p class="muted">Nhân viên gửi đơn → HR duyệt/từ chối. Đơn đã duyệt được kế toán dùng làm dữ liệu đầu vào khi tính lương. Giám đốc không duyệt từng đơn nghỉ phép.</p>
     </div>
 </div>
 
 <div class="filter-card">
     <form method="GET" class="filter-row" style="gap: 15px; align-items: flex-end;">
         <div class="field">
-            <label>Trạng Lý Đơn Nghỉ Phép</label>
+            <label>Trạng thái</label>
             <select name="status">
                 <option value="">-- Tất cả trạng thái --</option>
                 <option value="pending" {{ request('status') === 'pending' ? 'selected' : '' }}>Chờ duyệt</option>
                 <option value="approved" {{ request('status') === 'approved' ? 'selected' : '' }}>Đã duyệt</option>
-                <option value="rejected" {{ request('status') === 'rejected' ? 'selected' : '' }}>Từ chối</option>
+                <option value="cancelled" {{ request('status') === 'cancelled' ? 'selected' : '' }}>Đã hủy</option>
             </select>
         </div>
         
@@ -51,7 +51,9 @@
 
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
     <div style="flex: 1;"></div>
+    @if(auth()->user()?->is_hr)
     <a href="{{ route('leave_requests.create') }}" class="btn primary btn-create">+ Tạo Đơn Xin Nghỉ</a>
+    @endif
 </div>
 
 @if($leaveRequests->count())
@@ -107,6 +109,7 @@
                             ">
                                 @if($leave->status === 'approved') ✓ Đã duyệt
                                 @elseif($leave->status === 'rejected') ✗ Từ chối
+                                @elseif($leave->status === 'cancelled') Đã hủy
                                 @else ⏳ Chờ duyệt
                                 @endif
                             </span>
@@ -123,12 +126,10 @@
                         </td>
                         <td>
                             <div class="actions">
-                                @if($leave->status === 'pending')
+                                @if($leave->status === 'pending' && $currentUser->is_hr)
                                     <form method="POST" action="{{ route('leave_requests.approve', $leave) }}" style="display:inline">
                                         @csrf
-                                        <button class="btn" type="submit">
-                                            {{ $currentUser->is_admin ? 'Duyệt' : 'Xác nhận' }}
-                                        </button>
+                                        <button class="btn" type="submit">Duyệt</button>
                                     </form>
                                     <form method="POST" action="{{ route('leave_requests.reject', $leave) }}" style="display:inline" onsubmit="return submitRejectReason(this)">
                                         @csrf
@@ -136,8 +137,8 @@
                                         <button class="btn" type="submit">Từ chối</button>
                                     </form>
                                 @endif
-                                @if($currentUser->is_admin)
-                                    <form method="POST" action="{{ route('leave_requests.destroy', $leave) }}" style="display:inline" onsubmit="return confirm('Xóa đơn nghỉ phép này?')">
+                                @if($currentUser->is_hr && $leave->status === 'pending')
+                                    <form method="POST" action="{{ route('leave_requests.destroy', $leave) }}" style="display:inline" onsubmit="return confirm('Xóa đơn nghỉ phép đang chờ duyệt?')">
                                         @csrf
                                         @method('DELETE')
                                         <button class="btn danger" type="submit">Xóa</button>

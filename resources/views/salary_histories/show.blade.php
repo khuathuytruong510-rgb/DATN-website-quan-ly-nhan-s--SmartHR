@@ -5,7 +5,7 @@
 @section('content')
 @php
     $user = auth()->user();
-    $isStaff = $user && ($user->is_admin || $user->is_hr || $user->is_accountant);
+    $isStaff = $user && $user->isStaffUser();
     $backUrl = $isStaff ? route('salary_histories.index') : route('me.salary_histories');
     $employee = $salaryHistory->employee;
     $status = $salaryHistory->status ?? 'pending';

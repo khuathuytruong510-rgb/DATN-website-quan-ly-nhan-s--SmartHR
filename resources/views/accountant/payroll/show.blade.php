@@ -16,31 +16,27 @@
     </div>
     <div class="actions">
         <a class="btn" href="{{ route('accountant.payroll.index') }}">Quay lại</a>
+        @if($workflow->isDirectorApproved($payroll->status) || $workflow->canPay($payroll))
         <form method="POST" action="{{ route('accountant.payroll.send_email', $payroll) }}" style="display:inline;">
             @csrf
-            <button class="btn" type="submit">Gửi email</button>
+            <button class="btn" type="submit">Gửi email xác nhận</button>
         </form>
+        @endif
+        @if(in_array($payroll->status, \App\Services\PayrollPaymentWorkflowService::recalculableStatuses(), true))
         <form method="POST" action="{{ route('accountant.payroll.recalculate', $payroll) }}" style="display:inline;">
             @csrf
             <button class="btn" type="submit">Tính lại</button>
         </form>
-        @if(!$payroll->locked)
-            <form method="POST" action="{{ route('accountant.payroll.lock', $payroll) }}" style="display:inline;">
-                @csrf
-                <button class="btn" type="submit">Khoá</button>
-            </form>
-        @else
-            <form method="POST" action="{{ route('accountant.payroll.unlock', $payroll) }}" style="display:inline;">
-                @csrf
-                <button class="btn" type="submit">Mở khoá</button>
-            </form>
+        @endif
+        @if($workflow->canPay($payroll))
+        <a class="btn primary" href="{{ route('payroll.payment.show', $payroll) }}">Thanh toán</a>
         @endif
     </div>
 </div>
 
 <div class="card">
     <div style="margin-bottom:12px;">
-        <strong>Tháng:</strong> {{ $payroll->month }}
+        <strong>Tháng:</strong> {{ $payroll->display_month }}
     </div>
     <div style="margin-bottom:12px;">
         <strong>Nhân viên:</strong> {{ optional($payroll->employee)->name }} ({{ optional($payroll->employee)->email }})
@@ -50,9 +46,8 @@
     </div>
     <div>
         <strong>Trạng thái:</strong>
-        @if($payroll->status === 'pending')<span class="badge pending">Chờ duyệt</span>
-        @elseif($payroll->status === 'approved')<span class="badge">Đã duyệt</span>
-        @elseif($payroll->status === 'paid')<span class="badge bg-success">Đã trả</span>
+        @if($payroll->status === 'paid')<span class="badge bg-success">{{ $workflow->statusLabel($payroll->status) }}</span>
+        @else<span class="badge">{{ $workflow->statusLabel($payroll->status) }}</span>
         @endif
     </div>
 </div>

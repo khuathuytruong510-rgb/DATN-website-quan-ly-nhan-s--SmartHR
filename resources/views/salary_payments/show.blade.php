@@ -107,7 +107,7 @@
 
             {{-- Action Buttons --}}
             <div class="mb-4">
-                @if($salaryPayment->status === 'pending')
+                @if($salaryPayment->status === 'pending' && auth()->user()?->is_accountant)
                     <a href="{{ route('salary_payments.edit', $salaryPayment) }}" class="btn btn-warning">
                         <i class="bi bi-pencil"></i> Chỉnh sửa
                     </a>
