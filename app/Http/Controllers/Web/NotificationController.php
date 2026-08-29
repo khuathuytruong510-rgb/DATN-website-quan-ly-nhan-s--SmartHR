@@ -20,8 +20,7 @@ class NotificationController extends Controller
                 $query->where('target', 'all')
                     ->orWhere('target', 'hr');
 
-                // Admin cũng xem được mọi thông báo hệ thống gửi tới HR
-                if ($user->is_admin) {
+                if ($user->is_director || $user->is_hr) {
                     $query->orWhere('target', 'employee');
                 }
             })

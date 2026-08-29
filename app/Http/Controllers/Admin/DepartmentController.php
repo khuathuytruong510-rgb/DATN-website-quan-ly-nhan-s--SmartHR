@@ -34,7 +34,7 @@ class DepartmentController extends ApiController
 
     public function store(Request $request): \Illuminate\Http\JsonResponse
     {
-        $this->currentUser($request);
+        $this->requireHr($request);
 
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
@@ -53,7 +53,7 @@ class DepartmentController extends ApiController
 
     public function update(Request $request, $id): \Illuminate\Http\JsonResponse
     {
-        $this->currentUser($request);
+        $this->requireHr($request);
         $department = Department::findOrFail($id);
 
         $validator = Validator::make($request->all(), [
@@ -73,7 +73,7 @@ class DepartmentController extends ApiController
 
     public function destroy(Request $request, $id): \Illuminate\Http\JsonResponse
     {
-        $this->currentUser($request);
+        $this->requireHr($request);
         $department = Department::findOrFail($id);
         $department->delete();
 

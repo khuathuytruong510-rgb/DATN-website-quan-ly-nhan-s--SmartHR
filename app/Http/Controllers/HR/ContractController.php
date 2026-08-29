@@ -37,7 +37,7 @@ class ContractController extends ApiController
 
     public function store(Request $request): \Illuminate\Http\JsonResponse
     {
-        $this->currentUser($request);
+        $this->requireHr($request);
 
         $validator = Validator::make($request->all(), [
             'employee_id' => 'required|exists:employees,id',
@@ -45,21 +45,22 @@ class ContractController extends ApiController
             'salary' => 'required|numeric|min:0',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
-            'status' => 'nullable|in:active,expired,pending',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $contract = Contract::create(array_merge($validator->validated(), ['status' => $request->input('status', 'active')]));
+        $contract = Contract::create(array_merge($validator->validated(), [
+            'status' => Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE,
+        ]));
 
         return response()->json($contract, 201);
     }
 
     public function update(Request $request, $id): \Illuminate\Http\JsonResponse
     {
-        $this->currentUser($request);
+        $this->requireHr($request);
 
         $contract = Contract::findOrFail($id);
 
@@ -69,14 +70,20 @@ class ContractController extends ApiController
             'salary' => 'sometimes|required|numeric|min:0',
             'start_date' => 'sometimes|required|date',
             'end_date' => 'sometimes|required|date|after_or_equal:start_date',
-            'status' => 'nullable|in:active,expired,pending',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $data = $validator->validated();
+        $data = collect($validator->validated())->except([
+            'status',
+            'contract_status',
+            'employee_signed_at',
+            'director_signed_at',
+            'signed_employee_at',
+            'signed_director_at',
+        ])->all();
         $contract->update($data);
 
         return response()->json($contract);
@@ -84,7 +91,7 @@ class ContractController extends ApiController
 
     public function destroy(Request $request, $id): \Illuminate\Http\JsonResponse
     {
-        $this->currentUser($request);
+        $this->requireHr($request);
 
         $contract = Contract::findOrFail($id);
         $contract->delete();

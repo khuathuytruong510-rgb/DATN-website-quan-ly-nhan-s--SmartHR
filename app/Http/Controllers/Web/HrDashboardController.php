@@ -11,7 +11,6 @@ use App\Models\LeaveRequest;
 use App\Models\OvertimeRequest;
 use App\Models\Payroll;
 use App\Models\Position;
-use App\Models\Recruitment;
 use App\Models\SalaryAdvance;
 use App\Models\SupportRequest;
 use App\Models\User;
@@ -34,7 +33,6 @@ class HrDashboardController extends Controller
         $attendanceStats = $this->getAttendanceStats($start, $end, $isAll);
         $payrollStats = $this->getPayrollStats($start, $end, $isAll);
         $contractStats = $this->getContractStats();
-        $recruitmentStats = $this->getRecruitmentStats();
         $requestStats = $this->getRequestStats($start, $end, $isAll);
         $accountStats = $this->getAccountStats();
         $rewardStats = $this->getRewardStats();
@@ -43,7 +41,7 @@ class HrDashboardController extends Controller
 
         return view('statistics.hr-dashboard', compact(
             'hrOverview', 'departmentStats', 'attendanceStats', 'payrollStats',
-            'contractStats', 'recruitmentStats', 'requestStats', 'accountStats',
+            'contractStats', 'requestStats', 'accountStats',
             'rewardStats', 'monthlyPayrollTrend', 'monthlyNewEmployees',
             'periodLabel', 'start', 'end', 'isAll'
         ));
@@ -275,24 +273,6 @@ class HrDashboardController extends Controller
         return compact('total', 'active', 'expiringSoon', 'expired', 'byType');
     }
 
-    // ========== 6. THỐNG KÊ TUYỂN DỤNG ==========
-    private function getRecruitmentStats(): array
-    {
-        try {
-            $openPositions = Recruitment::where('status', 'open')->count();
-            $totalApplications = Recruitment::count();
-            $hired = Recruitment::where('status', 'hired')->count();
-            $rejected = Recruitment::where('status', 'rejected')->count();
-        } catch (\Exception $e) {
-            $openPositions = 0;
-            $totalApplications = 0;
-            $hired = 0;
-            $rejected = 0;
-        }
-
-        return compact('openPositions', 'totalApplications', 'hired', 'rejected');
-    }
-
     // ========== 7. THỐNG KÊ ĐƠN TỪ ==========
     private function getRequestStats(Carbon $start, Carbon $end, bool $isAll): array
     {
@@ -349,13 +329,14 @@ class HrDashboardController extends Controller
     {
         $total = User::count();
         $admin = User::where('is_admin', true)->count();
+        $director = User::where('is_director', true)->count();
         $hr = User::where('is_hr', true)->count();
         $accountant = User::where('is_accountant', true)->count();
-        $employee = User::where('is_admin', false)->where('is_hr', false)->where('is_accountant', false)->count();
+        $employee = User::where('is_admin', false)->where('is_director', false)->where('is_hr', false)->where('is_accountant', false)->count();
         $locked = User::where('is_locked', true)->count();
         $active = User::where('is_locked', false)->count();
 
-        return compact('total', 'admin', 'hr', 'accountant', 'employee', 'locked', 'active');
+        return compact('total', 'admin', 'director', 'hr', 'accountant', 'employee', 'locked', 'active');
     }
 
     // ========== 9. THỐNG KÊ KHEN THƯỞNG ==========
@@ -369,9 +350,9 @@ class HrDashboardController extends Controller
     }
 
     // ========== BIỂU ĐỒ XU HƯỚNG ==========
-    private function getMonthlyPayrollTrend(): array
+    private function getMonthlyPayrollTrend(): \Illuminate\Support\Collection
     {
-        $trend = [];
+        $trend = collect();
         for ($i = 11; $i >= 0; $i--) {
             $date = Carbon::now()->subMonths($i);
             $m = (int) $date->format('m');
@@ -381,19 +362,19 @@ class HrDashboardController extends Controller
                 ->selectRaw('COALESCE(SUM(total_salary), 0) as total_net, COUNT(*) as cnt')
                 ->first();
 
-            $trend[] = [
+            $trend->push([
                 'label' => $date->format('m/Y'),
                 'total' => (float) $stats->total_net,
                 'count' => (int) $stats->cnt,
-            ];
+            ]);
         }
 
         return $trend;
     }
 
-    private function getMonthlyNewEmployees(): array
+    private function getMonthlyNewEmployees(): \Illuminate\Support\Collection
     {
-        $trend = [];
+        $trend = collect();
         for ($i = 11; $i >= 0; $i--) {
             $date = Carbon::now()->subMonths($i);
             $s = $date->copy()->startOfMonth();
@@ -403,10 +384,10 @@ class HrDashboardController extends Controller
                 ->where('start_date', '<=', $e)
                 ->count();
 
-            $trend[] = [
+            $trend->push([
                 'label' => $date->format('m/Y'),
                 'count' => $count,
-            ];
+            ]);
         }
 
         return $trend;
@@ -480,6 +461,7 @@ class HrDashboardController extends Controller
         $csv .= "Chỉ số;Giá trị\n";
         $csv .= "Tổng số tài khoản;{$accountStats['total']}\n";
         $csv .= "Admin;{$accountStats['admin']}\n";
+        $csv .= "Giám đốc;{$accountStats['director']}\n";
         $csv .= "HR;{$accountStats['hr']}\n";
         $csv .= "Kế toán;{$accountStats['accountant']}\n";
         $csv .= "Nhân viên;{$accountStats['employee']}\n";
@@ -605,6 +587,7 @@ th { background: #f8f8f8; }
 <tr><th>Chỉ số</th><th>Giá trị</th></tr>
 <tr><td>Tổng số tài khoản</td><td>{$accountStats['total']}</td></tr>
 <tr><td>Admin</td><td>{$accountStats['admin']}</td></tr>
+<tr><td>Giám đốc</td><td>{$accountStats['director']}</td></tr>
 <tr><td>HR</td><td>{$accountStats['hr']}</td></tr>
 <tr><td>Kế toán</td><td>{$accountStats['accountant']}</td></tr>
 <tr><td>Nhân viên</td><td>{$accountStats['employee']}</td></tr>

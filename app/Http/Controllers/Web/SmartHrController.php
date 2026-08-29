@@ -17,7 +17,6 @@ use App\Models\Notification;
 use App\Models\Position;
 use App\Models\User;
 use App\Models\OvertimeRequest;
-use App\Models\Recruitment;
 use App\Models\SalaryAdvance;
 use App\Models\SupportRequest;
 use App\Traits\HasLeaveLimit;
@@ -33,7 +32,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 use App\Mail\PayrollConfirmationMail;
 use App\Services\ContractService;
 use App\Services\EvaluationService;
-use App\Services\PayrollCalculationService;
+use App\Services\PayrollPaymentWorkflowService;
 use App\Support\ContractFixedTerms;
 use Illuminate\Support\Facades\Mail;
 
@@ -70,19 +69,23 @@ class SmartHrController extends Controller
 
         // Check if user is an employee or a privileged staff
         $user = Auth::user();
-        $employee = Employee::where('user_id', $user->id)->first();
-        if ($user->is_admin || $user->is_hr || $user->is_accountant) {
+        if ($user->isStaffUser()) {
+            if ($user->is_accountant && ! $user->is_hr && ! $user->is_admin && ! $user->is_director) {
+                return redirect()->intended(route('accountant.dashboard'))
+                    ->with('success', 'Đăng nhập thành công! Chào mừng ' . $user->name);
+            }
+
             return redirect()->intended(route('dashboard'))
                 ->with('success', 'Đăng nhập thành công! Chào mừng ' . $user->name);
         }
 
-        if ($employee) {
-            return redirect()->intended(route('me.attendance'))
+        if ($user->linkedEmployee()) {
+            return redirect()->intended(route('me.dashboard'))
                 ->with('success', 'Đăng nhập thành công! Chào mừng ' . $user->name);
         }
 
-        return redirect()->intended(route('dashboard'))
-            ->with('success', 'Đăng nhập thành công! Chào mừng ' . $user->name);
+        return redirect()->route('me.unlinked')
+            ->with('success', 'Đăng nhập thành công. Tài khoản chưa được gắn hồ sơ nhân viên.');
     }
 
     public function showRegister(): View
@@ -107,7 +110,7 @@ class SmartHrController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        return redirect()->route('dashboard')->with('success', 'Đăng ký tài khoản thành công.');
+        return redirect()->route('me.unlinked')->with('success', 'Đăng ký tài khoản thành công. Liên hệ HR để được gắn hồ sơ nhân viên.');
     }
 
     public function logout(Request $request): RedirectResponse
@@ -123,7 +126,15 @@ class SmartHrController extends Controller
     {
         $user = auth()->user();
 
-        if ($user->is_admin || $user->is_hr || $user->is_accountant) {
+        if ($user->isStaffUser()) {
+            if ($user->is_director && ! $user->is_hr && ! $user->is_admin) {
+                return $this->directorDashboard();
+            }
+
+            if ($user->is_accountant && ! $user->is_hr && ! $user->is_admin && ! $user->is_director) {
+                return redirect()->route('accountant.dashboard');
+            }
+
             // 1. Tổng quan nhân sự
             $hrOverview = [
                 'totalEmployees'     => Employee::count(),
@@ -234,23 +245,15 @@ class SmartHrController extends Controller
             $accountStats = [
                 'total'     => User::count(),
                 'admin'     => User::where('is_admin', true)->count(),
+                'director'  => User::where('is_director', true)->count(),
                 'hr'        => User::where('is_hr', true)->count(),
                 'accountant'=> User::where('is_accountant', true)->count(),
-                'employee'  => User::where('is_admin', false)->where('is_hr', false)->where('is_accountant', false)->count(),
+                'employee'  => User::where('is_admin', false)->where('is_director', false)->where('is_hr', false)->where('is_accountant', false)->count(),
                 'locked'    => User::where('is_locked', true)->count(),
                 'active'    => User::where('is_locked', false)->count(),
             ];
 
-            // 8. Tuyển dụng
-            $recruitmentStats = ['openPositions' => 0, 'totalApplications' => 0, 'hired' => 0, 'rejected' => 0];
-            try {
-                $recruitmentStats['openPositions']    = Recruitment::where('status', 'open')->count();
-                $recruitmentStats['totalApplications']= Recruitment::count();
-                $recruitmentStats['hired']            = Recruitment::where('status', 'hired')->count();
-                $recruitmentStats['rejected']         = Recruitment::where('status', 'rejected')->count();
-            } catch (\Exception $e) {}
-
-            // 9. Xu hướng 12 tháng
+            // 8. Xu hướng 12 tháng
             $monthlyPayrollTrend = collect();
             $monthlyNewEmployees = collect();
             for ($i = 11; $i >= 0; $i--) {
@@ -277,12 +280,102 @@ class SmartHrController extends Controller
 
             return view('admin.dashboard', compact(
                 'hrOverview', 'departmentStats', 'attendanceStats', 'payrollStats',
-                'contractStats', 'requestStats', 'accountStats', 'recruitmentStats',
+                'contractStats', 'requestStats', 'accountStats',
                 'monthlyPayrollTrend', 'monthlyNewEmployees', 'expiringContracts'
             ));
         }
 
-        return redirect()->route('me.dashboard');
+        if ($user->linkedEmployee()) {
+            return redirect()->route('me.dashboard');
+        }
+
+        return redirect()->route('me.unlinked');
+    }
+
+    protected function directorDashboard(): View
+    {
+        $now = now();
+        $month = $now->month;
+        $year = $now->year;
+        $monthStart = $now->copy()->startOfMonth()->toDateString();
+        $monthEnd = $now->copy()->endOfMonth()->toDateString();
+
+        $people = [
+            'total' => Employee::count(),
+            'active' => Employee::where('status', 'active')->count(),
+            'probation' => Employee::whereHas('contracts', fn ($q) => $q->where('contract_type', 'probation')->where('status', 'active'))->count(),
+            'inactive' => Employee::where('status', 'inactive')->count(),
+            'joinedThisMonth' => Employee::whereBetween('start_date', [$monthStart, $monthEnd])->count(),
+        ];
+
+        $waitingContractStatuses = [
+            Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE,
+            Contract::STATUS_WAITING_DIRECTOR_SIGNATURE,
+            'waiting_employee',
+            'waiting_director',
+        ];
+
+        $contracts = [
+            'active' => Contract::where('status', 'active')->count(),
+            'waitingSign' => Contract::whereIn('status', $waitingContractStatuses)->count(),
+            'expiringSoon' => Contract::where('status', 'active')
+                ->whereNotNull('end_date')
+                ->whereBetween('end_date', [$now->toDateString(), $now->copy()->addDays(30)->toDateString()])
+                ->count(),
+        ];
+
+        $payrollQuery = Payroll::where('month', $month)->where('year', $year);
+        $approvedByDirector = array_values(array_unique(array_merge(
+            PayrollPaymentWorkflowService::directorApprovedStatuses(),
+            PayrollPaymentWorkflowService::payableStatuses(),
+            [PayrollPaymentWorkflowService::PAID]
+        )));
+        $payroll = [
+            'month' => $month,
+            'year' => $year,
+            'totalFund' => (clone $payrollQuery)->sum('total_salary'),
+            'awaitingDirector' => (clone $payrollQuery)->whereIn('status', PayrollPaymentWorkflowService::hrCheckedStatuses())->count(),
+            'approved' => (clone $payrollQuery)->whereIn('status', $approvedByDirector)->count(),
+            'awaitingEmployee' => (clone $payrollQuery)->whereIn('status', PayrollPaymentWorkflowService::directorApprovedStatuses())->count(),
+            'awaitingPayment' => (clone $payrollQuery)->whereIn('status', PayrollPaymentWorkflowService::payableStatuses())->count(),
+            'paid' => (clone $payrollQuery)->where('status', PayrollPaymentWorkflowService::PAID)->count(),
+            'issues' => (clone $payrollQuery)->where('status', PayrollPaymentWorkflowService::PAYROLL_ISSUE)->count(),
+        ];
+
+        $approvedLeaves = LeaveRequest::where('status', 'approved')
+            ->where(function ($q) use ($monthStart, $monthEnd) {
+                $q->whereBetween('start_date', [$monthStart, $monthEnd])
+                    ->orWhereBetween('end_date', [$monthStart, $monthEnd]);
+            });
+
+        $leave = [
+            'pending' => LeaveRequest::where('status', 'pending')->count(),
+            'days' => (clone $approvedLeaves)->sum('days'),
+            'paidDays' => (clone $approvedLeaves)->whereIn('type', ['annual', 'sick'])->sum('days'),
+            'unpaidDays' => (clone $approvedLeaves)->whereIn('type', ['unpaid', 'personal'])->sum('days'),
+        ];
+
+        $attendanceQuery = Attendance::whereBetween('date', [$monthStart, $monthEnd]);
+        $attendance = [
+            'full' => (clone $payrollQuery)->whereRaw('(COALESCE(working_days, 0) + COALESCE(paid_leave_days, 0)) >= COALESCE(required_working_days, 26)')->count(),
+            'short' => (clone $payrollQuery)->whereRaw('(COALESCE(working_days, 0) + COALESCE(paid_leave_days, 0)) < COALESCE(required_working_days, 26)')->count(),
+            'late' => (clone $attendanceQuery)->where(function ($q) {
+                $q->where('status', 'late')->orWhere('late_minutes', '>', 0);
+            })->count(),
+            'absent' => (clone $attendanceQuery)->where('status', 'absent')->count(),
+        ];
+
+        $expiringContracts = Contract::with(['employee.department'])
+            ->where('status', 'active')
+            ->whereNotNull('end_date')
+            ->whereBetween('end_date', [now()->toDateString(), now()->addDays(30)->toDateString()])
+            ->orderBy('end_date')
+            ->limit(8)
+            ->get();
+
+        return view('director.dashboard', compact(
+            'people', 'contracts', 'payroll', 'leave', 'attendance', 'expiringContracts'
+        ));
     }
 
     public function positions(): View
@@ -348,18 +441,15 @@ class SmartHrController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => $emailRules,
             'password' => ['required', 'string', 'min:6', 'confirmed'],
-            'role' => ['required', 'in:employee,hr,admin,accountant'],
-            'department_id' => ['required_if:role,employee,hr,accountant', 'nullable', 'exists:departments,id'],
+            'role' => ['required', 'in:employee,hr,admin,accountant,director'],
+            'department_id' => ['required_if:role,employee,hr,accountant,director', 'nullable', 'exists:departments,id'],
         ]);
 
-        $user = User::create([
+        $user = User::create(array_merge([
             'name' => $data['name'],
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
-            'is_admin' => $data['role'] === 'admin',
-            'is_hr' => $data['role'] === 'hr',
-            'is_accountant' => $data['role'] === 'accountant',
-        ]);
+        ], $this->roleFlags($data['role'])));
 
         if ($data['role'] !== 'admin') {
             $department = Department::findOrFail($data['department_id']);
@@ -368,7 +458,7 @@ class SmartHrController extends Controller
                 'name' => $data['name'],
                 'email' => $data['email'],
                 'employee_code' => Employee::generateUniqueEmployeeCode($department),
-                'position' => $data['role'] === 'hr' ? 'HR' : ($data['role'] === 'accountant' ? 'Kế toán' : 'Nhân viên'),
+                'position' => $this->positionForRole($data['role']),
                 'department_id' => $data['department_id'],
                 'status' => 'active',
             ]);
@@ -391,17 +481,14 @@ class SmartHrController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
             'password' => ['nullable', 'string', 'min:6', 'confirmed'],
-            'role' => ['required', 'in:employee,hr,admin,accountant'],
-            'department_id' => ['required_if:role,employee,hr,accountant', 'nullable', 'exists:departments,id'],
+            'role' => ['required', 'in:employee,hr,admin,accountant,director'],
+            'department_id' => ['required_if:role,employee,hr,accountant,director', 'nullable', 'exists:departments,id'],
         ]);
 
-        $update = [
+        $update = array_merge([
             'name' => $data['name'],
             'email' => $data['email'],
-            'is_admin' => $data['role'] === 'admin',
-            'is_hr' => $data['role'] === 'hr',
-            'is_accountant' => $data['role'] === 'accountant',
-        ];
+        ], $this->roleFlags($data['role']));
 
         if (! empty($data['password'])) {
             $update['password'] = Hash::make($data['password']);
@@ -417,7 +504,7 @@ class SmartHrController extends Controller
                 [
                     'name' => $data['name'],
                     'email' => $data['email'],
-                    'position' => $data['role'] === 'hr' ? 'HR' : ($data['role'] === 'accountant' ? 'Kế toán' : 'Nhân viên'),
+                    'position' => $this->positionForRole($data['role']),
                     'department_id' => $data['department_id'],
                     'status' => 'active',
                 ]
@@ -503,6 +590,7 @@ class SmartHrController extends Controller
     {
         $user->update([
             'is_admin' => $request->boolean('is_admin'),
+            'is_director' => $request->boolean('is_director'),
             'is_hr' => $request->boolean('is_hr'),
             'is_accountant' => $request->boolean('is_accountant'),
         ]);
@@ -575,12 +663,17 @@ class SmartHrController extends Controller
         }
 
         return view('employees.index', [
-            'employees' => Employee::with('department')->latest()->paginate(10),
+            'employees' => Employee::with([
+                'department',
+                'contracts' => fn ($q) => $q->latest('id'),
+            ])->latest()->paginate(10),
         ]);
     }
 
     public function createEmployee(): View
     {
+        abort_if(auth()->user()?->is_director && ! auth()->user()?->canManageHr(), 403, 'Giám đốc chỉ được xem thông tin nhân viên phục vụ phê duyệt.');
+
         $employee = new Employee(['status' => 'active']);
         return view('employees.form', [
             'employee' => $employee,
@@ -615,6 +708,8 @@ class SmartHrController extends Controller
 
     public function editEmployee(Employee $employee): View
     {
+        abort_if(auth()->user()?->is_director && ! auth()->user()?->canManageHr(), 403, 'Giám đốc chỉ được xem thông tin nhân viên phục vụ phê duyệt.');
+
         return view('employees.form', [
             'employee' => $employee,
             'departments' => Department::orderBy('name')->get(),
@@ -658,7 +753,7 @@ class SmartHrController extends Controller
         $user = Auth::user();
         $query = Contract::with('employee.department');
 
-        if ($user && ! $user->is_admin && ! $user->is_hr) {
+        if ($user && ! $user->is_hr && ! $user->is_director) {
             $employee = Employee::where('email', $user->email)->first();
             if ($employee) {
                 $query->where('employee_id', $employee->id);
@@ -676,7 +771,123 @@ class SmartHrController extends Controller
     {
         return view('hr.attendance.index', [
             'attendances' => Attendance::with('employee')->latest()->paginate(10),
+            'adjustmentRequests' => \App\Models\AttendanceAdjustmentRequest::with(['employee', 'attendance'])
+                ->where('status', \App\Models\AttendanceAdjustmentRequest::PENDING)
+                ->latest()
+                ->limit(20)
+                ->get(),
         ]);
+    }
+
+    public function approveAttendanceAdjustment(Request $request, \App\Models\AttendanceAdjustmentRequest $adjustment): RedirectResponse
+    {
+        if (! $this->isHROrAdmin()) {
+            abort(403);
+        }
+
+        try {
+            $lockedPeriod = false;
+            DB::transaction(function () use ($request, $adjustment, &$lockedPeriod) {
+                $row = \App\Models\AttendanceAdjustmentRequest::query()->whereKey($adjustment->id)->lockForUpdate()->firstOrFail();
+                if ($row->status !== \App\Models\AttendanceAdjustmentRequest::PENDING) {
+                    throw new \RuntimeException('Yêu cầu này đã được xử lý.');
+                }
+
+                $attendance = \App\Models\Attendance::query()->whereKey($row->attendance_id)->lockForUpdate()->first();
+                if (! $attendance) {
+                    throw new \RuntimeException('Không tìm thấy bản ghi chấm công.');
+                }
+
+                $note = trim((string) $request->input('review_note', ''));
+                $locked = false;
+                try {
+                    app(\App\Services\PayrollPeriodLockService::class)->assertWritableDate($attendance->date, 'chấm công');
+                } catch (\Throwable $e) {
+                    $locked = true;
+                    $note = $note !== '' ? $note : $e->getMessage();
+                }
+                $lockedPeriod = $locked;
+
+                $appliedAt = null;
+                if (! $locked) {
+                    $payload = [];
+                    if ($row->requested_check_in) {
+                        $payload['check_in'] = $row->requested_check_in;
+                    }
+                    if ($row->requested_check_out) {
+                        $payload['check_out'] = $row->requested_check_out;
+                    }
+                    if ($payload !== []) {
+                        $attendance->update($payload);
+                    }
+                    $appliedAt = now();
+                }
+
+                $row->update([
+                    'status' => \App\Models\AttendanceAdjustmentRequest::APPROVED,
+                    'reviewed_by' => Auth::id(),
+                    'reviewed_at' => now(),
+                    'applied_at' => $appliedAt,
+                    'review_note' => $locked
+                        ? ('Ngoại lệ — kỳ đã khóa, chưa ghi giờ lên bản ghi. '.$note)
+                        : ($note !== '' ? $note : 'HR duyệt yêu cầu điều chỉnh'),
+                ]);
+
+                \App\Models\ActivityLog::create([
+                    'user_id' => Auth::id(),
+                    'action' => 'attendance_adjustment_approved',
+                    'meta' => sprintf(
+                        'adjustment:%d;attendance:%d;applied:%s;note:%s',
+                        $row->id,
+                        $attendance->id,
+                        $appliedAt ? 'yes' : 'no',
+                        $row->review_note
+                    ),
+                ]);
+            });
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with(
+            'success',
+            $lockedPeriod
+                ? 'Đã ghi nhận ngoại lệ (kỳ khóa). Không sửa trực tiếp giờ chấm công.'
+                : 'Đã duyệt và cập nhật giờ chấm công theo đề nghị.'
+        );
+    }
+
+    public function rejectAttendanceAdjustment(Request $request, \App\Models\AttendanceAdjustmentRequest $adjustment): RedirectResponse
+    {
+        if (! $this->isHROrAdmin()) {
+            abort(403);
+        }
+
+        try {
+            DB::transaction(function () use ($request, $adjustment) {
+                $row = \App\Models\AttendanceAdjustmentRequest::query()->whereKey($adjustment->id)->lockForUpdate()->firstOrFail();
+                if ($row->status !== \App\Models\AttendanceAdjustmentRequest::PENDING) {
+                    throw new \RuntimeException('Yêu cầu này đã được xử lý.');
+                }
+
+                $row->update([
+                    'status' => \App\Models\AttendanceAdjustmentRequest::REJECTED,
+                    'reviewed_by' => Auth::id(),
+                    'reviewed_at' => now(),
+                    'review_note' => $request->input('review_note') ?: 'HR từ chối yêu cầu điều chỉnh',
+                ]);
+
+                \App\Models\ActivityLog::create([
+                    'user_id' => Auth::id(),
+                    'action' => 'attendance_adjustment_rejected',
+                    'meta' => 'adjustment:'.$row->id,
+                ]);
+            });
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Đã từ chối yêu cầu điều chỉnh chấm công.');
     }
 
     public function createAttendance(): View
@@ -692,7 +903,15 @@ class SmartHrController extends Controller
 
     public function storeAttendance(Request $request): RedirectResponse
     {
-        $attendance = Attendance::create($this->validateAttendance($request));
+        $data = $this->validateAttendance($request);
+
+        try {
+            app(\App\Services\PayrollPeriodLockService::class)->assertWritableDate($data['date'], 'chấm công');
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        }
+
+        Attendance::create($data);
 
         return redirect()->route('attendance.index')->with('success', 'Thêm bản ghi chấm công thành công.');
     }
@@ -707,13 +926,29 @@ class SmartHrController extends Controller
 
     public function updateAttendance(Request $request, Attendance $attendance): RedirectResponse
     {
-        $attendance->update($this->validateAttendance($request));
+        $data = $this->validateAttendance($request);
+
+        try {
+            $locks = app(\App\Services\PayrollPeriodLockService::class);
+            $locks->assertWritableDate($attendance->date, 'chấm công');
+            $locks->assertWritableDate($data['date'], 'chấm công');
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        }
+
+        $attendance->update($data);
 
         return redirect()->route('attendance.index')->with('success', 'Cập nhật bản ghi chấm công thành công.');
     }
 
     public function destroyAttendance(Attendance $attendance): RedirectResponse
     {
+        try {
+            app(\App\Services\PayrollPeriodLockService::class)->assertWritableDate($attendance->date, 'chấm công');
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
         $attendance->delete();
 
         return redirect()->route('attendance.index')->with('success', 'Xóa bản ghi chấm công thành công.');
@@ -735,55 +970,19 @@ class SmartHrController extends Controller
     public function createPayroll(): View
     {
         return view('hr.payroll.form', [
-            'payroll' => new Payroll(['status' => 'pending']),
+            'payroll' => new Payroll(['status' => 'calculated']),
             'employees' => Employee::orderBy('name')->get(),
         ]);
     }
 
     public function storePayroll(Request $request): RedirectResponse
     {
-        $data = $request->validate([
-            'employee_id' => ['required', 'exists:employees,id'],
-            'month' => ['required', 'date_format:Y-m'],
-            'base_salary' => ['required', 'numeric', 'min:0'],
-            'allowance' => ['nullable', 'numeric', 'min:0'],
-            'deduction' => ['nullable', 'numeric', 'min:0'],
-            'status' => ['nullable', 'in:pending,approved,paid'],
-        ]);
-
-        $data['allowance'] = $data['allowance'] ?? 0;
-        $data['deduction'] = $data['deduction'] ?? 0;
-        $data['status'] = $data['status'] ?? 'pending';
-        $data['total_salary'] = $data['base_salary'];
-
-        Payroll::create($data);
-
-        return redirect()->route('payroll.index')->with('success', 'Tạo bản ghi lương thành công.');
+        abort(403, 'Không tạo phiếu lương thủ công. HR chốt kỳ → Kế toán tính lương.');
     }
 
     public function generatePayroll(Request $request): RedirectResponse
     {
-        $monthInput = $request->input('month', now()->format('Y-m'));
-
-        if (! preg_match('/^\d{4}-\d{2}$/', $monthInput)) {
-            return redirect()->route('payroll.index')->with('error', 'Định dạng tháng không hợp lệ.');
-        }
-
-        [$year, $month] = explode('-', $monthInput);
-        $year = (int) $year;
-        $month = (int) $month;
-
-        $service = new PayrollCalculationService();
-        $employees = Employee::where('status', 'active')->get();
-        $count = 0;
-
-        foreach ($employees as $employee) {
-            $service->calculate($employee, $month, $year);
-            $count++;
-        }
-
-        return redirect()->route('payroll.index', ['month' => $monthInput])
-            ->with('success', "Đã tính lương cho {$count} nhân viên cho {$monthInput}.");
+        abort(403, 'Tính lương chỉ do Kế toán thực hiện sau khi HR đã chốt dữ liệu kỳ.');
     }
 
     public function evaluations(Request $request): View
@@ -1255,20 +1454,7 @@ class SmartHrController extends Controller
 
     public function approvePayroll(Payroll $payroll): RedirectResponse
     {
-        if ($payroll->status === 'paid') {
-            return redirect()->route('payroll.show', $payroll)
-                ->with('info', 'Phiếu lương đã được thanh toán.');
-        }
-
-        if ($payroll->confirmation_status !== 'confirmed') {
-            return redirect()->route('payroll.show', $payroll)
-                ->with('error', 'Chỉ có thể chuyển trạng thái sẵn sàng thanh toán sau khi nhân viên xác nhận.');
-        }
-
-        $payroll->update(['status' => 'approved']);
-
-        return redirect()->route('payroll.show', $payroll)
-            ->with('success', 'Đã đánh dấu phiếu lương là sẵn sàng thanh toán.');
+        abort(403, 'Không đổi trạng thái lương thủ công. Dùng đúng bước: HR kiểm tra → Giám đốc duyệt → Nhân viên xác nhận → Kế toán thanh toán.');
     }
 
     public function markPaid(Payroll $payroll): RedirectResponse
@@ -1278,7 +1464,7 @@ class SmartHrController extends Controller
                 ->with('info', 'Phiếu lương đã được thanh toán.');
         }
 
-        if ($payroll->status !== \App\Services\PayrollPaymentWorkflowService::READY_FOR_PAYMENT) {
+        if (! in_array($payroll->status, \App\Services\PayrollPaymentWorkflowService::payableStatuses(), true)) {
             return redirect()->route('payroll.show', $payroll)
                 ->with('error', 'Chỉ thanh toán khi bảng lương đủ điều kiện thanh toán (đã xác nhận).');
         }
@@ -1297,26 +1483,7 @@ class SmartHrController extends Controller
 
     public function updatePayroll(Request $request, Payroll $payroll): RedirectResponse
     {
-        $data = $request->validate([
-            'employee_id' => ['sometimes', 'required', 'exists:employees,id'],
-            'month' => ['sometimes', 'required', 'date_format:Y-m'],
-            'base_salary' => ['sometimes', 'required', 'numeric', 'min:0'],
-            'allowance' => ['nullable', 'numeric', 'min:0'],
-            'deduction' => ['nullable', 'numeric', 'min:0'],
-            'status' => ['nullable', 'in:pending,approved,paid'],
-        ]);
-
-        // Calculate total salary if any salary field is updated
-        if (isset($data['base_salary']) || isset($data['allowance']) || isset($data['deduction'])) {
-            $baseSalary = $data['base_salary'] ?? $payroll->base_salary;
-            $allowance = $data['allowance'] ?? $payroll->allowance;
-            $deduction = $data['deduction'] ?? $payroll->deduction;
-            $data['total_salary'] = $baseSalary + $allowance - $deduction;
-        }
-
-        $payroll->update($data);
-
-        return redirect()->route('payroll.index')->with('success', 'Cập nhật bản ghi lương thành công.');
+        abort(403, 'Không cho phép client đổi trạng thái hoặc số liệu lương tùy ý. Dùng quy trình tính / kiểm tra / duyệt / thanh toán.');
     }
 
     public function destroyPayroll(Payroll $payroll): RedirectResponse
@@ -1377,8 +1544,28 @@ class SmartHrController extends Controller
             return back()->withInput()->with('error', $msg);
         }
 
+        try {
+            app(\App\Services\PayrollPeriodLockService::class)->assertWritableRange(
+                $data['start_date'],
+                $data['end_date'],
+                'đơn nghỉ phép'
+            );
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        }
+
         $data['days'] = $this->calculateLeaveDays($data['start_date'], $data['end_date'], $data['half_day']);
         $data['status'] = 'pending';
+
+        try {
+            app(\App\Services\PayrollPeriodLockService::class)->assertWritableRange(
+                $data['start_date'],
+                $data['end_date'],
+                'đơn nghỉ phép'
+            );
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        }
 
         LeaveRequest::create($data);
 
@@ -1388,7 +1575,21 @@ class SmartHrController extends Controller
     public function approveLeaveRequest(LeaveRequest $leaveRequest): RedirectResponse
     {
         if (!$this->isHROrAdmin()) {
-            abort(403, 'Unauthorized: Only HR and Admin can approve leave requests.');
+            abort(403, 'Chỉ HR được duyệt nghỉ phép.');
+        }
+
+        if ($leaveRequest->status !== 'pending') {
+            return back()->with('error', 'Chỉ duyệt đơn đang chờ duyệt.');
+        }
+
+        try {
+            app(\App\Services\PayrollPeriodLockService::class)->assertWritableRange(
+                $leaveRequest->start_date,
+                $leaveRequest->end_date,
+                'đơn nghỉ phép'
+            );
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
         }
 
         $leaveRequest->update([
@@ -1403,12 +1604,26 @@ class SmartHrController extends Controller
     public function rejectLeaveRequest(Request $request, \App\Models\LeaveRequest $leaveRequest): RedirectResponse
     {
         if (!$this->isHROrAdmin()) {
-            abort(403, 'Unauthorized: Only HR and Admin can reject leave requests.');
+            abort(403, 'Chỉ HR được từ chối nghỉ phép.');
+        }
+
+        if ($leaveRequest->status !== 'pending') {
+            return back()->with('error', 'Chỉ từ chối đơn đang chờ duyệt.');
         }
 
         $data = $request->validate([
             'rejection_reason' => ['required', 'string'],
         ]);
+
+        try {
+            app(\App\Services\PayrollPeriodLockService::class)->assertWritableRange(
+                $leaveRequest->start_date,
+                $leaveRequest->end_date,
+                'đơn nghỉ phép'
+            );
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         $leaveRequest->update([
             'status' => 'rejected',
@@ -1422,8 +1637,22 @@ class SmartHrController extends Controller
 
     public function destroyLeaveRequest(\App\Models\LeaveRequest $leaveRequest): RedirectResponse
     {
-        if (!$this->isAdmin()) {
-            abort(403, 'Unauthorized: Only Admin can delete leave requests.');
+        if (! $this->isHr()) {
+            abort(403, 'Chỉ HR được xóa đơn nghỉ phép.');
+        }
+
+        if ($leaveRequest->status !== 'pending') {
+            return back()->with('error', 'Chỉ xóa đơn đang chờ duyệt. Đơn đã duyệt/từ chối/hủy thuộc vòng đời, không xóa.');
+        }
+
+        try {
+            app(\App\Services\PayrollPeriodLockService::class)->assertWritableRange(
+                $leaveRequest->start_date,
+                $leaveRequest->end_date,
+                'đơn nghỉ phép'
+            );
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
         }
 
         $leaveRequest->delete();
@@ -1486,6 +1715,8 @@ class SmartHrController extends Controller
             ]);
         }
 
+        $employee->load(['department', 'contracts' => fn ($q) => $q->latest('id')]);
+
         return view('employees.show', compact('employee'));
     }
 
@@ -1507,7 +1738,7 @@ class SmartHrController extends Controller
                 'allowed_maternity_leave_days' => 180,
             ]),
             'employees' => Employee::orderBy('name')->get(),
-            'signers' => User::where('is_admin', true)->orWhere('is_hr', true)->orderBy('name')->get(),
+            'signers' => User::where('is_director', true)->orWhere('is_hr', true)->orderBy('name')->get(),
             'positions' => Position::orderBy('name')->get(),
             'isEdit' => false,
         ]);
@@ -1525,10 +1756,7 @@ class SmartHrController extends Controller
             return back()->withInput()->with('error', 'Nhân viên này đã có hợp đồng đang có hiệu lực.');
         }
 
-        if ($request->input('sign_and_save')) {
-            $data['employee_signed_at'] = Auth::user()->is_admin || Auth::user()->is_hr ? now()->toDateTimeString() : null;
-            $data['director_signed_at'] = Auth::user()->is_admin ? now()->toDateTimeString() : null;
-        }
+        unset($data['employee_signed_at'], $data['director_signed_at']);
 
         $contract = $contractService->createContract(Auth::user(), $data);
 
@@ -1581,7 +1809,7 @@ class SmartHrController extends Controller
         return view('contracts.form', [
             'contract' => $contract,
             'employees' => Employee::orderBy('name')->get(),
-            'signers' => User::where('is_admin', true)->orWhere('is_hr', true)->orderBy('name')->get(),
+            'signers' => User::where('is_director', true)->orWhere('is_hr', true)->orderBy('name')->get(),
             'positions' => Position::orderBy('name')->get(),
             'isEdit' => true,
         ]);
@@ -1599,10 +1827,7 @@ class SmartHrController extends Controller
             return back()->withInput()->with('error', 'Nhân viên này đã có hợp đồng đang có hiệu lực.');
         }
 
-        if ($request->input('sign_and_save')) {
-            $data['employee_signed_at'] = Auth::user()->is_admin || Auth::user()->is_hr ? now()->toDateTimeString() : null;
-            $data['director_signed_at'] = Auth::user()->is_admin ? now()->toDateTimeString() : null;
-        }
+        unset($data['employee_signed_at'], $data['director_signed_at']);
 
         $contract = $contractService->updateContract(Auth::user(), $contract, $data);
 
@@ -1676,7 +1901,7 @@ class SmartHrController extends Controller
                 'allowed_maternity_leave_days'        => $contract->allowed_maternity_leave_days ?? 180,
             ]),
             'employees'     => Employee::orderBy('name')->get(),
-            'signers'       => User::where('is_admin', true)->orWhere('is_hr', true)->orderBy('name')->get(),
+            'signers'       => User::where('is_director', true)->orWhere('is_hr', true)->orderBy('name')->get(),
             'positions'     => Position::orderBy('name')->get(),
             'isEdit'        => false,
             'renewingFrom'  => $contract,
@@ -1719,14 +1944,23 @@ class SmartHrController extends Controller
     public function signContract(Contract $contract, Request $request, ContractService $contractService): RedirectResponse
     {
         $user = Auth::user();
-        $employee = Employee::where('email', $user->email)->first();
+        $employee = $user?->linkedEmployee();
+
+        if (! $user?->is_director) {
+            abort(403, 'Chỉ Giám đốc ký hợp đồng phía công ty. Nhân viên ký trên cổng của mình.');
+        }
 
         if (! $this->canSignContract($user, $employee, $contract)) {
             abort(403);
         }
 
-        $party = $request->input('party', 'employee');
-        $contractService->signContract($user, $contract, $party);
+        $party = 'director';
+
+        try {
+            $contractService->signContract($user, $contract, $party);
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return back()->with('success', 'Ký hợp đồng thành công.');
     }
@@ -1869,11 +2103,29 @@ class SmartHrController extends Controller
         return $query->exists();
     }
 
+    private function roleFlags(string $role): array
+    {
+        return [
+            'is_admin' => $role === 'admin',
+            'is_director' => $role === 'director',
+            'is_hr' => $role === 'hr',
+            'is_accountant' => $role === 'accountant',
+        ];
+    }
+
+    private function positionForRole(string $role): string
+    {
+        return match ($role) {
+            'hr' => 'HR',
+            'accountant' => 'Kế toán',
+            'director' => 'Giám đốc',
+            default => 'Nhân viên',
+        };
+    }
+
     private function canManageContracts(): bool
     {
-        $user = Auth::user();
-
-        return $user && ($user->is_admin || $user->is_hr);
+        return (bool) Auth::user()?->is_hr;
     }
 
     private function canSignContract(?User $user, ?Employee $employee, Contract $contract): bool
@@ -1882,8 +2134,8 @@ class SmartHrController extends Controller
             return false;
         }
 
-        if ($user->is_admin) {
-            return true;
+        if ($user->is_director) {
+            return (bool) $contract->employee_signed_at && ! $contract->director_signed_at;
         }
 
         if ($employee && $contract->employee_id === $employee->id) {
@@ -1961,6 +2213,10 @@ class SmartHrController extends Controller
 
     public function getNextEmployeeCode(Request $request)
     {
+        if (! Auth::user()?->is_hr) {
+            abort(403, 'Chỉ HR được tạo mã nhân viên.');
+        }
+
         $departmentId = $request->query('department_id');
         
         if (!$departmentId) {
@@ -2008,6 +2264,6 @@ class SmartHrController extends Controller
 
     private function isHROrAdmin(): bool
     {
-        return $this->isAdmin() || $this->isHr();
+        return $this->isHr();
     }
 }
