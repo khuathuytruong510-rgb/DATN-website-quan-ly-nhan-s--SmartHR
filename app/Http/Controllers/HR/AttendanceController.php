@@ -37,7 +37,7 @@ class AttendanceController extends ApiController
 
     public function store(Request $request): \Illuminate\Http\JsonResponse
     {
-        $this->currentUser($request);
+        $this->requireHr($request);
 
         $validator = Validator::make($request->all(), [
             'employee_id' => 'required|exists:employees,id',
@@ -51,13 +51,19 @@ class AttendanceController extends ApiController
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        try {
+            app(\App\Services\PayrollPeriodLockService::class)->assertWritableDate($validator->validated()['date'], 'chấm công');
+        } catch (\Throwable $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
         $attendance = Attendance::create($validator->validated());
         return response()->json($attendance, 201);
     }
 
     public function update(Request $request, $id): \Illuminate\Http\JsonResponse
     {
-        $this->currentUser($request);
+        $this->requireHr($request);
         $attendance = Attendance::findOrFail($id);
 
         $validator = Validator::make($request->all(), [
@@ -72,14 +78,30 @@ class AttendanceController extends ApiController
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $attendance->update($validator->validated());
+        $data = $validator->validated();
+        try {
+            $locks = app(\App\Services\PayrollPeriodLockService::class);
+            $locks->assertWritableDate($attendance->date, 'chấm công');
+            if (! empty($data['date'])) {
+                $locks->assertWritableDate($data['date'], 'chấm công');
+            }
+        } catch (\Throwable $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $attendance->update($data);
         return response()->json($attendance);
     }
 
     public function destroy(Request $request, $id): \Illuminate\Http\JsonResponse
     {
-        $this->currentUser($request);
+        $this->requireHr($request);
         $attendance = Attendance::findOrFail($id);
+        try {
+            app(\App\Services\PayrollPeriodLockService::class)->assertWritableDate($attendance->date, 'chấm công');
+        } catch (\Throwable $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
         $attendance->delete();
 
         return response()->json(null, 204);

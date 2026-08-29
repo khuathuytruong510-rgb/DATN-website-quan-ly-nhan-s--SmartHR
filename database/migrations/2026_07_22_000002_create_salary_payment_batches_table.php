@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('salary_payment_batches')) {
+            return;
+        }
+
         Schema::create('salary_payment_batches', function (Blueprint $table) {
             $table->id();
             $table->string('code')->unique()->index();

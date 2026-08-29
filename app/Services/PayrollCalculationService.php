@@ -2,10 +2,13 @@
 
 namespace App\Services;
 
+use App\Models\ActivityLog;
 use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Models\Payroll;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 class PayrollCalculationService
 {
@@ -48,7 +51,66 @@ class PayrollCalculationService
         return max(0, $gross - $insurance - $tax);
     }
 
+    /**
+     * Tính / tính lại một phiếu. Backend tự tính số liệu và gán calculated.
+     * Không nhận status / total_salary từ client.
+     *
+     * Chỉ được tính phiếu mới, nháp, đã tính, hoặc đang sự cố.
+     */
     public function calculate(Employee $employee, int $month, int $year)
+    {
+        return DB::transaction(function () use ($employee, $month, $year) {
+            $existing = Payroll::query()
+                ->where('employee_id', $employee->id)
+                ->where('month', $month)
+                ->where('year', $year)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing && ! in_array($existing->status, PayrollPaymentWorkflowService::recalculableStatuses(), true)) {
+                throw new PayrollNotRecalculableException(
+                    'Không được tính lại phiếu đã vào vòng HR kiểm tra / Giám đốc duyệt / NV xác nhận / đã thanh toán. Phải đi vòng sự cố chính thức.'
+                );
+            }
+
+            app(PayrollPeriodLockService::class)->assertUnlockedForCalculation($month, $year);
+
+            return $this->persistCalculated($employee, $month, $year, $existing);
+        });
+    }
+
+    /**
+     * Tính cả kỳ cho nhân viên đang làm. Bỏ qua phiếu không được tính lại.
+     */
+    public function calculatePeriod(int $month, int $year, ?User $actor = null): array
+    {
+        app(PayrollPeriodLockService::class)->assertUnlockedForCalculation($month, $year);
+
+        $calculated = 0;
+        $skipped = 0;
+
+        $employees = Employee::query()->where('status', 'active')->orderBy('id')->get();
+        foreach ($employees as $employee) {
+            try {
+                $this->calculate($employee, $month, $year);
+                $calculated++;
+            } catch (PayrollNotRecalculableException) {
+                $skipped++;
+            }
+        }
+
+        if ($actor) {
+            ActivityLog::create([
+                'user_id' => $actor->id,
+                'action' => 'payroll_calculated',
+                'meta' => sprintf('period:%02d/%d;calculated:%d;skipped:%d', $month, $year, $calculated, $skipped),
+            ]);
+        }
+
+        return compact('calculated', 'skipped', 'month', 'year');
+    }
+
+    protected function persistCalculated(Employee $employee, int $month, int $year, ?Payroll $existing): Payroll
     {
         /*
         |--------------------------------------------------------------------------
@@ -209,33 +271,39 @@ class PayrollCalculationService
         | 16. Lưu / Cập nhật bảng lương
         |--------------------------------------------------------------------------
         */
-        return Payroll::updateOrCreate(
-            [
-                'employee_id' => $employee->id,
-                'month'       => $month,
-                'year'        => $year,
-            ],
-            [
-                'base_salary'           => $baseSalary,
-                'daily_salary'          => round($dailySalary, 2),
-                'required_working_days' => $requiredWorkingDays,
-                'working_days'          => $actualWorkingDays,
-                'paid_leave_days'       => $paidLeaveDays,
-                'unpaid_leave_days'     => $unpaidLeaveDays,
-                'working_salary'        => round($workingSalary, 2),
-                'overtime_days'         => $overtimeDays,
-                'overtime_hours'        => round($overtimeHours, 2),
-                'overtime_day_salary'   => round($overtimeDaySalary, 2),
-                'overtime_hour_salary'  => round($overtimeHourSalary, 2),
-                'overtime_salary'       => round($totalOvertimeSalary, 2),
-                'allowance'             => $allowance,
-                'bonus'                 => $bonus,
-                'deduction'             => $deduction,
-                'late_penalty_fee'      => round($totalLatePenaltyFee, 2),
-                'insurance'             => round($insurance, 2),
-                'tax'                   => round($tax, 2),
-                'total_salary'          => round($totalSalary, 2),
-            ]
-        );
+        $payload = [
+            'base_salary'           => $baseSalary,
+            'daily_salary'          => round($dailySalary, 2),
+            'required_working_days' => $requiredWorkingDays,
+            'working_days'          => $actualWorkingDays,
+            'paid_leave_days'       => $paidLeaveDays,
+            'unpaid_leave_days'     => $unpaidLeaveDays,
+            'working_salary'        => round($workingSalary, 2),
+            'overtime_days'         => $overtimeDays,
+            'overtime_hours'        => round($overtimeHours, 2),
+            'overtime_day_salary'   => round($overtimeDaySalary, 2),
+            'overtime_hour_salary'  => round($overtimeHourSalary, 2),
+            'overtime_salary'       => round($totalOvertimeSalary, 2),
+            'allowance'             => $allowance,
+            'bonus'                 => $bonus,
+            'deduction'             => $deduction,
+            'late_penalty_fee'      => round($totalLatePenaltyFee, 2),
+            'insurance'             => round($insurance, 2),
+            'tax'                   => round($tax, 2),
+            'total_salary'          => round($totalSalary, 2),
+            'status'                => PayrollPaymentWorkflowService::CALCULATED,
+        ];
+
+        if ($existing) {
+            $existing->fill($payload)->save();
+
+            return $existing->fresh();
+        }
+
+        return Payroll::create(array_merge($payload, [
+            'employee_id' => $employee->id,
+            'month'       => $month,
+            'year'        => $year,
+        ]));
     }
 }

@@ -27,14 +27,17 @@
             <div class="mb-3">
                 <label for="target" class="form-label">Đối tượng</label>
                 <select name="target" id="target" class="form-control" required>
-                    @if ($user->is_admin)
+                    @if ($user->is_director)
                         <option value="employee">Nhân viên</option>
                         <option value="hr">HR</option>
-                        <option value="all">Tất cả nhân viên (kể cả HR)</option>
+                        <option value="all">Tất cả</option>
                     @elseif ($user->is_hr)
                         <option value="employee">Nhân viên</option>
                     @endif
                 </select>
+                @if ($user->is_director)
+                    <p class="muted" style="margin:8px 0 0;font-size:13px;">Giám đốc phát hành thông báo quản lý đến HR hoặc toàn hệ thống. HR chỉ thông báo đến nhân viên.</p>
+                @endif
             </div>
 
             <button type="submit" class="btn btn-primary">Gửi thông báo</button>

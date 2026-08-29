@@ -34,6 +34,7 @@ class DatabaseSeeder extends Seeder
             'is_admin' => true,
             'is_hr' => false,
             'is_accountant' => false,
+            'is_director' => false,
         ]);
 
         $depts = [
@@ -63,6 +64,28 @@ class DatabaseSeeder extends Seeder
         $sales   = Department::where('code', 'KD')->first();
         $finance = Department::where('code', 'KTTC')->first();
         $mkt     = Department::where('code', 'MKT')->first();
+        $bgd     = Department::where('code', 'BGD')->first();
+
+        $directorUser = User::updateOrCreate([
+            'email' => 'giamdoc@smarthr.com',
+        ], [
+            'name' => 'Phạm Thị Dung',
+            'password' => Hash::make('123456'),
+            'api_token' => Str::random(60),
+            'is_admin' => false,
+            'is_hr' => false,
+            'is_accountant' => false,
+            'is_director' => true,
+        ]);
+
+        Employee::updateOrCreate(['email' => 'giamdoc@smarthr.com'], [
+            'user_id' => $directorUser->id,
+            'name' => 'Phạm Thị Dung',
+            'position' => 'Giám đốc',
+            'department_id' => $bgd?->id,
+            'status' => 'active',
+            'employee_code' => 'BGD0001',
+        ]);
 
         // Employee Users
         $employeeUser1 = User::updateOrCreate([
@@ -245,7 +268,7 @@ class DatabaseSeeder extends Seeder
             'allowance' => 2000000,
             'deduction' => 500000,
             'total_salary' => 19500000,
-            'status' => 'approved',
+            'status' => 'director_approved',
             'paid_at' => null,
         ]);
 
@@ -258,11 +281,9 @@ class DatabaseSeeder extends Seeder
             'allowance' => 1500000,
             'deduction' => 0,
             'total_salary' => 23500000,
-            'status' => 'pending',
+            'status' => 'calculated',
             'paid_at' => null,
         ]);
-
-        // Leave requests sample data
         LeaveRequest::updateOrCreate([
             'employee_id' => $employee4->id,
             'start_date' => '2026-06-14',
@@ -305,5 +326,7 @@ class DatabaseSeeder extends Seeder
             'reason' => 'Hỗ trợ khách hàng',
             'status' => 'pending',
         ]);
+
+        $this->call(DefenseDemoSeeder::class);
     }
 }

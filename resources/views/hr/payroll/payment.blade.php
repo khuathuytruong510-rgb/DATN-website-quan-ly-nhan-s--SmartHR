@@ -7,14 +7,17 @@
     $amountText = number_format($payroll->total_salary ?? 0, 0, '.', ',');
     $period = sprintf('%02d/%s', (int) $payroll->month, $payroll->year);
     $empName = optional($employee)->name ?? 'N/A';
+    $bankName = $payroll->payout_bank_name ?: optional($employee)->bank_name;
+    $accountNumber = $payroll->payout_account_number ?: optional($employee)->account_number;
+    $accountHolder = $payroll->payout_account_holder ?: (optional($employee)->account_holder ?: $empName);
     $noteTransfer = sprintf(
         'Thanh toán lương tháng %s cho nhân viên %s bằng chuyển khoản. Số tiền: %s ₫. STK: %s — %s (%s).',
         $period,
         $empName,
         $amountText,
-        optional($employee)->account_number ?: 'chưa có',
-        optional($employee)->account_holder ?: $empName,
-        optional($employee)->bank_name ?: 'chưa rõ NH'
+        $accountNumber ?: 'chưa có',
+        $accountHolder ?: $empName,
+        $bankName ?: 'chưa rõ NH'
     );
     $noteCash = sprintf(
         'Thanh toán lương tháng %s cho nhân viên %s bằng tiền mặt. Số tiền: %s ₫.',
@@ -67,42 +70,20 @@
         </div>
 
         <div class="card">
-            <h3 style="margin-top:0;">Thông tin nhận lương (QR/STK)</h3>
-            <form method="POST" action="{{ route('payroll.payment.bank', $payroll) }}" enctype="multipart/form-data">
-                @csrf
-                <div class="field">
-                    <label>Ngân hàng <span style="color:#dc2626;">*</span></label>
-                    @include('components.bank-select', [
-                        'name' => 'bank_name',
-                        'value' => optional($employee)->bank_name,
-                        'required' => true,
-                    ])
+            <h3 style="margin-top:0;">Thông tin nhận lương (đã chốt)</h3>
+            <p>Ngân hàng: <strong>{{ $bankName ?: '—' }}</strong></p>
+            <p>Số tài khoản: <strong>{{ $accountNumber ?: '—' }}</strong></p>
+            <p>Chủ tài khoản: <strong>{{ $accountHolder ?: '—' }}</strong></p>
+            @if(optional($employee)->qr_image)
+                <div style="margin-bottom:12px;">
+                    <img src="{{ asset('storage/'.$employee->qr_image) }}" alt="QR" style="max-width:180px;border:1px solid var(--line);border-radius:8px;">
                 </div>
-                <div class="field">
-                    <label>Số tài khoản <span style="color:#dc2626;">*</span></label>
-                    <input type="text" name="account_number" value="{{ old('account_number', optional($employee)->account_number) }}" required maxlength="50" pattern="[0-9]{6,20}" title="Chỉ nhập số, 6–20 ký tự" placeholder="Chỉ nhập số">
-                </div>
-                <div class="field">
-                    <label>Chủ tài khoản <span style="color:#dc2626;">*</span></label>
-                    <input type="text" name="account_holder" value="{{ old('account_holder', optional($employee)->account_holder ?: optional($employee)->name) }}" required maxlength="150">
-                </div>
-                <div class="field">
-                    <label>Ảnh QR (tùy chọn)</label>
-                    <input type="file" name="qr_image" accept="image/png,image/jpeg,image/jpg,image/webp">
-                </div>
-                @if(optional($employee)->qr_image)
-                    <div style="margin-bottom:12px;">
-                        <img src="{{ asset('storage/'.$employee->qr_image) }}" alt="QR" style="max-width:180px;border:1px solid var(--line);border-radius:8px;">
-                    </div>
-                @endif
-                @if($payroll->status === 'ready_for_payment')
-                    <button class="btn" type="submit">Lưu thông tin nhận lương</button>
-                @endif
-            </form>
+            @endif
+            <p class="muted" style="font-size:13px;">Kế toán không sửa hồ sơ nhân viên. Đổi STK do HR xử lý. Snapshot được chốt khi HR kiểm tra phiếu.</p>
         </div>
     </div>
 
-    @if($payroll->status === 'ready_for_payment')
+    @if($workflow->canPay($payroll))
         <div class="card" style="margin-top:16px;">
             <h3 style="margin-top:0;">Xác nhận thanh toán</h3>
             <form method="POST" action="{{ route('payroll.payment.confirm', $payroll) }}" id="payForm">
@@ -145,7 +126,7 @@
         </div>
     @elseif($payroll->status === 'paid')
         <div class="card" style="margin-top:16px;">
-            <div class="alert">Đã thanh toán{{ $payroll->paid_at ? ' lúc '.$payroll->paid_at->format('d/m/Y H:i') : '' }}.</div>
+            <div class="alert">Đã thanh toán{{ $payroll->paid_at ? ' lúc '.$payroll->paid_at->format('d/m/Y H:i') : '' }}{{ $payroll->paidByUser ? ' bởi '.$payroll->paidByUser->name : '' }}{{ optional($payroll->salaryPayment)->transaction_code ? ' · Mã GD: '.$payroll->salaryPayment->transaction_code : '' }}.</div>
         </div>
     @endif
 </div>

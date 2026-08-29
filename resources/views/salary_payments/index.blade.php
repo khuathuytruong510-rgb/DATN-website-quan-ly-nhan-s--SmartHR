@@ -8,15 +8,16 @@
             <div class="d-flex justify-content-between align-items-center flex-wrap">
                 <div>
                     <h3 class="fw-bold mb-1">
-                        <i class="bi bi-cash-coin"></i> Quản lý thanh toán lương
+                        <i class="bi bi-cash-coin"></i> Lịch sử thanh toán lương
                     </h3>
                     <p class="text-muted mb-0">
-                        Theo dõi và xử lý thanh toán lương cho nhân viên.
+                        Theo dõi các phiếu đã thanh toán. Để thanh toán mới, dùng quy trình bảng lương (sau khi NV xác nhận).
                     </p>
                 </div>
                 <div>
-                    <a href="{{ route('salary_payments.select_payroll') }}" class="btn btn-primary">
-                        <i class="bi bi-plus-circle"></i> Tạo phiếu thanh toán
+                    <a href="{{ route('payroll.index') }}" class="btn btn-primary">
+                        <i class="bi bi-wallet2"></i>
+                        {{ auth()->user()?->is_accountant ? 'Đến bảng lương / thanh toán' : 'Đến bảng lương' }}
                     </a>
                 </div>
             </div>
@@ -142,7 +143,7 @@
                                     <a href="{{ route('salary_payments.show', $p) }}" class="btn btn-outline-primary" title="Xem chi tiết">
                                         <i class="bi bi-eye"></i>
                                     </a>
-                                    @if($p->status === 'pending')
+                                    @if($p->status === 'pending' && auth()->user()?->is_accountant)
                                         <a href="{{ route('salary_payments.edit', $p) }}" class="btn btn-outline-warning" title="Chỉnh sửa">
                                             <i class="bi bi-pencil"></i>
                                         </a>

@@ -10,7 +10,7 @@
 <div class="page-head">
     <div>
         <h1>Nhật ký hoạt động</h1>
-        <p class="muted">Các hành động liên quan tới tài khoản của bạn</p>
+            <p class="muted">Các thao tác của bạn trên cổng nhân viên.</p>
     </div>
     <div class="actions">
         <a class="btn" href="{{ route('me.dashboard') }}">Quay lại</a>
@@ -32,8 +32,8 @@
             <tbody>
             @foreach($logs as $l)
                 <tr>
-                    <td>{{ $l->created_at->format('Y-m-d H:i') }}</td>
-                    <td>{{ $l->action }}</td>
+                    <td>{{ $l->created_at->format('d/m/Y H:i') }}</td>
+                    <td>{{ $l->label() }}</td>
                     <td>{{ $l->meta }}</td>
                 </tr>
             @endforeach

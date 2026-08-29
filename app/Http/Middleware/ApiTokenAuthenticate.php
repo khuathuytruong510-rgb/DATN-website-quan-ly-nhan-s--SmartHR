@@ -30,6 +30,7 @@ class ApiTokenAuthenticate
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        Auth::setUser($user);
         $request->setUserResolver(fn () => $user);
 
         return $next($request);

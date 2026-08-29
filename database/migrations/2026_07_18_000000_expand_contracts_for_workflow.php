@@ -79,15 +79,34 @@ return new class extends Migration
         });
 
         if (! DB::table('contract_templates')->where('is_default', true)->exists()) {
-            DB::table('contract_templates')->insert([
-                'title' => 'Điều khoản hợp đồng lao động mặc định',
-                'contract_type' => 'fixed_term',
-                'content' => 'Điều 1. Người lao động cam kết làm việc trung thùc...\nĐiều 2. Công ty có quyền thay đổi nội dung phù hợp...',
+            $cols = Schema::getColumnListing('contract_templates');
+            $row = [
+                'content' => "Điều 1. Người lao động cam kết làm việc trung thực...\nĐiều 2. Công ty có quyền thay đổi nội dung phù hợp...",
                 'is_default' => true,
-                'status' => 'active',
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]);
+            ];
+
+            if (in_array('name', $cols, true)) {
+                $row['name'] = 'Điều khoản hợp đồng lao động mặc định';
+            } elseif (in_array('title', $cols, true)) {
+                $row['title'] = 'Điều khoản hợp đồng lao động mặc định';
+            }
+
+            if (in_array('code', $cols, true)) {
+                $row['code'] = 'DEFAULT';
+            }
+            if (in_array('contract_type', $cols, true)) {
+                $row['contract_type'] = 'fixed_term';
+            }
+            if (in_array('status', $cols, true)) {
+                $row['status'] = 'active';
+            }
+            if (in_array('is_active', $cols, true)) {
+                $row['is_active'] = true;
+            }
+
+            DB::table('contract_templates')->insert($row);
         }
     }
 

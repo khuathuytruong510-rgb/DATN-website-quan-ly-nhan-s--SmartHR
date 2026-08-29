@@ -5,8 +5,8 @@
 @include('components.module_header', [
     'title' => 'Hợp đồng',
     'subtitle' => 'Danh sách hợp đồng lao động và trạng thái ký kết.',
-    'buttonText' => 'Tạo hợp đồng',
-    'buttonRoute' => route('contracts.create'),
+    'buttonText' => auth()->user()?->canManageHr() ? 'Tạo hợp đồng' : null,
+    'buttonRoute' => auth()->user()?->canManageHr() ? route('contracts.create') : null,
 ])
 
 @if(session('success'))
@@ -102,7 +102,7 @@
                         <td>
                             <div class="d-flex flex-wrap gap-1">
                                 <a class="btn btn-sm btn-outline-primary" href="{{ route('contracts.show', $contract) }}">Xem</a>
-                                @if(auth()->user()?->is_admin || auth()->user()?->is_hr)
+                                @if(auth()->user()?->canManageHr())
                                     <a class="btn btn-sm btn-outline-secondary" href="{{ route('contracts.edit', $contract) }}">Sửa</a>
                                     <a class="btn btn-sm btn-outline-info" href="{{ route('contracts.renew', $contract) }}"
                                        title="{{ in_array($contract->status, ['expired','expiring']) ? 'Gia hạn hợp đồng' : 'Tạo hợp đồng kế tiếp' }}">
@@ -119,11 +119,17 @@
                                         </form>
                                     @endif
                                 @endif
-                                @if(auth()->user()?->is_admin || auth()->user()?->is_hr || optional($contract->employee)->email === auth()->user()?->email)
+                                @if(optional($contract->employee)->email === auth()->user()?->email && ! $contract->employee_signed_at)
                                     <form action="{{ route('contracts.sign', $contract) }}" method="POST" class="d-inline">
                                         @csrf
-                                        <input type="hidden" name="party" value="{{ optional($contract->employee)->email === auth()->user()?->email ? 'employee' : 'director' }}">
-                                        <button class="btn btn-sm btn-outline-success" type="submit">✍️ Ký</button>
+                                        <input type="hidden" name="party" value="employee">
+                                        <button class="btn btn-sm btn-outline-success" type="submit">✍️ NV ký</button>
+                                    </form>
+                                @elseif(auth()->user()?->is_director && $contract->employee_signed_at && ! $contract->director_signed_at)
+                                    <form action="{{ route('contracts.sign', $contract) }}" method="POST" class="d-inline">
+                                        @csrf
+                                        <input type="hidden" name="party" value="director">
+                                        <button class="btn btn-sm btn-outline-success" type="submit">✍️ GĐ ký</button>
                                     </form>
                                 @endif
                             </div>

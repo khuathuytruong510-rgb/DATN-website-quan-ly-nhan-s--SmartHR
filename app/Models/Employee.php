@@ -37,8 +37,9 @@ class Employee extends Model
         'leave_balance',
         'position_id',
         'bank_name',
-        'bank_account_number',
-        'bank_account_holder',
+        'account_number',
+        'account_holder',
+        'qr_image',
         'address_detail',
     ];
 
@@ -105,6 +106,37 @@ class Employee extends Model
     public function salaryPayments(): HasMany
     {
         return $this->hasMany(SalaryPayment::class, 'employee_id');
+    }
+
+    /**
+     * Alias tương thích Payment Center (main) với cột account_* của workflow lương.
+     */
+    public function getBankAccountNumberAttribute($value = null): ?string
+    {
+        if (filled($value)) {
+            return $value;
+        }
+
+        return $this->attributes['account_number'] ?? null;
+    }
+
+    public function getBankAccountHolderAttribute($value = null): ?string
+    {
+        if (filled($value)) {
+            return $value;
+        }
+
+        return $this->attributes['account_holder'] ?? null;
+    }
+
+    public function setBankAccountNumberAttribute($value): void
+    {
+        $this->attributes['account_number'] = $value;
+    }
+
+    public function setBankAccountHolderAttribute($value): void
+    {
+        $this->attributes['account_holder'] = $value;
     }
 
     /**

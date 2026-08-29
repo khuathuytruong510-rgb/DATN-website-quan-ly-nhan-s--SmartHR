@@ -18,12 +18,11 @@ class SalaryHistoryController extends Controller
             abort(403);
         }
 
-        if ($user->is_admin || $user->is_hr || $user->is_accountant) {
+        if ($user->is_admin || $user->is_director || $user->is_hr || $user->is_accountant) {
             return;
         }
 
-        $employee = Employee::where('user_id', $user->id)->first()
-            ?? Employee::where('email', $user->email)->first();
+        $employee = $user->linkedEmployee();
 
         if (! $employee || (int) $salaryHistory->employee_id !== (int) $employee->id) {
             abort(403, 'Bạn chỉ được xem lịch sử lương của chính mình.');
@@ -57,7 +56,7 @@ class SalaryHistoryController extends Controller
             ? $new
             : ($new + $allowanceTotal + $rewards - $deductions - $tax - $insurance);
 
-        $latePenaltyFee = (float) ($salaryHistory->payroll->late_penalty_fee ?? 0);
+            $latePenaltyFee = (float) (optional($salaryHistory->payroll)->late_penalty_fee ?? 0);
 
         return view('salary_histories.show', compact(
             'salaryHistory',
@@ -113,14 +112,14 @@ class SalaryHistoryController extends Controller
         $employee = null;
 
         if ($user) {
-            $employee = Employee::where('user_id', $user->id)->first()
-                ?? Employee::where('email', $user->email)->first();
+            $employee = $user->linkedEmployee();
         }
 
         $histories = collect();
         if ($employee) {
             $histories = SalaryHistory::with('payroll')
                 ->where('employee_id', $employee->id)
+                ->where('change_type', SalaryHistory::CHANGE_PAYMENT)
                 ->latest('effective_date')
                 ->latest('id')
                 ->paginate(12);

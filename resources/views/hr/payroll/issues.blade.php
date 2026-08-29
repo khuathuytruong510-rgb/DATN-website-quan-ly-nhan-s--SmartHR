@@ -42,7 +42,9 @@
                         </td>
                         <td>
                             <div class="actions" style="justify-content:flex-end;">
+                                @if(auth()->user()?->is_hr)
                                 <a href="{{ route('payroll.issues.fix_form', $payroll) }}" class="btn primary">Khắc phục</a>
+                                @endif
                                 <a href="{{ route('payroll.show', $payroll) }}" class="btn">Xem phiếu</a>
                             </div>
                         </td>

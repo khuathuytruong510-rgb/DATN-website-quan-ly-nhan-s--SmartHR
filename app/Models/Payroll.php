@@ -45,6 +45,9 @@ class Payroll extends Model
         'issue_reported_at',
         'paid_by',
         'payment_method',
+        'payout_bank_name',
+        'payout_account_number',
+        'payout_account_holder',
     ];
 
     protected $casts = [

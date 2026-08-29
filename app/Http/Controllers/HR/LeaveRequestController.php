@@ -40,7 +40,7 @@ class LeaveRequestController extends ApiController
 
     public function store(Request $request): \Illuminate\Http\JsonResponse
     {
-        $this->currentUser($request);
+        $this->requireHr($request);
 
         $validator = Validator::make($request->all(), [
             'employee_id' => 'required|exists:employees,id',
@@ -51,7 +51,6 @@ class LeaveRequestController extends ApiController
             'reason' => 'nullable|string',
             'is_urgent' => 'nullable|boolean',
             'urgent_reason' => 'required_if:is_urgent,1|nullable|string|max:500',
-            'status' => 'nullable|in:pending,approved,rejected',
         ]);
 
         if ($validator->fails()) {
@@ -83,6 +82,17 @@ class LeaveRequestController extends ApiController
         }
 
         $data['days'] = $this->calculateLeaveDays($data['start_date'], $data['end_date'], $data['half_day']);
+        $data['status'] = 'pending';
+
+        try {
+            app(\App\Services\PayrollPeriodLockService::class)->assertWritableRange(
+                $data['start_date'],
+                $data['end_date'],
+                'đơn nghỉ phép'
+            );
+        } catch (\Throwable $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         $leave = LeaveRequest::create($data);
         return response()->json($leave, 201);
@@ -90,8 +100,12 @@ class LeaveRequestController extends ApiController
 
     public function update(Request $request, $id): \Illuminate\Http\JsonResponse
     {
-        $this->currentUser($request);
+        $this->requireHr($request);
         $leave = LeaveRequest::findOrFail($id);
+
+        if ($leave->status !== 'pending') {
+            return response()->json(['message' => 'Chỉ sửa đơn đang chờ duyệt.'], 422);
+        }
 
         $validator = Validator::make($request->all(), [
             'employee_id' => 'sometimes|required|exists:employees,id',
@@ -100,7 +114,6 @@ class LeaveRequestController extends ApiController
             'half_day' => 'nullable|boolean',
             'type' => 'sometimes|required|in:sick,personal,annual,unpaid',
             'reason' => 'nullable|string',
-            'status' => 'nullable|in:pending,approved,rejected',
         ]);
 
         if ($validator->fails()) {
@@ -108,6 +121,7 @@ class LeaveRequestController extends ApiController
         }
 
         $data = $validator->validated();
+        unset($data['status'], $data['approved_by'], $data['approved_at']);
         if (isset($data['half_day'])) {
             $data['half_day'] = filter_var($data['half_day'], FILTER_VALIDATE_BOOLEAN);
         }
@@ -116,14 +130,36 @@ class LeaveRequestController extends ApiController
             $data['days'] = $this->calculateLeaveDays($data['start_date'], $data['end_date'], $halfDay);
         }
 
+        try {
+            app(\App\Services\PayrollPeriodLockService::class)->assertWritableRange(
+                $data['start_date'] ?? $leave->start_date,
+                $data['end_date'] ?? $leave->end_date,
+                'đơn nghỉ phép'
+            );
+        } catch (\Throwable $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
         $leave->update($data);
         return response()->json($leave);
     }
 
     public function destroy(Request $request, $id): \Illuminate\Http\JsonResponse
     {
-        $this->currentUser($request);
+        $this->requireHr($request);
         $leave = LeaveRequest::findOrFail($id);
+        if ($leave->status !== 'pending') {
+            return response()->json(['message' => 'Chỉ xóa đơn đang chờ duyệt.'], 422);
+        }
+        try {
+            app(\App\Services\PayrollPeriodLockService::class)->assertWritableRange(
+                $leave->start_date,
+                $leave->end_date,
+                'đơn nghỉ phép'
+            );
+        } catch (\Throwable $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
         $leave->delete();
 
         return response()->json(null, 204);

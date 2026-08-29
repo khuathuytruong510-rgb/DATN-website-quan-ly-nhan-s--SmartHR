@@ -99,14 +99,52 @@ class ContractService
     public function signContract(User $actor, Contract $contract, string $party): Contract
     {
         return DB::transaction(function () use ($actor, $contract, $party): Contract {
+            $contract = Contract::query()->whereKey($contract->id)->lockForUpdate()->firstOrFail();
+            $contract->loadMissing('employee');
+
+            $blocked = [
+                Contract::STATUS_CANCELLED,
+                Contract::STATUS_TERMINATED,
+                Contract::STATUS_EXPIRED,
+                Contract::STATUS_REJECTED,
+            ];
+            if (in_array($contract->status, $blocked, true)) {
+                throw new \RuntimeException('Không thể ký hợp đồng đã hết hạn, bị hủy hoặc đã chấm dứt. Hãy tạo hợp đồng/gia hạn mới.');
+            }
+
             if ($party === 'employee') {
+                $allowed = [Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE, 'waiting_employee', Contract::STATUS_DRAFT];
+                if (! in_array($contract->status, $allowed, true) && $contract->employee_signed_at) {
+                    throw new \RuntimeException('Nhân viên đã ký hợp đồng này.');
+                }
+                if (! in_array($contract->status, $allowed, true)) {
+                    throw new \RuntimeException('Nhân viên chỉ ký khi hợp đồng đang chờ chữ ký nhân viên.');
+                }
+                $employee = $contract->employee;
+                $owns = $employee && (
+                    ((int) $employee->user_id === (int) $actor->id)
+                    || strcasecmp((string) $employee->email, (string) $actor->email) === 0
+                );
+                if (! $owns) {
+                    throw new \RuntimeException('Chỉ nhân viên của hợp đồng này được ký ở bước nhân viên. HR không ký thay.');
+                }
                 if ($contract->employee_signed_at) {
-                    return $contract->fresh();
+                    throw new \RuntimeException('Nhân viên đã ký hợp đồng này. Không ký lại.');
                 }
                 $contract->employee_signed_at = now();
             } elseif ($party === 'director') {
+                if (! $actor->is_director) {
+                    throw new \RuntimeException('Chỉ Giám đốc được ký hợp đồng phía công ty.');
+                }
+                if (! $contract->employee_signed_at) {
+                    throw new \RuntimeException('Giám đốc chỉ ký sau khi nhân viên đã ký.');
+                }
                 if ($contract->director_signed_at) {
-                    return $contract->fresh();
+                    throw new \RuntimeException('Giám đốc đã ký hợp đồng này. Không ký lại.');
+                }
+                $waitingDirector = [Contract::STATUS_WAITING_DIRECTOR_SIGNATURE, 'waiting_director'];
+                if (! in_array($contract->status, $waitingDirector, true)) {
+                    throw new \RuntimeException('Giám đốc chỉ ký khi hợp đồng đang chờ chữ ký giám đốc.');
                 }
                 $contract->director_signed_at = now();
             } else {
@@ -243,8 +281,8 @@ class ContractService
             'contract_content' => $contractContent,
             'created_by' => $actor->id,
             'parent_contract_id' => $data['parent_contract_id'] ?? $contract?->parent_contract_id,
-            'employee_signed_at' => $data['employee_signed_at'] ?? $contract?->employee_signed_at,
-            'director_signed_at' => $data['director_signed_at'] ?? $contract?->director_signed_at,
+            'employee_signed_at' => $contract?->employee_signed_at,
+            'director_signed_at' => $contract?->director_signed_at,
             'contract_template_id' => $template?->id ?? $data['contract_template_id'] ?? $contract?->contract_template_id,
             'workplace' => $data['workplace'] ?? $contract?->workplace,
             'working_schedule' => $data['working_schedule'] ?? $contract?->working_schedule,
@@ -252,8 +290,8 @@ class ContractService
             'allowed_unpaid_leave_days_per_month' => (int) ($data['allowed_unpaid_leave_days_per_month'] ?? $contract?->allowed_unpaid_leave_days_per_month ?? 1),
             'allowed_makeup_attendance_per_month' => (int) ($data['allowed_makeup_attendance_per_month'] ?? $contract?->allowed_makeup_attendance_per_month ?? 3),
             'allowed_maternity_leave_days' => (int) ($data['allowed_maternity_leave_days'] ?? $contract?->allowed_maternity_leave_days ?? 180),
-            'status' => Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE,
-            'contract_status' => Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE,
+            'status' => $contract?->status ?? Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE,
+            'contract_status' => $contract?->contract_status ?? $contract?->status ?? Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE,
         ];
 
         if (! empty($data['document']) && $data['document'] instanceof UploadedFile) {

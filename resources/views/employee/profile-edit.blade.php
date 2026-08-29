@@ -1,12 +1,12 @@
 @extends('layouts.app')
 
-@section('title', 'Chỉnh sửa hồ sơ')
+@section('title', 'Cập nhật thông tin cá nhân')
 
 @section('content')
     <div class="page-head">
         <div>
-            <h1>Chỉnh sửa hồ sơ</h1>
-            <p class="muted">Cập nhật thông tin cá nhân của bạn.</p>
+            <h1>Cập nhật thông tin cá nhân</h1>
+            <p class="muted">Chỉ gửi thay đổi thông tin liên hệ / giấy tờ cá nhân. Chức vụ, phòng ban, mã NV do HR quản lý.</p>
         </div>
     </div>
 
@@ -53,19 +53,8 @@
                 </div>
             </div>
 
-            <div class="grid two-cols" style="margin-top: 16px;">
-                <div>
-                    <label for="education">Trình độ</label>
-                    <input id="education" type="text" name="education" value="{{ old('education', $employee->education) }}" class="form-control">
-                </div>
-                <div>
-                    <label for="experience">Kinh nghiệm</label>
-                    <input id="experience" type="text" name="experience" value="{{ old('experience', $employee->experience) }}" class="form-control">
-                </div>
-            </div>
-
             <div style="margin-top: 20px;">
-                <button type="submit" class="btn btn-primary">Lưu thay đổi</button>
+                <button type="submit" class="btn btn-primary">Gửi cập nhật</button>
                 <a class="btn btn-secondary" href="{{ route('me.profile') }}">Hủy</a>
             </div>
         </form>

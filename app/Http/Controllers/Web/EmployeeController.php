@@ -3,17 +3,25 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\Attendance;
+use App\Models\AttendanceAdjustmentRequest;
 use App\Models\Benefit;
 use App\Models\Contract;
 use App\Models\Employee;
 use App\Models\EmployeeEvaluation;
 use App\Models\LeaveRequest;
 use App\Models\Notification;
+use App\Models\NotificationRead;
 use App\Models\Payroll;
+use App\Services\ContractService;
+use App\Services\PayrollPaymentWorkflowService;
 use App\Traits\HasLeaveLimit;
+use Illuminate\Database\QueryException;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class EmployeeController extends Controller
@@ -23,22 +31,74 @@ class EmployeeController extends Controller
     public function dashboard()
     {
         $user = auth()->user();
-        $employee = Employee::where('email', $user->email)->with('department')->firstOrFail();
+        $employee = $user->linkedEmployee();
+
+        if (! $employee) {
+            return redirect()->route('me.unlinked');
+        }
+
+        $employee->loadMissing('department');
 
         $todayAttendance = Attendance::where('employee_id', $employee->id)
             ->whereDate('date', now()->toDateString())
             ->latest()
             ->first();
 
+        $todayStatus = 'Chưa chấm';
+        if ($todayAttendance?->check_out) {
+            $todayStatus = 'Đã ra';
+        } elseif ($todayAttendance?->check_in) {
+            $todayStatus = 'Đã vào';
+        }
+
+        $workflow = app(PayrollPaymentWorkflowService::class);
+        $issuedStatuses = array_values(array_unique(array_merge(
+            PayrollPaymentWorkflowService::directorApprovedStatuses(),
+            PayrollPaymentWorkflowService::payableStatuses(),
+            [PayrollPaymentWorkflowService::PAID]
+        )));
         $latestPayroll = Payroll::where('employee_id', $employee->id)
-            ->latest('month')
-            ->first();
+            ->whereIn('status', $issuedStatuses)
+            ->orderByDesc('year')
+            ->orderByDesc('month')
+            ->first()
+            ?? Payroll::where('employee_id', $employee->id)
+                ->orderByDesc('year')
+                ->orderByDesc('month')
+                ->first();
+
+        $currentContract = Contract::where('employee_id', $employee->id)
+            ->where('status', 'active')
+            ->latest('start_date')
+            ->first()
+            ?? Contract::where('employee_id', $employee->id)->latest()->first();
+
+        $leaveLimit = $this->checkLeaveLimit(
+            $employee->id,
+            now()->startOfMonth()->toDateString(),
+            now()->endOfMonth()->toDateString()
+        );
+
+        $unreadNotifications = $this->employeeNotificationsQuery($user, $employee)
+            ->whereDoesntHave('reads', fn ($q) => $q->where('user_id', $user->id))
+            ->count();
 
         return view('employee.dashboard', [
             'employee' => $employee,
             'todayAttendance' => $todayAttendance,
+            'todayStatus' => $todayStatus,
             'latestPayroll' => $latestPayroll,
+            'currentContract' => $currentContract,
+            'leaveLimit' => $leaveLimit,
+            'unreadNotifications' => $unreadNotifications,
+            'payrollStatusLabel' => $latestPayroll ? $workflow->statusLabel($latestPayroll->status) : null,
+            'payrollIsIssued' => $latestPayroll ? in_array($latestPayroll->status, $issuedStatuses, true) : false,
         ]);
+    }
+
+    public function unlinked()
+    {
+        return view('employee.unlinked');
     }
 
     public function attendanceIndex(Request $request)
@@ -63,74 +123,22 @@ class EmployeeController extends Controller
 
     public function attendanceCreate(Request $request)
     {
-        $user = auth()->user();
-        $employee = Employee::where('email', $user->email)->firstOrFail();
-
-        return view('employee.attendance.form', [
-            'attendance' => new Attendance(['employee_id' => $employee->id, 'status' => 'present', 'date' => now()->toDateString()]),
-        ]);
+        return redirect()->route('me.attendance');
     }
 
     public function attendanceStore(Request $request)
     {
-        $user = auth()->user();
-        $employee = Employee::where('email', $user->email)->firstOrFail();
-
-        $data = $request->validate([
-            'date' => ['required', 'date'],
-            'check_in' => ['nullable', 'date_format:H:i:s'],
-            'check_out' => ['nullable', 'date_format:H:i:s'],
-            'status' => ['required', 'in:present,late,leave,absent'],
-            'notes' => ['nullable', 'string'],
-        ]);
-
-        $data['employee_id'] = $employee->id;
-
-        $attendance = Attendance::create($data);
-
-        if ($request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'attendance' => $attendance,
-            ], 201);
-        }
-
-        return redirect()->route('me.attendance')->with('success', 'Ghi chấm công thành công.');
+        abort(403, 'Không được tự tạo bản ghi chấm công. Dùng Check-in/Check-out hoặc gửi yêu cầu điều chỉnh.');
     }
 
     public function attendanceUpdate(Request $request, Attendance $attendance)
     {
-        $user = auth()->user();
-        $employee = Employee::where('email', $user->email)->firstOrFail();
-
-        if ($attendance->employee_id !== $employee->id) {
-            abort(403);
-        }
-
-        $data = $request->validate([
-            'date' => ['required', 'date'],
-            'check_in' => ['nullable', 'date_format:H:i:s'],
-            'check_out' => ['nullable', 'date_format:H:i:s'],
-            'status' => ['required', 'in:present,late,leave,absent'],
-            'notes' => ['nullable', 'string'],
-        ]);
-
-        $attendance->update($data);
-
-        if ($request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'attendance' => $attendance,
-            ], 200);
-        }
-
-        return redirect()->route('me.attendance')->with('success', 'Cập nhật chấm công thành công.');
+        abort(403, 'Không được tự sửa giờ chấm công. Liên hệ HR nếu cần điều chỉnh (có kiểm tra và nhật ký).');
     }
 
     public function contracts()
     {
-        $user = auth()->user();
-        $employee = Employee::where('email', $user->email)->first();
+        $employee = auth()->user()?->linkedEmployee();
 
         $contracts = collect();
         if ($employee) {
@@ -143,14 +151,90 @@ class EmployeeController extends Controller
         return view('employee.contracts.index', ['contracts' => $contracts, 'employee' => $employee]);
     }
 
+    public function signContract(Contract $contract, ContractService $contractService)
+    {
+        $employee = auth()->user()?->linkedEmployee();
+        if (! $employee || $contract->employee_id !== $employee->id) {
+            abort(403, 'Bạn chỉ được ký hợp đồng của chính mình.');
+        }
+
+        try {
+            $contractService->signContract(auth()->user(), $contract, 'employee');
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Bạn đã ký hợp đồng. Đang chờ Giám đốc ký để hợp đồng có hiệu lực.');
+    }
+
     public function payrolls()
     {
-        $user = auth()->user();
-        $employee = Employee::where('email', $user->email)->firstOrFail();
+        $employee = auth()->user()?->linkedEmployee();
+        if (! $employee) {
+            abort(403, 'Tài khoản chưa gắn hồ sơ nhân viên.');
+        }
 
-        $payrolls = Payroll::where('employee_id', $employee->id)->latest()->get();
+        $payrolls = Payroll::where('employee_id', $employee->id)->with('employee')->latest()->get();
 
-        return view('employee.payroll.index', ['payrolls' => $payrolls]);
+        return view('employee.payroll.index', [
+            'payrolls' => $payrolls,
+            'workflow' => app(\App\Services\PayrollPaymentWorkflowService::class),
+        ]);
+    }
+
+    public function payrollShow(Payroll $payroll)
+    {
+        $this->assertOwnEmployeeId($payroll->employee_id);
+
+        return view('employee.payroll.index', [
+            'payrolls' => collect([$payroll->load('employee')]),
+            'workflow' => app(\App\Services\PayrollPaymentWorkflowService::class),
+        ]);
+    }
+
+    public function payrollHistory(Payroll $payroll)
+    {
+        $this->assertOwnEmployeeId($payroll->employee_id);
+
+        $history = \App\Models\SalaryHistory::where('payroll_id', $payroll->id)->first();
+        if (! $history) {
+            abort(404, 'Chưa có lịch sử thanh toán cho phiếu này.');
+        }
+
+        return redirect()->route('me.salary_histories.show', $history);
+    }
+
+    public function contractShow(Contract $contract)
+    {
+        $this->assertOwnEmployeeId($contract->employee_id);
+
+        return view('employee.contracts.index', [
+            'contracts' => collect([$contract->load('employee.department')]),
+            'employee' => $contract->employee,
+        ]);
+    }
+
+    public function attendanceShow(Attendance $attendance)
+    {
+        $this->assertOwnEmployeeId($attendance->employee_id);
+
+        return redirect()->route('me.attendance');
+    }
+
+    private function assertOwnEmployeeId($employeeId): void
+    {
+        $employee = auth()->user()?->linkedEmployee();
+        if (! $employee || (int) $employee->id !== (int) $employeeId) {
+            abort(403, 'Bạn chỉ được xem dữ liệu của chính mình.');
+        }
+    }
+
+    /**
+     * Lịch sử thanh toán của NV — dùng chung trang lịch sử lương đã thanh toán.
+     */
+    public function paymentHistory()
+    {
+        return redirect()->route('me.salary_histories');
     }
 
     public function evaluations(): View
@@ -198,7 +282,7 @@ class EmployeeController extends Controller
         $user = auth()->user();
         $employee = Employee::where('email', $user->email)->firstOrFail();
 
-        $leaves = $employee->leaveRequests()->latest()->get();
+        $leaves = $employee->leaveRequests()->with('approver')->latest()->get();
 
         $limitCheck = $this->checkLeaveLimit(
             $employee->id,
@@ -251,13 +335,97 @@ class EmployeeController extends Controller
             return back()->withInput()->with('error', $msg);
         }
 
-        $data['employee_id'] = $employee->id;
-        $data['days'] = $this->calculateLeaveDays($data['start_date'], $data['end_date'], $data['half_day']);
-        $data['status'] = 'pending';
+        try {
+            app(\App\Services\PayrollPeriodLockService::class)->assertWritableRange(
+                $data['start_date'],
+                $data['end_date'],
+                'đơn nghỉ phép'
+            );
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        }
 
-        LeaveRequest::create($data);
+        DB::transaction(function () use ($user, $employee, $data) {
+            LeaveRequest::create([
+                'employee_id' => $employee->id,
+                'start_date' => $data['start_date'],
+                'end_date' => $data['end_date'],
+                'half_day' => $data['half_day'],
+                'type' => $data['type'],
+                'reason' => $data['reason'] ?? null,
+                'is_urgent' => $data['is_urgent'],
+                'urgent_reason' => $data['urgent_reason'] ?? null,
+                'days' => $this->calculateLeaveDays($data['start_date'], $data['end_date'], $data['half_day']),
+                'status' => 'pending',
+                'approved_by' => null,
+                'approved_at' => null,
+                'cancelled_by' => null,
+                'cancelled_at' => null,
+            ]);
+
+            ActivityLog::create([
+                'user_id' => $user->id,
+                'action' => 'leave_submitted',
+                'meta' => sprintf('%s → %s', $data['start_date'], $data['end_date']),
+            ]);
+        });
 
         return redirect()->route('me.leave_requests')->with('success', 'Đã tạo đơn nghỉ phép.');
+    }
+
+    public function cancelLeave(LeaveRequest $leaveRequest): RedirectResponse
+    {
+        $user = auth()->user();
+        $employee = Employee::where('email', $user->email)->firstOrFail();
+
+        if ((int) $leaveRequest->employee_id !== (int) $employee->id) {
+            abort(403, 'Bạn chỉ được hủy đơn của chính mình.');
+        }
+
+        $reason = trim((string) request('cancel_reason', ''));
+
+        try {
+            DB::transaction(function () use ($leaveRequest, $user, $employee, $reason) {
+                $leave = LeaveRequest::query()->whereKey($leaveRequest->id)->lockForUpdate()->firstOrFail();
+                if ((int) $leave->employee_id !== (int) $employee->id) {
+                    abort(403, 'Bạn chỉ được hủy đơn của chính mình.');
+                }
+
+                $status = $leave->status ?: 'pending';
+                $beforeLeaveDay = optional($leave->start_date)->toDateString() > now()->toDateString();
+
+                if ($status === 'pending') {
+                    $leave->update([
+                        'status' => 'cancelled',
+                        'cancelled_by' => $user->id,
+                        'cancelled_at' => now(),
+                        'cancel_reason' => $reason !== '' ? $reason : 'Nhân viên hủy đơn đang chờ duyệt',
+                    ]);
+                } elseif ($status === 'approved' && $beforeLeaveDay) {
+                    $data = request()->validate([
+                        'cancel_reason' => ['required', 'string', 'max:500'],
+                    ]);
+                    $leave->update([
+                        'status' => 'cancelled',
+                        'cancelled_by' => $user->id,
+                        'cancelled_at' => now(),
+                        'cancel_reason' => $data['cancel_reason'],
+                    ]);
+                } else {
+                    throw new \RuntimeException('Chỉ hủy được đơn đang chờ duyệt, hoặc đơn đã duyệt trước ngày nghỉ.');
+                }
+
+                ActivityLog::create([
+                    'user_id' => $user->id,
+                    'action' => 'leave_cancelled',
+                    'meta' => 'leave:'.$leave->id.';reason:'.$leave->cancel_reason,
+                ]);
+            });
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('me.leave_requests')->with('success', 'Đã hủy đơn nghỉ phép. Lịch sử đơn vẫn được giữ.');
     }
 
     public function profile()
@@ -265,7 +433,12 @@ class EmployeeController extends Controller
         $user = auth()->user();
         $employee = Employee::where('email', $user->email)->with('department')->firstOrFail();
 
-        return view('employee.profile', compact('employee'));
+        $baseSalary = optional(
+            Contract::where('employee_id', $employee->id)->where('status', 'active')->latest('start_date')->first()
+            ?? Payroll::where('employee_id', $employee->id)->orderByDesc('year')->orderByDesc('month')->first()
+        )->base_salary;
+
+        return view('employee.profile', compact('employee', 'baseSalary'));
     }
 
     public function trainings(): View
@@ -298,14 +471,11 @@ class EmployeeController extends Controller
             'cccd' => ['nullable', 'string', 'max:50'],
             'phone' => ['nullable', 'string', 'max:30'],
             'address' => ['nullable', 'string'],
-            'start_date' => ['nullable', 'date'],
-            'education' => ['nullable', 'string', 'max:255'],
-            'experience' => ['nullable', 'string'],
         ]);
 
         $employee->update($data);
 
-        return redirect()->route('me.profile')->with('success', 'Cập nhật hồ sơ thành công.');
+        return redirect()->route('me.profile')->with('success', 'Đã gửi cập nhật thông tin cá nhân.');
     }
 
     /**
@@ -344,7 +514,7 @@ class EmployeeController extends Controller
             ]);
         }
 
-        return redirect()->route('me.profile')->with('success', 'Đổi mật khẩu thành công.');
+        return redirect()->route('me.profile')->with('success', 'Mật khẩu đã được cập nhật.');
     }
 
     public function notifications(): View
@@ -352,27 +522,124 @@ class EmployeeController extends Controller
         $user = auth()->user();
         $employee = Employee::where('email', $user->email)->first();
 
-        $notifications = Notification::where(function ($query) use ($user) {
-            $query->where('target', 'all');
-
-            if ($user->is_hr) {
-                $query->orWhere('target', 'employee');
-                $query->orWhere('target', 'hr');
-            } else {
-                $query->orWhere('target', 'employee');
-            }
-        })
-            ->when($employee && ! $user->is_hr && ! $user->is_admin, function ($query) use ($employee) {
-                $query->where(function ($q) use ($employee) {
-                    $q->whereNull('data')
-                        ->orWhere('data', 'not like', '%"employee_id"%')
-                        ->orWhere('data', 'like', '%"employee_id":'.$employee->id.'%')
-                        ->orWhere('data', 'like', '%"employee_id": '.$employee->id.'%');
-                });
-            })
+        $notifications = $this->employeeNotificationsQuery($user, $employee)
+            ->with(['reads' => fn ($q) => $q->where('user_id', $user->id)])
             ->latest()
             ->paginate(10);
 
         return view('employee.notifications', compact('notifications'));
+    }
+
+    public function markNotificationRead(Notification $notification): RedirectResponse
+    {
+        $user = auth()->user();
+        $employee = $user?->linkedEmployee();
+        $allowed = $this->employeeNotificationsQuery($user, $employee)
+            ->whereKey($notification->id)
+            ->exists();
+
+        if (! $allowed) {
+            abort(403);
+        }
+
+        NotificationRead::firstOrCreate(
+            ['notification_id' => $notification->id, 'user_id' => $user->id],
+            ['read_at' => now()]
+        );
+
+        return back()->with('success', 'Đã đánh dấu đã đọc.');
+    }
+
+    public function requestAttendanceAdjustment(Request $request, Attendance $attendance): RedirectResponse
+    {
+        $employee = auth()->user()?->linkedEmployee();
+        if (! $employee || (int) $attendance->employee_id !== (int) $employee->id) {
+            abort(403, 'Bạn chỉ được yêu cầu điều chỉnh chấm công của chính mình.');
+        }
+
+        $data = $request->validate([
+            'requested_check_in' => ['nullable', 'date_format:H:i'],
+            'requested_check_out' => ['nullable', 'date_format:H:i'],
+            'reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        if (blank($data['requested_check_in'] ?? null) && blank($data['requested_check_out'] ?? null)) {
+            return back()->with('error', 'Vui lòng nhập giờ vào hoặc giờ ra đề nghị.');
+        }
+
+        try {
+            DB::transaction(function () use ($attendance, $employee, $data) {
+                $locked = Attendance::query()->whereKey($attendance->id)->lockForUpdate()->firstOrFail();
+                if ((int) $locked->employee_id !== (int) $employee->id) {
+                    abort(403);
+                }
+
+                $pending = AttendanceAdjustmentRequest::query()
+                    ->where('attendance_id', $locked->id)
+                    ->where('status', AttendanceAdjustmentRequest::PENDING)
+                    ->lockForUpdate()
+                    ->exists();
+
+                if ($pending) {
+                    throw new \RuntimeException('Đã có yêu cầu điều chỉnh đang chờ HR xử lý cho ngày này.');
+                }
+
+                AttendanceAdjustmentRequest::create([
+                    'employee_id' => $employee->id,
+                    'attendance_id' => $locked->id,
+                    'work_date' => $locked->date,
+                    'current_check_in' => $locked->getRawOriginal('check_in'),
+                    'current_check_out' => $locked->getRawOriginal('check_out'),
+                    'requested_check_in' => $data['requested_check_in'] ?? null,
+                    'requested_check_out' => $data['requested_check_out'] ?? null,
+                    'reason' => $data['reason'],
+                    'status' => AttendanceAdjustmentRequest::PENDING,
+                    'reviewed_by' => null,
+                    'reviewed_at' => null,
+                    'applied_at' => null,
+                    'review_note' => null,
+                ]);
+
+                ActivityLog::create([
+                    'user_id' => auth()->id(),
+                    'action' => 'attendance_adjustment_requested',
+                    'meta' => optional($locked->date)->format('d/m/Y'),
+                ]);
+
+                Notification::create([
+                    'sender_id' => auth()->id(),
+                    'target' => 'hr',
+                    'title' => 'Yêu cầu điều chỉnh chấm công',
+                    'message' => sprintf(
+                        '%s đề nghị điều chỉnh chấm công ngày %s: %s',
+                        $employee->name,
+                        optional($locked->date)->format('d/m/Y'),
+                        $data['reason']
+                    ),
+                    'data' => ['attendance_id' => $locked->id, 'type' => 'attendance_adjustment'],
+                ]);
+            });
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        } catch (QueryException) {
+            return back()->with('error', 'Đã có yêu cầu điều chỉnh đang chờ HR xử lý cho ngày này.');
+        }
+
+        return back()->with('success', 'Đã gửi yêu cầu điều chỉnh chấm công. HR sẽ xử lý, bạn không tự sửa giờ.');
+    }
+
+    protected function employeeNotificationsQuery($user, ?Employee $employee)
+    {
+        return Notification::query()
+            ->where(function ($query) {
+                $query->where('target', 'all')->orWhere('target', 'employee');
+            })
+            ->when($employee, function ($query) use ($employee) {
+                $query->where(function ($q) use ($employee) {
+                    $q->whereNull('data')
+                        ->orWhereNull('data->employee_id')
+                        ->orWhere('data->employee_id', $employee->id);
+                });
+            });
     }
 }

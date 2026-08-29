@@ -40,7 +40,10 @@ trait HasLeaveLimit
         $month = $start->month;
 
         $query = LeaveRequest::where('employee_id', $employeeId)
-            ->where('status', '!=', 'rejected')
+            ->where(function ($q) {
+                $q->whereNull('status')
+                    ->orWhereNotIn('status', ['rejected', 'cancelled']);
+            })
             ->whereMonth('start_date', $month)
             ->whereYear('start_date', $year);
 

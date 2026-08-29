@@ -37,8 +37,8 @@
                 <tr>
                     <td>{{ $r->id }}</td>
                     <td>{{ $r->subject }}</td>
-                    <td>{{ ucfirst($r->type) }}</td>
-                    <td><span class="badge {{ $r->status === 'pending' ? 'pending' : ($r->status === 'processing' ? '' : 'inactive') }}">{{ ucfirst($r->status) }}</span></td>
+                    <td>{{ $r->typeLabel() }}</td>
+                    <td><span class="badge">{{ $r->statusLabel() }}</span></td>
                     <td>{{ $r->created_at->format('Y-m-d') }}</td>
                     <td><a class="btn" href="{{ route('me.support_requests.show', $r) }}">Xem</a></td>
                 </tr>

@@ -8,6 +8,16 @@ use Illuminate\Routing\Controller as BaseController;
 
 class ApiController extends BaseController
 {
+    protected function requireHr(Request $request): User
+    {
+        $user = $this->currentUser($request);
+        if (! $user->is_hr) {
+            abort(403, 'Chỉ HR được ghi dữ liệu nhân sự qua API.');
+        }
+
+        return $user;
+    }
+
     protected function currentUser(Request $request): User
     {
         $token = $request->bearerToken();

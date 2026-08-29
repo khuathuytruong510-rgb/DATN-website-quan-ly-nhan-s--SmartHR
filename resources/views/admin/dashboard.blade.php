@@ -4,67 +4,87 @@
 @section('content')
 <div>
 
-{{-- Header --}}
-<div class="page-head">
+<div class="emp-hero">
     <div>
         <h1>Dashboard</h1>
-        <p class="muted">Tổng quan hệ thống quản lý nhân sự</p>
+        <p>Tổng quan hệ thống quản lý nhân sự</p>
     </div>
-    <div class="actions">
-        <button onclick="window.print()" class="btn">🖨 In báo cáo</button>
-        <a href="{{ route('hr-dashboard.export', ['format'=>'excel','period'=>'all']) }}" class="btn">📊 Xuất Excel</a>
-        <a href="{{ route('hr-dashboard.export', ['format'=>'pdf','period'=>'all']) }}" class="btn">📄 Xuất PDF</a>
-    </div>
-</div>
-
-{{-- 1. Tổng quan nhân sự --}}
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px;">
-    <div class="card" style="padding:18px;text-align:center;">
-        <div style="font-size:32px;font-weight:900;color:#2563eb;">{{ $hrOverview['totalEmployees'] }}</div>
-        <div style="font-size:13px;color:#64748b;margin-top:4px;">Tổng nhân viên</div>
-    </div>
-    <div class="card" style="padding:18px;text-align:center;">
-        <div style="font-size:32px;font-weight:900;color:#0ea5e9;">{{ $hrOverview['totalDepartments'] }}</div>
-        <div style="font-size:13px;color:#64748b;margin-top:4px;">Phòng ban</div>
-    </div>
-    <div class="card" style="padding:18px;text-align:center;">
-        <div style="font-size:32px;font-weight:900;color:#f59e0b;">{{ $hrOverview['totalPositions'] }}</div>
-        <div style="font-size:13px;color:#64748b;margin-top:4px;">Chức vụ</div>
-    </div>
-    <div class="card" style="padding:18px;text-align:center;">
-        <div style="font-size:32px;font-weight:900;color:#16a34a;">{{ $hrOverview['activeEmployees'] }}</div>
-        <div style="font-size:13px;color:#64748b;margin-top:4px;">Đang làm việc</div>
+    <div class="emp-hero-meta">
+        <button type="button" class="emp-chip" onclick="window.print()" style="cursor:pointer;border:1px solid rgba(255,255,255,.18);color:#fff;">In báo cáo</button>
+        <a class="emp-chip" href="{{ route('hr-dashboard.export', ['format'=>'excel','period'=>'all']) }}">Xuất Excel</a>
+        <a class="emp-chip" href="{{ route('hr-dashboard.export', ['format'=>'pdf','period'=>'all']) }}">Xuất PDF</a>
     </div>
 </div>
 
-<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:20px;">
-    <div class="card" style="padding:16px;text-align:center;">
-        <div style="font-size:24px;font-weight:800;color:#dc2626;">{{ $hrOverview['inactiveEmployees'] }}</div>
-        <div style="font-size:12px;color:#64748b;margin-top:4px;">Nghỉ việc</div>
-    </div>
-    <div class="card" style="padding:16px;text-align:center;">
-        <div style="font-size:24px;font-weight:800;color:#d97706;">{{ $hrOverview['probationEmployees'] }}</div>
-        <div style="font-size:12px;color:#64748b;margin-top:4px;">Thử việc</div>
-    </div>
-    <div class="card" style="padding:16px;text-align:center;">
-        <div style="font-size:24px;font-weight:800;color:#0ea5e9;">{{ $hrOverview['internEmployees'] }}</div>
-        <div style="font-size:12px;color:#64748b;margin-top:4px;">Thực tập</div>
-    </div>
-    <div class="card" style="padding:16px;text-align:center;">
-        <div style="font-size:24px;font-weight:800;color:#2563eb;">{{ $accountStats['total'] }}</div>
-        <div style="font-size:12px;color:#64748b;margin-top:4px;">Tài khoản</div>
-        <div style="margin-top:6px;display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">
-            <span class="badge" style="background:#dcfce7;color:#166534;">{{ $accountStats['active'] }} HĐ</span>
-            <span class="badge" style="background:#fee2e2;color:#dc2626;">{{ $accountStats['locked'] }} khoá</span>
+<section class="grid emp-kpis">
+    <article class="emp-kpi is-info">
+        <div class="emp-kpi-head">
+            <h2 class="emp-kpi-label">Tổng nhân viên</h2>
+            <span class="emp-kpi-ico ico-info"><i class="bi bi-people"></i></span>
         </div>
-    </div>
-    <div class="card" style="padding:16px;text-align:center;border-color:#fca5a5;">
-        <div style="font-size:24px;font-weight:800;color:#dc2626;">{{ $contractStats['expiringSoon'] }}</div>
-        <div style="font-size:12px;color:#64748b;margin-top:4px;">HĐ sắp hết hạn</div>
-    </div>
-</div>
+        <div class="emp-kpi-value">{{ $hrOverview['totalEmployees'] }}</div>
+        <p class="emp-kpi-sub">Toàn bộ hồ sơ nhân sự</p>
+    </article>
+    <article class="emp-kpi is-violet">
+        <div class="emp-kpi-head">
+            <h2 class="emp-kpi-label">Phòng ban</h2>
+            <span class="emp-kpi-ico ico-violet"><i class="bi bi-building"></i></span>
+        </div>
+        <div class="emp-kpi-value">{{ $hrOverview['totalDepartments'] }}</div>
+        <p class="emp-kpi-sub">Cơ cấu tổ chức</p>
+    </article>
+    <article class="emp-kpi is-warn">
+        <div class="emp-kpi-head">
+            <h2 class="emp-kpi-label">Chức vụ</h2>
+            <span class="emp-kpi-ico ico-warn"><i class="bi bi-briefcase"></i></span>
+        </div>
+        <div class="emp-kpi-value">{{ $hrOverview['totalPositions'] }}</div>
+        <p class="emp-kpi-sub">Vị trí công việc</p>
+    </article>
+    <article class="emp-kpi is-ok">
+        <div class="emp-kpi-head">
+            <h2 class="emp-kpi-label">Đang làm việc</h2>
+            <span class="emp-kpi-ico ico-ok"><i class="bi bi-person-check"></i></span>
+        </div>
+        <div class="emp-kpi-value">{{ $hrOverview['activeEmployees'] }}</div>
+        <p class="emp-kpi-sub">Nhân viên active</p>
+    </article>
+    <article class="emp-kpi is-danger">
+        <div class="emp-kpi-head">
+            <h2 class="emp-kpi-label">Nghỉ việc</h2>
+            <span class="emp-kpi-ico ico-danger"><i class="bi bi-person-dash"></i></span>
+        </div>
+        <div class="emp-kpi-value">{{ $hrOverview['inactiveEmployees'] }}</div>
+        <p class="emp-kpi-sub">Không còn làm việc</p>
+    </article>
+    <article class="emp-kpi is-warn">
+        <div class="emp-kpi-head">
+            <h2 class="emp-kpi-label">Thử việc / Thực tập</h2>
+            <span class="emp-kpi-ico ico-warn"><i class="bi bi-hourglass-split"></i></span>
+        </div>
+        <div class="emp-kpi-value">{{ $hrOverview['probationEmployees'] }} / {{ $hrOverview['internEmployees'] }}</div>
+        <p class="emp-kpi-sub">Thử việc · Thực tập</p>
+    </article>
+    <article class="emp-kpi is-info">
+        <div class="emp-kpi-head">
+            <h2 class="emp-kpi-label">Tài khoản</h2>
+            <span class="emp-kpi-ico ico-info"><i class="bi bi-person-badge"></i></span>
+        </div>
+        <div class="emp-kpi-value">{{ $accountStats['total'] }}</div>
+        <p class="emp-kpi-sub"><span class="emp-badge ok">{{ $accountStats['active'] }} HĐ</span> <span class="emp-badge warn">{{ $accountStats['locked'] }} khoá</span></p>
+    </article>
+    <article class="emp-kpi {{ $contractStats['expiringSoon'] ? 'is-danger' : 'is-muted' }}">
+        <div class="emp-kpi-head">
+            <h2 class="emp-kpi-label">HĐ sắp hết hạn</h2>
+            <span class="emp-kpi-ico {{ $contractStats['expiringSoon'] ? 'ico-danger' : 'ico-muted' }}"><i class="bi bi-exclamation-triangle"></i></span>
+        </div>
+        <div class="emp-kpi-value">{{ $contractStats['expiringSoon'] }}</div>
+        <p class="emp-kpi-sub">Trong 30 ngày tới</p>
+    </article>
+</section>
 
 {{-- 2. Biểu đồ phòng ban --}}
+<h2 class="section-title">Phòng ban</h2>
 <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:16px;margin-bottom:20px;">
     <div class="card" style="padding:18px;">
         <div style="font-weight:700;margin-bottom:14px;">📊 Tỷ lệ nhân viên theo phòng ban</div>
@@ -111,6 +131,7 @@
 </div>
 
 {{-- 3. Chấm công --}}
+<h2 class="section-title">Chấm công</h2>
 <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:20px;">
     @foreach([
         ['Tổng ngày công', number_format($attendanceStats['totalWorkDays']), '#2563eb'],
@@ -128,6 +149,7 @@
 </div>
 
 {{-- 4. Lương --}}
+<h2 class="section-title">Lương</h2>
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
     @foreach([
         ['Tổng quỹ lương', number_format($payrollStats['totalFund'],0,',','.').'₫', '#2563eb'],
@@ -230,6 +252,7 @@
         @foreach([
             ['Tổng', $accountStats['total'], '#2563eb'],
             ['Admin', $accountStats['admin'], '#dc2626'],
+            ['Giám đốc', $accountStats['director'] ?? 0, '#7c3aed'],
             ['HR', $accountStats['hr'], '#0ea5e9'],
             ['Kế toán', $accountStats['accountant'], '#d97706'],
             ['Nhân viên', $accountStats['employee'], '#64748b'],

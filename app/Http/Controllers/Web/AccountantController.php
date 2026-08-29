@@ -3,31 +3,34 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Models\Payroll;
-use App\Models\Employee;
-use App\Models\LeaveRequest;
 use App\Mail\PayrollMail;
 use App\Mail\PayrollConfirmationMail;
-use App\Traits\HasLeaveLimit;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\View\View;
-use App\Services\PayrollService;
 use App\Models\ActivityLog;
+use App\Models\LeaveRequest;
+use App\Models\Payroll;
+use App\Services\PayrollCalculationService;
+use App\Services\PayrollPaymentWorkflowService;
+use App\Services\PayrollPeriodLockService;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\View\View;
 
 
 class AccountantController extends Controller
 {
-    use HasLeaveLimit;
-
     public function dashboard(): View
     {
         $total = Payroll::count();
-        $pending = Payroll::where('status', 'pending')->count();
-        $approved = Payroll::where('status', 'approved')->count();
+        $waitingReview = Payroll::whereIn('status', array_merge(
+            PayrollPaymentWorkflowService::calculatedStatuses(),
+            PayrollPaymentWorkflowService::hrCheckedStatuses()
+        ))->count();
+        $waitingPay = Payroll::whereIn('status', PayrollPaymentWorkflowService::payableStatuses())->count();
+        $paid = Payroll::where('status', PayrollPaymentWorkflowService::PAID)->count();
 
-        return view('accountant.dashboard', compact('total', 'pending', 'approved'));
+        return view('accountant.dashboard', compact('total', 'waitingReview', 'waitingPay', 'paid'));
     }
 
     public function payrollIndex(Request $request): View
@@ -45,18 +48,36 @@ class AccountantController extends Controller
         }
 
         if ($status = $request->input('status')) {
-            $query->where('status', $status);
+            $statusGroups = [
+                'calculated' => PayrollPaymentWorkflowService::calculatedStatuses(),
+                'hr_checked' => PayrollPaymentWorkflowService::hrCheckedStatuses(),
+                'hr_approved' => PayrollPaymentWorkflowService::hrCheckedStatuses(),
+                'director_approved' => PayrollPaymentWorkflowService::directorApprovedStatuses(),
+                'employee_confirmed' => PayrollPaymentWorkflowService::payableStatuses(),
+                'ready_for_payment' => PayrollPaymentWorkflowService::payableStatuses(),
+            ];
+            if (isset($statusGroups[$status])) {
+                $query->whereIn('status', $statusGroups[$status]);
+            } else {
+                $query->where('status', $status);
+            }
         }
 
         $payrolls = $query->paginate(15)->withQueryString();
 
-        return view('accountant.payroll.index', compact('payrolls'));
+        return view('accountant.payroll.index', [
+            'payrolls' => $payrolls,
+            'workflow' => app(PayrollPaymentWorkflowService::class),
+        ]);
     }
 
     public function payrollShow(Payroll $payroll): View
     {
         $payroll->load('employee');
-        return view('accountant.payroll.show', compact('payroll'));
+        return view('accountant.payroll.show', [
+            'payroll' => $payroll,
+            'workflow' => app(PayrollPaymentWorkflowService::class),
+        ]);
     }
 
     public function sendPayrollEmail(Payroll $payroll)
@@ -66,6 +87,12 @@ class AccountantController extends Controller
         if (! $employee || ! filter_var($employee->email, FILTER_VALIDATE_EMAIL)) {
             return redirect()->route('accountant.payroll.show', $payroll)
                 ->with('error', 'Nhân viên chưa có email hợp lệ.');
+        }
+
+        $workflow = app(PayrollPaymentWorkflowService::class);
+        if (! $workflow->isDirectorApproved($payroll->status) && ! $workflow->canPay($payroll)) {
+            return redirect()->route('accountant.payroll.show', $payroll)
+                ->with('error', 'Chỉ gửi email khi phiếu đã được Giám đốc phê duyệt (hoặc NV đã xác nhận, chờ thanh toán).');
         }
 
         try {
@@ -78,16 +105,35 @@ class AccountantController extends Controller
             ]);
         } catch (\Throwable $e) {
             $payroll->update(['email_status' => 'failed']);
+            ActivityLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'payroll_email_failed',
+                'meta' => 'payroll:'.$payroll->id,
+            ]);
             return redirect()->route('accountant.payroll.show', $payroll)->with('error', 'Gửi email thất bại: ' . $e->getMessage());
         }
+
+        ActivityLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'payroll_email_sent',
+            'meta' => 'payroll:'.$payroll->id,
+        ]);
 
         return redirect()->route('accountant.payroll.show', $payroll)->with('success', 'Đã gửi email đến ' . $employee->email);
     }
 
-    public function recalculatePayroll(Payroll $payroll)
+    public function recalculatePayroll(Payroll $payroll, PayrollCalculationService $service)
     {
-        if ($payroll->locked) {
-            return redirect()->route('accountant.payroll.show', $payroll)->with('error', 'Bảng lương đang bị khoá.');
+        if (! in_array($payroll->status, PayrollPaymentWorkflowService::recalculableStatuses(), true)) {
+            return redirect()->route('accountant.payroll.show', $payroll)
+                ->with('error', 'Chỉ tính lại phiếu đang nháp, đã tính, hoặc đang sự cố. Phiếu HR đã kiểm tra / Giám đốc đã duyệt phải đi đúng vòng workflow.');
+        }
+
+        try {
+            app(\App\Services\PayrollPeriodLockService::class)
+                ->assertUnlockedForCalculation((int) $payroll->month, (int) ($payroll->year ?? now()->year));
+        } catch (\Throwable $e) {
+            return redirect()->route('accountant.payroll.show', $payroll)->with('error', $e->getMessage());
         }
 
         $employee = $payroll->employee;
@@ -95,35 +141,40 @@ class AccountantController extends Controller
             return back()->with('error', 'Nhân viên không tồn tại');
         }
 
-        $service = new PayrollService();
-        $monthParts = explode('-', $payroll->month);
-        $year = (int)($monthParts[0] ?? $payroll->year ?? now()->year);
-        $month = (int)($monthParts[1] ?? $payroll->month);
+        $month = (int) $payroll->month;
+        $year = (int) ($payroll->year ?? now()->year);
 
-        $newPayroll = $service->calculate($employee, $month, $year);
+        try {
+            $newPayroll = $service->calculate($employee, $month, $year);
+        } catch (\Throwable $e) {
+            return redirect()->route('accountant.payroll.show', $payroll)->with('error', $e->getMessage());
+        }
 
-        ActivityLog::create(['user_id' => Auth::id(), 'action' => 'recalculate_payroll', 'meta' => 'payroll:' . $newPayroll->id]);
+        ActivityLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'payroll_recalculated',
+            'meta' => 'payroll:'.$newPayroll->id.';status_before:'.$payroll->status,
+        ]);
 
         return redirect()->route('accountant.payroll.show', $newPayroll)->with('success', 'Đã tính lại bảng lương');
     }
 
     public function lockPayroll(Payroll $payroll)
     {
-        $payroll->update(['locked' => true]);
-        ActivityLog::create(['user_id' => Auth::id(), 'action' => 'lock_payroll', 'meta' => 'payroll:' . $payroll->id]);
-        return redirect()->route('accountant.payroll.show', $payroll)->with('success', 'Đã khoá bảng lương');
+        abort(403, 'Kế toán không khóa từng phiếu. HR chốt cả kỳ lương.');
     }
 
     public function unlockPayroll(Payroll $payroll)
     {
-        $payroll->update(['locked' => false]);
-        ActivityLog::create(['user_id' => Auth::id(), 'action' => 'unlock_payroll', 'meta' => 'payroll:' . $payroll->id]);
-        return redirect()->route('accountant.payroll.show', $payroll)->with('success', 'Đã mở khoá bảng lương');
+        abort(403, 'Kế toán không mở khóa phiếu. HR mở khóa kỳ (có lý do và nhật ký).');
     }
 
     public function sendAllPayrolls(Request $request)
     {
-        $payrolls = Payroll::with('employee')->orderByDesc('month')->get();
+        $payrolls = Payroll::with('employee')
+            ->whereIn('status', PayrollPaymentWorkflowService::directorApprovedStatuses())
+            ->orderByDesc('month')
+            ->get();
         $sent = 0; $failed = 0;
 
         foreach ($payrolls as $p) {
@@ -157,16 +208,41 @@ class AccountantController extends Controller
         return redirect()->route('accountant.payroll.index')->with('success', "Đã gửi {$sent} bảng lương. {$failed} thất bại.");
     }
 
-    public function payrollGenerate(): View
+    public function payrollGenerate(PayrollPeriodLockService $periodLock): View
     {
-        return view('accountant.payroll.generate');
+        $periods = collect();
+        $cursor = Carbon::now()->startOfMonth();
+        for ($i = 0; $i < 6; $i++) {
+            $month = (int) $cursor->month;
+            $year = (int) $cursor->year;
+            $lock = $periodLock->find($month, $year);
+            $statusCounts = Payroll::query()
+                ->where('month', $month)
+                ->where('year', $year)
+                ->pluck('status')
+                ->countBy();
+
+            $periods->push([
+                'month' => $month,
+                'year' => $year,
+                'label' => $cursor->format('m/Y'),
+                'value' => $cursor->format('Y-m'),
+                'locked' => (bool) $lock?->is_locked,
+                'total' => $statusCounts->sum(),
+                'calculated' => (int) $statusCounts->only(PayrollPaymentWorkflowService::calculatedStatuses())->sum(),
+                'issue' => (int) ($statusCounts[PayrollPaymentWorkflowService::PAYROLL_ISSUE] ?? 0),
+            ]);
+            $cursor = $cursor->copy()->subMonth();
+        }
+
+        return view('accountant.payroll.generate', compact('periods'));
     }
 
-    public function generatePayroll(Request $request)
+    public function generatePayroll(Request $request, PayrollCalculationService $service)
     {
         $monthInput = $request->input('month', now()->format('Y-m'));
 
-        if (! preg_match('/^\d{4}-\d{2}$/', $monthInput)) {
+        if (! preg_match('/^\d{4}-\d{2}$/', (string) $monthInput)) {
             return redirect()->route('accountant.payroll.generate')->with('error', 'Định dạng tháng không hợp lệ.');
         }
 
@@ -174,16 +250,18 @@ class AccountantController extends Controller
         $year = (int) $year;
         $month = (int) $month;
 
-        $service = new PayrollService();
-        $employees = \App\Models\Employee::where('status', 'active')->get();
-        $count = 0;
-
-        foreach ($employees as $employee) {
-            $service->calculate($employee, $month, $year);
-            $count++;
+        try {
+            $result = $service->calculatePeriod($month, $year, $request->user());
+        } catch (\Throwable $e) {
+            return redirect()->route('accountant.payroll.generate')->with('error', $e->getMessage());
         }
 
-        return redirect()->route('accountant.payroll.generate')->with('success', "Đã tính lương cho {$count} nhân viên cho {$monthInput}.");
+        $msg = "Đã tính lương cho {$result['calculated']} nhân viên kỳ {$monthInput}.";
+        if ($result['skipped'] > 0) {
+            $msg .= " Bỏ qua {$result['skipped']} phiếu đã vào vòng duyệt (không tính lại).";
+        }
+
+        return redirect()->route('accountant.payroll.generate')->with('success', $msg);
     }
 
     public function payrollSend(): View
@@ -194,7 +272,10 @@ class AccountantController extends Controller
     public function payrollFeedback(): View
     {
         $issues = Payroll::with('employee')
-            ->where('confirmation_status', 'issue_reported')
+            ->where(function ($q) {
+                $q->where('status', PayrollPaymentWorkflowService::PAYROLL_ISSUE)
+                    ->orWhere('confirmation_status', 'issue_reported');
+            })
             ->whereNotNull('issue_report')
             ->orderByDesc('issue_reported_at')
             ->orderByDesc('id')
@@ -222,83 +303,24 @@ class AccountantController extends Controller
         ]);
     }
 
-    public function createLeaveRequest(): View
+    public function createLeaveRequest()
     {
-        return view('accountant.leave_requests.create', [
-            'leaveRequest' => new LeaveRequest([
-                'status' => 'pending',
-                'start_date' => now()->toDateString(),
-                'end_date' => now()->addDays(1)->toDateString(),
-            ]),
-            'employees' => Employee::orderBy('name')->get(),
-        ]);
+        abort(403, 'Kế toán chỉ xem nghỉ phép để tính lương. Tạo/duyệt đơn thuộc HR.');
     }
 
     public function storeLeaveRequest(Request $request)
     {
-        $data = $request->validate([
-            'employee_id' => ['required', 'exists:employees,id'],
-            'start_date' => ['required', 'date'],
-            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
-            'half_day' => ['nullable', 'boolean'],
-            'type' => ['required', 'in:sick,personal,annual,unpaid,maternity'],
-            'reason' => ['nullable', 'string'],
-            'is_urgent' => ['nullable', 'boolean'],
-            'urgent_reason' => ['required_if:is_urgent,1', 'nullable', 'string', 'max:500'],
-        ]);
-
-        $data['is_urgent'] = $request->boolean('is_urgent');
-        $data['half_day'] = $request->boolean('half_day');
-
-        $limitCheck = $this->checkLeaveLimit(
-            $data['employee_id'],
-            $data['start_date'],
-            $data['end_date'],
-            $data['half_day']
-        );
-
-        if ($limitCheck['exceeded'] && empty($data['is_urgent'])) {
-            $msg = "Nhân viên đã sử dụng {$limitCheck['used_days']}/{$limitCheck['max_days']} ngày nghỉ phép trong tháng này. ";
-            if ($limitCheck['requests_exceeded']) {
-                $msg .= "Nhân viên đã hết {$limitCheck['max_requests']} lượt xin nghỉ trong tháng. ";
-            }
-            $msg .= "Vui lòng yêu cầu nhân viên liên hệ bộ phận hỗ trợ nếu cần nghỉ thêm với lý do thuyết phục.";
-            return back()->withInput()->with('error', $msg);
-        }
-
-        $data['days'] = $this->calculateLeaveDays($data['start_date'], $data['end_date'], $data['half_day']);
-        $data['status'] = 'pending';
-
-        LeaveRequest::create($data);
-
-        return redirect()->route('accountant.leave_requests')->with('success', 'Đã tạo đơn nghỉ phép thành công.');
+        abort(403, 'Kế toán chỉ xem nghỉ phép để tính lương. Tạo/duyệt đơn thuộc HR.');
     }
 
     public function approveLeaveRequest(LeaveRequest $leaveRequest)
     {
-        $leaveRequest->update([
-            'status' => 'approved',
-            'approved_by' => Auth::id(),
-            'approved_at' => now(),
-        ]);
-
-        return redirect()->route('accountant.leave_requests')->with('success', 'Đã duyệt đơn nghỉ phép.');
+        abort(403, 'Kế toán không được duyệt nghỉ phép. Việc duyệt thuộc HR.');
     }
 
     public function rejectLeaveRequest(Request $request, LeaveRequest $leaveRequest)
     {
-        $data = $request->validate([
-            'rejection_reason' => ['required', 'string'],
-        ]);
-
-        $leaveRequest->update([
-            'status' => 'rejected',
-            'approved_by' => Auth::id(),
-            'approved_at' => now(),
-            'rejection_reason' => $data['rejection_reason'],
-        ]);
-
-        return redirect()->route('accountant.leave_requests')->with('success', 'Đã từ chối đơn nghỉ phép.');
+        abort(403, 'Kế toán không được từ chối nghỉ phép. Việc duyệt thuộc HR.');
     }
 
     public function allowances(): View
@@ -328,7 +350,16 @@ class AccountantController extends Controller
 
     public function activityLogs(): View
     {
-        return view('accountant.activity_logs.index');
+        $logs = ActivityLog::query()
+            ->where(function ($q) {
+                $q->where('user_id', auth()->id())
+                    ->orWhere('action', 'like', '%payroll%')
+                    ->orWhere('action', 'like', '%salary%');
+            })
+            ->latest()
+            ->paginate(20);
+
+        return view('accountant.activity_logs.index', compact('logs'));
     }
 
     public function profile(): View

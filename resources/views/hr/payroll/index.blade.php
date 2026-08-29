@@ -10,46 +10,150 @@
             <div class="d-flex justify-content-between align-items-center flex-wrap">
                 <div>
                     <h3 class="fw-bold mb-1">
-                        Bảng lương nhân viên
+                        {{ !empty($paymentFocus) ? 'Thanh toán lương' : 'Bảng lương nhân viên' }}
                     </h3>
                     <p class="text-muted mb-0">
-                        Quản lý và tính lương nhân viên theo tháng.
+                        @if(!empty($paymentFocus))
+                            Chỉ phiếu nhân viên đã xác nhận. Kế toán thanh toán → salary_payment → Đã trả. Không thanh toán phiếu chưa xác nhận hoặc đã trả.
+                        @else
+                            HR chốt dữ liệu kỳ → Kế toán tính → HR kiểm tra → Giám đốc phê duyệt cuối → Nhân viên xác nhận → Kế toán thanh toán.
+                        @endif
                     </p>
                 </div>
 
-                <form method="POST" action="{{ route('payroll.generate') }}">
-                    @csrf
-                    <div class="row">
-                        <div class="col-md-3">
-                            <label>Tháng</label>
-                            <select name="month" class="form-select">
-                                @for($i=1;$i<=12;$i++)
-                                    <option value="{{ $i }}" {{ $month==$i?'selected':'' }}>
-                                        Tháng {{ $i }}
-                                    </option>
-                                @endfor
-                            </select>
-                        </div>
+                @php
+                    $user = auth()->user();
+                    $canGenerate = $user->is_accountant && empty($paymentFocus);
+                    $pendingHrCount = $payrolls->whereIn('status', \App\Services\PayrollPaymentWorkflowService::calculatedStatuses())->count();
+                    $pendingDirectorCount = $payrolls->whereIn('status', \App\Services\PayrollPaymentWorkflowService::hrCheckedStatuses())->count();
+                    $canBulkHrReview = $user->is_hr;
+                    $canBulkFinalApprove = $user->is_director;
+                    $periodLocked = (bool) optional($periodLock ?? null)->is_locked;
+                @endphp
 
-                        <div class="col-md-3">
-                            <label>Năm</label>
-                            <select name="year" class="form-select">
-                                @for($y=2025;$y<=2035;$y++)
-                                    <option value="{{ $y }}" {{ $year==$y?'selected':'' }}>
-                                        {{ $y }}
-                                    </option>
-                                @endfor
-                            </select>
+                <div class="d-flex flex-column gap-2 align-items-stretch" style="min-width:min(520px,100%);">
+                    <form method="GET" action="{{ route('payroll.index') }}">
+                        <div class="row g-2">
+                            <div class="col-md-3">
+                                <label>Tháng</label>
+                                <select name="month" class="form-select">
+                                    @for($i=1;$i<=12;$i++)
+                                        <option value="{{ $i }}" {{ $month==$i?'selected':'' }}>
+                                            Tháng {{ $i }}
+                                        </option>
+                                    @endfor
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label>Năm</label>
+                                <select name="year" class="form-select">
+                                    @for($y=2025;$y<=2035;$y++)
+                                        <option value="{{ $y }}" {{ $year==$y?'selected':'' }}>
+                                            {{ $y }}
+                                        </option>
+                                    @endfor
+                                </select>
+                            </div>
+                            <div class="col-md-6 d-flex align-items-end gap-2 flex-wrap">
+                                <button class="btn btn-outline-primary" type="submit">Xem kỳ lương</button>
+                                @if($canGenerate)
+                                <a class="btn btn-primary" href="{{ route('accountant.payroll.generate') }}">
+                                    <i class="bi bi-calculator"></i>
+                                    Sang tính lương
+                                </a>
+                                @endif
+                                <a class="btn btn-outline-secondary"
+                                   href="{{ route('payroll.print', ['month' => $month, 'year' => $year]) }}"
+                                   target="_blank">
+                                    <i class="bi bi-printer"></i>
+                                    In bảng lương
+                                </a>
+                            </div>
                         </div>
+                    </form>
 
-                        <div class="col-md-3 d-flex align-items-end">
-                            <button class="btn btn-primary w-100">
-                                <i class="bi bi-calculator"></i>
-                                Tính lương
+                    @if($user->is_hr)
+                        @if($periodLocked)
+                            <form method="POST" action="{{ route('payroll.period.unlock') }}"
+                                  onsubmit="return confirm('Mở khóa kỳ {{ sprintf('%02d/%d', $month, $year) }}? Sau đó có thể sửa chấm công/nghỉ phép. Phải chốt lại trước khi Kế toán tính.');">
+                                @csrf
+                                <input type="hidden" name="month" value="{{ $month }}">
+                                <input type="hidden" name="year" value="{{ $year }}">
+                                <div class="d-flex gap-2 flex-wrap align-items-end">
+                                    <div style="flex:1;min-width:220px;">
+                                        <label class="form-label mb-1">Kỳ {{ sprintf('%02d/%d', $month, $year) }} đang khóa</label>
+                                        <input type="text" name="unlock_reason" class="form-control" required minlength="10" maxlength="500"
+                                               placeholder="Lý do mở khóa (bắt buộc ≥ 10 ký tự, ghi nhật ký)">
+                                    </div>
+                                    <button type="submit" class="btn btn-outline-danger">Mở khóa kỳ</button>
+                                </div>
+                                <p class="text-muted mb-0 mt-1" style="font-size:12px;">
+                                    Chốt lúc {{ optional($periodLock->locked_at)->format('d/m/Y H:i') }}
+                                    @if($periodLock->locker)
+                                        · {{ $periodLock->locker->name }}
+                                    @endif
+                                </p>
+                            </form>
+                        @else
+                            <form method="POST" action="{{ route('payroll.period.lock') }}"
+                                  onsubmit="return confirm('Chốt dữ liệu kỳ {{ sprintf('%02d/%d', $month, $year) }}? Sau khi chốt, không sửa chấm công/nghỉ phép của kỳ; Kế toán mới được tính lương.');">
+                                @csrf
+                                <input type="hidden" name="month" value="{{ $month }}">
+                                <input type="hidden" name="year" value="{{ $year }}">
+                                <button type="submit" class="btn btn-outline-primary">
+                                    Chốt dữ liệu kỳ {{ sprintf('%02d/%d', $month, $year) }}
+                                </button>
+                                @if(optional($periodLock ?? null)->unlock_reason)
+                                    <p class="text-muted mb-0 mt-1" style="font-size:12px;">
+                                        Lần mở khóa trước: {{ $periodLock->unlock_reason }}
+                                        @if($periodLock->unlocked_at)
+                                            · {{ $periodLock->unlocked_at->format('d/m/Y H:i') }}
+                                        @endif
+                                    </p>
+                                @endif
+                            </form>
+                        @endif
+                    @elseif($canGenerate && ! $periodLocked)
+                        <p class="text-muted mb-0" style="font-size:13px;">HR chưa chốt kỳ {{ sprintf('%02d/%d', $month, $year) }}. Kế toán chưa được tính lương.</p>
+                    @endif
+
+                    @if($canBulkHrReview)
+                        <form method="POST" action="{{ route('payroll.review_all') }}"
+                              onsubmit="return confirm('Xác nhận đã kiểm tra dữ liệu nhân sự trên {{ $pendingHrCount }} bảng lương tháng {{ sprintf('%02d/%d', $month, $year) }}? Sau bước này Giám đốc sẽ phê duyệt cuối.');">
+                            @csrf
+                            <input type="hidden" name="month" value="{{ $month }}">
+                            <input type="hidden" name="year" value="{{ $year }}">
+                            <button type="submit" class="btn btn-success"
+                                    @disabled($pendingHrCount < 1)
+                                    title="{{ $pendingHrCount < 1 ? 'Không có phiếu chờ HR kiểm tra' : 'HR kiểm tra dữ liệu tất cả phiếu kế toán đã tính' }}">
+                                <i class="bi bi-check2-all"></i>
+                                Kiểm tra bảng lương
+                                @if($pendingHrCount > 0)
+                                    ({{ $pendingHrCount }})
+                                @endif
                             </button>
-                        </div>
-                    </div>
-                </form>
+                        </form>
+                    @endif
+
+                    @if($canBulkFinalApprove)
+                        <form method="POST" action="{{ route('payroll.approve_all') }}"
+                              onsubmit="return confirm('Bạn đang phê duyệt {{ $pendingDirectorCount }} phiếu lương của tháng {{ sprintf('%02d/%d', $month, $year) }}. Sau khi phê duyệt, các phiếu sẽ chuyển sang chờ nhân viên xác nhận.\n\nBạn có chắc chắn tiếp tục?');">
+                            @csrf
+                            <input type="hidden" name="month" value="{{ $month }}">
+                            <input type="hidden" name="year" value="{{ $year }}">
+                            <button type="submit" class="btn btn-success"
+                                    @disabled($pendingDirectorCount < 1)
+                                    title="{{ $pendingDirectorCount < 1 ? 'Không có phiếu chờ phê duyệt cuối' : 'Giám đốc phê duyệt cuối các phiếu HR đã kiểm tra' }}">
+                                <i class="bi bi-check2-all"></i>
+                                Phê duyệt cuối
+                                @if($pendingDirectorCount > 0)
+                                    ({{ $pendingDirectorCount }})
+                                @endif
+                            </button>
+                        </form>
+                    @endif
+                </div>
+
             </div>
         </div>
     </div>
@@ -265,23 +369,35 @@
 
                                     @php
                                         $user = auth()->user();
-                                        $canApprove = ($user->is_admin || $user->is_hr) && $payroll->status === 'pending';
-                                        $canPay = ($user->is_admin || $user->is_accountant) && $payroll->status === 'ready_for_payment';
+                                        $canHrReview = $workflow->actorCanReview($user, $payroll);
+                                        $canFinalApprove = $workflow->actorCanFinalApprove($user, $payroll);
+                                        $canPay = $user->is_accountant && $workflow->canPay($payroll);
                                     @endphp
 
-                                    @if($canApprove)
-                                        <form method="POST" action="{{ route('payroll.approve', $payroll) }}" class="d-inline">
+                                    @if($canHrReview)
+                                        <form method="POST" action="{{ route('payroll.review', $payroll) }}" class="d-inline">
                                             @csrf
-                                            <button type="submit" class="btn btn-sm btn-success" title="Duyệt" onclick="return confirm('Duyệt bảng lương của {{ optional($payroll->employee)->name }}?')">
-                                                Duyệt
+                                            <button type="submit" class="btn btn-sm btn-success" title="Kiểm tra dữ liệu" onclick="return confirm('Xác nhận đã kiểm tra dữ liệu nhân sự trên bảng lương của {{ optional($payroll->employee)->name }}?')">
+                                                Kiểm tra dữ liệu
                                             </button>
                                         </form>
-                                    @elseif($payroll->confirmation_status === 'issue_reported')
-                                        <span class="badge text-bg-danger text-wrap" style="max-width:160px;" title="{{ $payroll->issue_report }}">Có sự cố</span>
-                                        @if(auth()->user()->is_admin || auth()->user()->is_hr || auth()->user()->is_accountant)
+                                    @elseif($canFinalApprove)
+                                        <form method="POST" action="{{ route('payroll.approve', $payroll) }}" class="d-inline">
+                                            @csrf
+                                            <button type="submit" class="btn btn-sm btn-success" title="Phê duyệt cuối" onclick="return confirm('Phê duyệt cuối bảng lương của {{ optional($payroll->employee)->name }}?')">
+                                                Phê duyệt cuối
+                                            </button>
+                                        </form>
+                                    @elseif($workflow->isCalculated($payroll->status))
+                                        <span class="badge text-bg-secondary text-wrap" style="max-width:160px;">Chờ HR kiểm tra</span>
+                                    @elseif($workflow->isHrChecked($payroll->status))
+                                        <span class="badge text-bg-info text-wrap" style="max-width:160px;">Chờ phê duyệt cuối</span>
+                                    @elseif($payroll->status === 'payroll_issue' || $payroll->confirmation_status === 'issue_reported')
+                                        <span class="badge text-bg-danger text-wrap" style="max-width:160px;" title="{{ $payroll->issue_report }}">Sự cố lương</span>
+                                        @if(auth()->user()->is_hr)
                                             <a href="{{ route('payroll.issues.fix_form', $payroll) }}" class="btn btn-sm btn-danger">Khắc phục</a>
                                         @endif
-                                    @elseif(in_array($payroll->status, ['waiting_confirmation', 'approved'], true))
+                                    @elseif($workflow->isDirectorApproved($payroll->status))
                                         <span class="badge text-bg-warning text-wrap" style="max-width:160px;">Chờ xác nhận của nhân viên</span>
                                     @elseif($canPay)
                                         <a href="{{ route('payroll.payment.show', $payroll) }}" class="btn btn-sm btn-pay-soft">Thanh toán</a>
@@ -294,7 +410,11 @@
                         @empty
                         <tr>
                             <td colspan="20" class="text-center py-5 text-muted">
-                                Chưa có dữ liệu bảng lương.
+                                @if(!empty($paymentFocus))
+                                    Không có phiếu nhân viên đã xác nhận chờ thanh toán trong kỳ này.
+                                @else
+                                    Chưa có dữ liệu bảng lương.
+                                @endif
                             </td>
                         </tr>
                         @endforelse

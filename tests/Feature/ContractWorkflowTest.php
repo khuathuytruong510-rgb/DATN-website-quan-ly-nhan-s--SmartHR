@@ -66,7 +66,7 @@ class ContractWorkflowTest extends TestCase
     public function test_contract_creation_renewal_and_signing_flow(): void
     {
         $hr = User::factory()->create(['name' => 'HR User', 'is_hr' => true, 'is_admin' => false]);
-        $director = User::factory()->create(['name' => 'Director User', 'is_hr' => false, 'is_admin' => true]);
+        $director = User::factory()->create(['name' => 'Director User', 'is_hr' => false, 'is_admin' => false, 'is_director' => true]);
 
         $department = Department::create([
             'name' => 'Engineering',
@@ -131,5 +131,76 @@ class ContractWorkflowTest extends TestCase
         $renewed->refresh();
         $this->assertEquals('active', $renewed->status);
         $this->assertNotNull($renewed->director_signed_at);
+    }
+
+    public function test_hr_cannot_sign_on_behalf_of_employee_and_employee_must_sign_first(): void
+    {
+        $hr = User::factory()->create(['name' => 'HR User', 'is_hr' => true, 'is_admin' => false, 'is_director' => false]);
+        $director = User::factory()->create(['name' => 'Director User', 'is_hr' => false, 'is_admin' => false, 'is_director' => true]);
+        $department = Department::create([
+            'name' => 'Engineering',
+            'code' => 'ENG',
+            'manager' => 'Manager',
+        ]);
+        $employee = Employee::create([
+            'name' => 'Nguyen Van C',
+            'email' => 'nguyenvanc@example.com',
+            'position' => 'Developer',
+            'department_id' => $department->id,
+            'status' => 'active',
+            'employee_code' => 'EMP003',
+        ]);
+        $employeeUser = User::factory()->create([
+            'name' => 'Employee C',
+            'email' => 'nguyenvanc@example.com',
+            'is_hr' => false,
+            'is_admin' => false,
+            'is_director' => false,
+            'is_accountant' => false,
+        ]);
+        $employee->user_id = $employeeUser->id;
+        $employee->save();
+
+        $this->actingAs($hr)
+            ->post(route('contracts.store'), [
+                'employee_id' => $employee->id,
+                'title' => 'Hợp đồng chính thức',
+                'contract_type' => 'fixed_term',
+                'start_date' => '2026-01-01',
+                'end_date' => '2026-12-31',
+                'sign_and_save' => '1',
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $contract = Contract::query()->where('employee_id', $employee->id)->latest('id')->first();
+        $this->assertNotNull($contract);
+        $this->assertNull($contract->employee_signed_at);
+        $this->assertNull($contract->director_signed_at);
+        $this->assertContains($contract->status, ['waiting_employee_signature', 'waiting_employee']);
+
+        $this->actingAs($hr)
+            ->post(route('contracts.sign', $contract), ['party' => 'employee'])
+            ->assertForbidden();
+
+        $this->actingAs($director)
+            ->post(route('contracts.sign', $contract), ['party' => 'director'])
+            ->assertForbidden();
+
+        $this->actingAs($employeeUser)
+            ->post(route('me.contracts.sign', $contract))
+            ->assertRedirect();
+
+        $contract->refresh();
+        $this->assertNotNull($contract->employee_signed_at);
+        $this->assertNull($contract->director_signed_at);
+
+        $this->actingAs($director)
+            ->post(route('contracts.sign', $contract), ['party' => 'director'])
+            ->assertRedirect();
+
+        $contract->refresh();
+        $this->assertNotNull($contract->director_signed_at);
+        $this->assertEquals('active', $contract->status);
     }
 }

@@ -31,11 +31,25 @@ class OvertimeRequestController extends Controller
         $employee = Employee::where('email', $user->email)->firstOrFail();
 
         $data = $request->validated();
-        $data['employee_id'] = $employee->id;
 
-        OvertimeRequest::create($data + ['status' => 'pending']);
+        OvertimeRequest::create([
+            'employee_id' => $employee->id,
+            'date' => $data['date'],
+            'start_time' => $data['start_time'],
+            'end_time' => $data['end_time'],
+            'reason' => $data['reason'] ?? null,
+            'status' => 'pending',
+            'approved_by' => null,
+            'approved_at' => null,
+        ]);
 
-        return redirect()->route('me.overtime_requests')->with('success', 'Đã gửi yêu cầu tăng ca.');
+        \App\Models\ActivityLog::create([
+            'user_id' => $user->id,
+            'action' => 'overtime_submitted',
+            'meta' => ($data['date'] ?? '').' '.$data['start_time'].'–'.$data['end_time'],
+        ]);
+
+        return redirect()->route('me.overtime_requests')->with('success', 'Đã gửi đăng ký tăng ca. Thời gian đăng ký chưa phải giờ tính lương — HR/Kế toán đối soát theo chấm công.');
     }
 
     public function show(OvertimeRequest $overtimeRequest)
