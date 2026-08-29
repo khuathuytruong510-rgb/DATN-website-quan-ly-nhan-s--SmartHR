@@ -58,7 +58,7 @@ class PayrollSeeder extends Seeder
                 'insurance' => $insurance,
                 'tax' => $tax,
                 'total_salary' => $totalSalary,
-                'status' => 'pending',
+                'status' => 'calculated',
             ]);
         }
     }
