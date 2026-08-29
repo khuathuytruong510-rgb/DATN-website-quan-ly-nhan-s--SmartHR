@@ -30,9 +30,10 @@
         <div class="field">
             <label>Loại</label>
             <select name="type">
-                <option value="payroll">Lỗi lương</option>
                 <option value="attendance">Lỗi chấm công</option>
-                <option value="document">Xin giấy tờ</option>
+                <option value="payroll">Lỗi bảng lương</option>
+                <option value="document">Yêu cầu giấy tờ</option>
+                <option value="personnel">Thông tin nhân sự</option>
                 <option value="other">Khác</option>
             </select>
             @error('type')<div class="error">{{ $message }}</div>@enderror

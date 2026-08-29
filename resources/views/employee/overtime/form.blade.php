@@ -11,7 +11,7 @@
     <div class="page-head">
         <div>
             <h1>Tạo yêu cầu tăng ca</h1>
-            <p class="muted">Gửi yêu cầu tăng ca tới quản lý.</p>
+            <p class="muted">Gửi đăng ký tăng ca. Thời gian đăng ký không nhất thiết là thời gian tính lương.</p>
         </div>
         <div class="actions">
             <a class="btn" href="{{ route('me.overtime_requests') }}">Quay lại</a>

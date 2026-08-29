@@ -16,6 +16,6 @@
     </div>
 
     <div class="card">
-        <div class="empty">Chưa có lịch làm việc. Nhà quản trị sẽ cập nhật lịch cho bạn.</div>
+        <div class="empty">Hiện chưa có lịch làm việc được phân công.</div>
     </div>
 @endsection

@@ -1,10 +1,13 @@
-@extends('layouts.employee')
+@extends('layouts.app')
 
-@section('content')
+@section('title', 'Chấm công')
+
 @section('breadcrumb')
 <li><a href="{{ route('me.dashboard') }}">Dashboard</a></li>
 <li>Chấm công</li>
 @endsection
+
+@section('content')
 <div class="container mx-auto px-4 py-8">
     <div class="max-w-4xl mx-auto">
         <!-- CSRF Token Meta -->
@@ -14,6 +17,12 @@
         <div class="mb-8">
             <h1 class="text-3xl font-bold text-gray-800 mb-2">Chấm Công</h1>
             <p class="text-gray-600">Hôm nay: <strong>{{ date('d/m/Y H:i:s') }}</strong></p>
+            @if(session('success'))
+                <div class="mt-3 rounded-lg bg-green-50 text-green-800 px-4 py-2">{{ session('success') }}</div>
+            @endif
+            @if(session('error'))
+                <div class="mt-3 rounded-lg bg-red-50 text-red-700 px-4 py-2">{{ session('error') }}</div>
+            @endif
         </div>
 
         <!-- Map Section -->
@@ -184,11 +193,12 @@
                             <th class="px-4 py-2 text-left">Chấm Ra</th>
                             <th class="px-4 py-2 text-left">Trạng Thái</th>
                             <th class="px-4 py-2 text-left">Vị Trí Vào</th>
+                            <th class="px-4 py-2 text-left"></th>
                         </tr>
                     </thead>
                     <tbody id="history-table">
                         <tr>
-                            <td class="px-4 py-2 text-center" colspan="5">Đang tải...</td>
+                            <td class="px-4 py-2 text-center" colspan="6">Đang tải...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -196,6 +206,30 @@
         </div>
     </div>
 </div>
+
+<dialog id="adjust-dialog" class="rounded-xl p-0 w-full max-w-md shadow-xl">
+    <form method="POST" id="adjust-form" class="p-5">
+        @csrf
+        <h3 class="text-lg font-bold mb-1">Yêu cầu điều chỉnh chấm công</h3>
+        <p class="text-sm text-gray-500 mb-4" id="adjust-date-label"></p>
+        <div class="mb-3">
+            <label class="block text-sm font-semibold mb-1">Giờ vào đề nghị</label>
+            <input type="time" name="requested_check_in" class="w-full border rounded-lg px-3 py-2">
+        </div>
+        <div class="mb-3">
+            <label class="block text-sm font-semibold mb-1">Giờ ra đề nghị</label>
+            <input type="time" name="requested_check_out" class="w-full border rounded-lg px-3 py-2">
+        </div>
+        <div class="mb-4">
+            <label class="block text-sm font-semibold mb-1">Lý do</label>
+            <textarea name="reason" required rows="3" class="w-full border rounded-lg px-3 py-2" placeholder="Ví dụ: Quên chấm công"></textarea>
+        </div>
+        <div class="flex gap-2 justify-end">
+            <button type="button" class="px-4 py-2 rounded-lg border" onclick="document.getElementById('adjust-dialog').close()">Đóng</button>
+            <button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold">Gửi HR</button>
+        </div>
+    </form>
+</dialog>
 
 <!-- Leaflet Map Library (local copy) -->
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
@@ -653,7 +687,7 @@
         table.innerHTML = '';
 
         if (attendances.length === 0) {
-            table.innerHTML = '<tr><td class="px-4 py-2 text-center" colspan="5">Không có dữ liệu</td></tr>';
+            table.innerHTML = '<tr><td class="px-4 py-2 text-center" colspan="6">Không có dữ liệu</td></tr>';
             return;
         }
 
@@ -675,6 +709,10 @@
                 'leave': 'Nghỉ'
             }[attendance.status] || attendance.status;
 
+            const adjustBtn = attendance.pending_adjustment
+                ? '<span class="text-xs text-amber-700">Đang chờ HR</span>'
+                : `<button type="button" class="text-xs font-semibold text-indigo-600" onclick="openAdjust(${attendance.id}, '${new Date(attendance.date).toLocaleDateString('vi-VN')}')">Yêu cầu điều chỉnh</button>`;
+
             const row = document.createElement('tr');
             row.className = 'border-t border-gray-200 hover:bg-gray-50';
             row.innerHTML = `
@@ -683,9 +721,18 @@
                 <td class="px-4 py-2">${checkOutTime}</td>
                 <td class="px-4 py-2"><span class="px-2 py-1 rounded text-xs font-semibold ${statusColor}">${statusText}</span></td>
                 <td class="px-4 py-2 text-xs">${attendance.check_in_location || '---'}</td>
+                <td class="px-4 py-2">${adjustBtn}</td>
             `;
             table.appendChild(row);
         });
+    }
+
+    function openAdjust(id, dateLabel) {
+        const dialog = document.getElementById('adjust-dialog');
+        const form = document.getElementById('adjust-form');
+        document.getElementById('adjust-date-label').textContent = 'Ngày ' + dateLabel + ' — bạn không tự sửa giờ.';
+        form.action = `/me/attendance/${id}/adjust`;
+        dialog.showModal();
     }
 
     // Show message helper

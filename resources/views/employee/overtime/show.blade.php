@@ -17,8 +17,8 @@
 
     <div class="card">
         <div class="field"><label>Ngày</label><div>{{ optional($overtimeRequest->date)->format('d/m/Y') }}</div></div>
-        <div class="field"><label>Giờ bắt đầu</label><div>{{ $overtimeRequest->start_time }}</div></div>
-        <div class="field"><label>Giờ kết thúc</label><div>{{ $overtimeRequest->end_time }}</div></div>
+        <div class="field"><label>Giờ đăng ký</label><div>{{ $overtimeRequest->start_time }} – {{ $overtimeRequest->end_time }}</div></div>
+        <div class="field"><label>Ghi chú nghiệp vụ</label><div class="muted">Giờ đăng ký khác giờ tính lương. HR/Kế toán đối soát theo dữ liệu chấm công (ACTUAL) khi tính lương.</div></div>
         <div class="field"><label>Lý do</label><div>{{ $overtimeRequest->reason ?? '-' }}</div></div>
         <div class="field"><label>Trạng thái</label>
             <div>

@@ -10,7 +10,7 @@
     <div class="page-head">
         <div>
             <h1>Đăng ký tăng ca</h1>
-            <p class="muted">Danh sách yêu cầu tăng ca của bạn.</p>
+            <p class="muted">Thời gian đăng ký tăng ca. Giờ đăng ký chưa phải giờ tính lương — HR/Kế toán đối soát theo chấm công thực tế.</p>
         </div>
         <a class="btn primary" href="{{ route('me.overtime_requests.create') }}">Tạo yêu cầu</a>
     </div>
@@ -24,8 +24,7 @@
                     <thead class="table-light">
                         <tr>
                             <th>Ngày</th>
-                            <th>Giờ bắt đầu</th>
-                            <th>Giờ kết thúc</th>
+                            <th>Giờ đăng ký</th>
                             <th>Trạng thái</th>
                             <th>Hành động</th>
                         </tr>
@@ -34,8 +33,7 @@
                         @foreach($requests as $r)
                             <tr>
                                 <td>{{ optional($r->date)->format('d/m/Y') }}</td>
-                                <td>{{ $r->start_time }}</td>
-                                <td>{{ $r->end_time }}</td>
+                                <td>{{ $r->start_time }} – {{ $r->end_time }}</td>
                                 <td>
                                     @if($r->status === 'pending')
                                         <span class="badge bg-warning">Chờ duyệt</span>
