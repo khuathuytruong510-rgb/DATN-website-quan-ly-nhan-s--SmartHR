@@ -17,8 +17,12 @@ class EnsureNotAdminOrHr
     {
         $user = auth()->user();
 
-        if ($user && ($user->is_admin || $user->is_hr || $user->is_accountant)) {
+        if ($user && $user->isStaffUser()) {
             return redirect()->route('dashboard');
+        }
+
+        if ($user && ! $user->linkedEmployee() && ! $request->routeIs('me.unlinked')) {
+            return redirect()->route('me.unlinked');
         }
 
         return $next($request);
