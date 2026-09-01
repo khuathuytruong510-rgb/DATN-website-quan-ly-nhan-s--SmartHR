@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Carbon\Carbon;
+use App\Models\User;
 
 class Payroll extends Model
 {
@@ -27,6 +28,7 @@ class Payroll extends Model
         'allowance',
         'bonus',
         'deduction',
+        'late_penalty_fee',
         'insurance',
         'tax',
         'total_salary',
@@ -38,8 +40,14 @@ class Payroll extends Model
         'confirmed_at',
         'confirmation_status',
         'confirmation_deadline',
+        'confirmation_token',
         'issue_report',
         'issue_reported_at',
+        'paid_by',
+        'payment_method',
+        'payout_bank_name',
+        'payout_account_number',
+        'payout_account_holder',
     ];
 
     protected $casts = [
@@ -55,12 +63,22 @@ class Payroll extends Model
         return $this->belongsTo(Employee::class);
     }
 
+    public function paidByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'paid_by');
+    }
+
     /**
      * Thanh toán lương
      */
     public function salaryPayment()
     {
         return $this->hasOne(SalaryPayment::class);
+    }
+
+    public function salaryHistory()
+    {
+        return $this->hasOne(SalaryHistory::class);
     }
 
     /**
@@ -85,7 +103,8 @@ class Payroll extends Model
             $totalIncome
             - ($this->insurance ?? 0)
             - ($this->tax ?? 0)
-            - ($this->deduction ?? 0),
+            - ($this->deduction ?? 0)
+            - ($this->late_penalty_fee ?? 0),
             2
         );
     }
@@ -140,5 +159,13 @@ class Payroll extends Model
     public function getNetSalaryAttribute(): float
     {
         return round($this->total_salary ?? 0, 2);
+    }
+
+    /**
+     * Get formatted late penalty fee
+     */
+    public function getFormattedLatePenaltyFeeAttribute(): string
+    {
+        return number_format($this->late_penalty_fee ?? 0, 0, '.', ',') . ' ₫';
     }
 }

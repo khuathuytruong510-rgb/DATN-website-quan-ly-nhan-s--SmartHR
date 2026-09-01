@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\SupportRequest;
 use App\Models\Employee;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 
 class SupportRequestController extends Controller
 {
@@ -33,20 +33,67 @@ class SupportRequestController extends Controller
         $data = $request->validate([
             'subject' => ['required', 'string', 'max:255'],
             'message' => ['required', 'string'],
-            'type' => ['required', 'in:payroll,attendance,document,other'],
+            'type' => ['required', 'in:payroll,attendance,document,personnel,other'],
             'attachment' => ['nullable', 'file', 'max:5120'],
         ]);
 
+        $attachment = null;
         if ($request->hasFile('attachment')) {
-            $path = $request->file('attachment')->store('support_attachments');
-            $data['attachment'] = $path;
+            $attachment = $request->file('attachment')->store('support_attachments');
         }
 
-        $data['employee_id'] = $employee->id;
+        DB::transaction(function () use ($user, $employee, $data, $attachment) {
+            SupportRequest::create([
+                'employee_id' => $employee->id,
+                'subject' => $data['subject'],
+                'message' => $data['message'],
+                'type' => $data['type'],
+                'attachment' => $attachment,
+                'status' => SupportRequest::PENDING,
+            ]);
 
-        SupportRequest::create($data + ['status' => 'pending']);
+            \App\Models\ActivityLog::create([
+                'user_id' => $user->id,
+                'action' => 'support_submitted',
+                'meta' => $data['subject'],
+            ]);
+        });
 
         return redirect()->route('me.support_requests')->with('success', 'Đã gửi yêu cầu hỗ trợ.');
+    }
+
+    public function followUp(Request $request, SupportRequest $supportRequest)
+    {
+        $user = auth()->user();
+        $employee = Employee::where('email', $user->email)->firstOrFail();
+
+        if ($supportRequest->employee_id !== $employee->id) {
+            abort(403);
+        }
+
+        $data = $request->validate([
+            'follow_up' => ['required', 'string', 'max:2000'],
+        ]);
+
+        try {
+            DB::transaction(function () use ($supportRequest, $employee, $data) {
+                $row = SupportRequest::query()->whereKey($supportRequest->id)->lockForUpdate()->firstOrFail();
+                if ((int) $row->employee_id !== (int) $employee->id) {
+                    abort(403);
+                }
+                if (! in_array($row->status, [SupportRequest::PENDING, SupportRequest::PROCESSING], true)) {
+                    throw new \RuntimeException('Không thể bổ sung nội dung khi yêu cầu đã giải quyết.');
+                }
+
+                $row->update([
+                    'follow_up' => trim(($row->follow_up ? $row->follow_up."\n---\n" : '').$data['follow_up']),
+                ]);
+            });
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Đã bổ sung nội dung. Bạn không tự đóng yêu cầu.');
     }
 
     public function show(SupportRequest $supportRequest)

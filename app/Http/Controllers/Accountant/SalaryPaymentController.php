@@ -45,31 +45,17 @@ class SalaryPaymentController extends Controller
      */
     public function create(Payroll $payroll)
     {
-        // Kiểm tra xem bảng lương đã duyệt chưa
-        if ($payroll->status !== 'approved') {
-            return back()->with('error', 'Bảng lương chưa được duyệt!');
+        if (! request()->user()?->is_accountant) {
+            abort(403, 'Chỉ Kế toán được tạo thanh toán.');
         }
 
-        // Kiểm tra xem đã có thanh toán chưa
-        $existing = SalaryPayment::where('payroll_id', $payroll->id)->first();
-        if ($existing) {
-            return redirect()->route('salary_payments.show', $existing);
+        if (! in_array($payroll->status, \App\Services\PayrollPaymentWorkflowService::payableStatuses(), true)) {
+            return back()->with('error', 'Chỉ tạo thanh toán khi bảng lương đủ điều kiện thanh toán (NV đã xác nhận).');
         }
 
-        // Tạo record thanh toán mới
-        $payment = SalaryPayment::create([
-            'employee_id' => $payroll->employee_id,
-            'payroll_id' => $payroll->id,
-            'code' => 'PAY-' . now()->format('YmdHis'),
-            'month' => $payroll->month,
-            'year' => $payroll->year,
-            'total' => $payroll->total_salary,
-            'deductions' => $payroll->insurance + $payroll->tax,
-            'net' => $payroll->total_salary - ($payroll->insurance + $payroll->tax),
-            'status' => 'pending',
-        ]);
-
-        return redirect()->route('salary_payments.show', $payment);
+        return redirect()
+            ->route('payroll.payment.show', $payroll)
+            ->with('info', 'Thanh toán qua trang quy trình bảng lương.');
     }
 
     /**
@@ -87,6 +73,10 @@ class SalaryPaymentController extends Controller
      */
     public function edit(SalaryPayment $salaryPayment)
     {
+        if (! request()->user()?->is_accountant) {
+            abort(403, 'Chỉ Kế toán được sửa phiếu thanh toán.');
+        }
+
         // Chỉ cho phép sửa nếu chưa thanh toán
         if ($salaryPayment->status !== 'pending') {
             return back()->with('error', 'Không thể sửa thanh toán đã xử lý!');
@@ -107,6 +97,10 @@ class SalaryPaymentController extends Controller
      */
     public function update(Request $request, SalaryPayment $salaryPayment)
     {
+        if (! $request->user()?->is_accountant) {
+            abort(403, 'Chỉ Kế toán được sửa phiếu thanh toán.');
+        }
+
         if ($salaryPayment->status !== 'pending') {
             return back()->with('error', 'Không thể sửa thanh toán đã xử lý!');
         }
@@ -132,30 +126,21 @@ class SalaryPaymentController extends Controller
      */
     public function pay(Request $request, SalaryPayment $salaryPayment)
     {
-        if ($salaryPayment->status !== 'pending') {
-            return back()->with('error', 'Thanh toán không hợp lệ!');
+        if (! $request->user()?->is_accountant) {
+            abort(403, 'Chỉ Kế toán được thanh toán lương.');
         }
 
-        $validated = $request->validate([
-            'payment_method' => 'required|in:bank_transfer,cash',
-            'bank' => 'nullable|required_if:payment_method,bank_transfer|string',
-            'account_holder' => 'nullable|required_if:payment_method,bank_transfer|string',
-            'account_number' => 'nullable|required_if:payment_method,bank_transfer|string',
-            'transaction_code' => 'nullable|string',
-            'cash_payer' => 'nullable|required_if:payment_method,cash|string',
-            'notes' => 'nullable|string',
-        ]);
+        $salaryPayment->loadMissing('payroll');
 
-        // Xử lý thanh toán thông qua Service
-        $this->salaryService->processPayment($salaryPayment, $validated);
-
-        // Cập nhật status của payroll
-        if ($salaryPayment->payroll) {
-            $salaryPayment->payroll->update(['status' => 'paid', 'paid_at' => now()]);
+        if ($salaryPayment->payroll_id && $salaryPayment->payroll) {
+            if (in_array($salaryPayment->payroll->status, \App\Services\PayrollPaymentWorkflowService::payableStatuses(), true)) {
+                return redirect()
+                    ->route('payroll.payment.show', $salaryPayment->payroll)
+                    ->with('info', 'Vui lòng thanh toán theo quy trình bảng lương.');
+            }
         }
 
-        return redirect()->route('salary_payments.show', $salaryPayment)
-            ->with('success', 'Thanh toán lương thành công!');
+        return back()->with('error', 'Không thể thanh toán ngoài quy trình xác nhận bảng lương.');
     }
 
     /**
@@ -169,7 +154,7 @@ class SalaryPaymentController extends Controller
         $payrolls = Payroll::with('employee', 'employee.department')
             ->where('month', $month)
             ->where('year', $year)
-            ->where('status', 'approved')
+            ->whereIn('status', \App\Services\PayrollPaymentWorkflowService::payableStatuses())
             ->whereDoesntHave('salaryPayment')
             ->orderByDesc('id')
             ->paginate(20);
@@ -264,6 +249,10 @@ class SalaryPaymentController extends Controller
      */
     public function destroy(SalaryPayment $salaryPayment)
     {
+        if (! request()->user()?->is_accountant) {
+            abort(403, 'Chỉ Kế toán được xóa phiếu thanh toán chưa chi.');
+        }
+
         if ($salaryPayment->status !== 'pending') {
             return back()->with('error', 'Không thể xóa thanh toán đã xử lý!');
         }

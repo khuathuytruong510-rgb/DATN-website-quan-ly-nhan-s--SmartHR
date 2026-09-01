@@ -4,6 +4,7 @@
 
 @section('content')
     <div class="auth-card">
+        <p class="auth-brand">SmartHR</p>
         <h1>Đăng ký</h1>
         <p class="muted">Tạo tài khoản quản trị để sử dụng SmartHR.</p>
 

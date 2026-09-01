@@ -1,4 +1,4 @@
-@extends('layouts.employee')
+@extends('layouts.app')
 
 @section('title', 'Bảng lương của tôi')
 
@@ -8,179 +8,193 @@
 @endsection
 
 @section('content')
-    <div class="page-head">
-        <div>
-            <h1>Bảng lương của tôi</h1>
-            <p class="muted">Xem và xác nhận phiếu lương</p>
-        </div>
+<div class="max-w-4xl">
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-gray-900">Bảng lương của tôi</h1>
+        <p class="text-gray-500 mt-1">Xem, xác nhận phiếu lương và lịch sử thanh toán</p>
     </div>
 
     @if(session('success'))
-        <div class="alert">{{ session('success') }}</div>
+        <div class="mb-4 rounded-xl border border-green-200 bg-green-50 text-green-800 px-4 py-3">{{ session('success') }}</div>
     @endif
     @if(session('error'))
-        <div class="alert" style="background:#fee2e2;color:#dc2626;border-radius:8px;padding:12px;">{{ session('error') }}</div>
+        <div class="mb-4 rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3">{{ session('error') }}</div>
     @endif
+
+    {{-- Tài khoản nhận lương --}}
+    <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm mb-6">
+        <h2 class="text-lg font-bold text-gray-900 mb-1">Tài khoản nhận lương</h2>
+        <p class="text-sm text-gray-500 mb-4">Không sửa trực tiếp. Gửi yêu cầu để HR duyệt trước khi cập nhật.</p>
+
+        @php $emp = optional($payrolls->first())->employee ?? auth()->user()?->linkedEmployee(); @endphp
+        @if($emp)
+            @php
+                $acct = (string) ($emp->account_number ?? '');
+                $masked = $acct === '' ? '—' : (strlen($acct) <= 4 ? str_repeat('*', strlen($acct)) : str_repeat('*', max(0, strlen($acct) - 4)).substr($acct, -4));
+            @endphp
+            <div class="grid md:grid-cols-2 gap-3 text-sm text-gray-700 mb-4 rounded-xl bg-slate-50 border border-slate-100 p-4">
+                <div><span class="text-gray-500">Ngân hàng</span><div class="font-semibold">{{ $emp->bank_name ?: '—' }}</div></div>
+                <div><span class="text-gray-500">Số tài khoản</span><div class="font-semibold">{{ $masked }}</div></div>
+                <div><span class="text-gray-500">Chủ tài khoản</span><div class="font-semibold">{{ $emp->account_holder ?: '—' }}</div></div>
+                <div><span class="text-gray-500">Trạng thái</span><div class="font-semibold">{{ $emp->account_number ? 'Đã xác nhận' : 'Chưa có' }}</div></div>
+            </div>
+        @endif
+
+        <details class="rounded-xl border border-gray-200">
+            <summary class="px-4 py-2.5 cursor-pointer font-semibold text-gray-800">Yêu cầu thay đổi</summary>
+            <form method="POST" action="{{ route('me.payroll.bank_change') }}" enctype="multipart/form-data" class="grid md:grid-cols-2 gap-3 p-4 border-t">
+                @csrf
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Ngân hàng</label>
+                    @include('components.bank-select', [
+                        'name' => 'bank_name',
+                        'value' => '',
+                        'required' => false,
+                        'class' => 'w-full rounded-xl border border-gray-300 px-3 py-2',
+                    ])
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Số tài khoản</label>
+                    <input type="text" name="account_number" class="w-full rounded-xl border border-gray-300 px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Chủ tài khoản</label>
+                    <input type="text" name="account_holder" class="w-full rounded-xl border border-gray-300 px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Ảnh QR</label>
+                    <input type="file" name="qr_image" accept="image/*" class="w-full rounded-xl border border-gray-300 px-3 py-2">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-semibold mb-1">Lý do</label>
+                    <textarea name="note" rows="2" class="w-full rounded-xl border border-gray-300 px-3 py-2"></textarea>
+                </div>
+                <div class="md:col-span-2">
+                    <button type="submit" class="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700">Gửi yêu cầu thay đổi</button>
+                </div>
+            </form>
+        </details>
+    </div>
 
     @if($payrolls->isEmpty())
-        <div class="empty">Chưa có phiếu lương nào. Vui lòng liên hệ phòng nhân sự.</div>
+        <div class="rounded-2xl border border-gray-200 bg-white p-8 text-gray-500 shadow-sm">
+            Chưa có phiếu lương.
+        </div>
     @else
-        <div class="grid two-cols">
-            <div>
-                @foreach($payrolls as $p)
-                    <div class="card" style="margin-bottom:18px; display:flex; gap:16px; align-items:stretch;">
-                        <div style="flex:1;">
-                            <div style="display:flex; gap:12px; align-items:center;">
-                                <img src="{{ optional($p->employee)->avatar ? asset('storage/' . $p->employee->avatar) : 'https://ui-avatars.com/api/?name=' . urlencode(optional($p->employee)->name) }}" alt="avatar" style="width:72px;height:72px;border-radius:12px;object-fit:cover;">
-                                <div>
-                                    <h3 style="margin:0 0 6px;">{{ optional($p->employee)->name }}</h3>
-                                    <div class="muted">Mã NV: {{ optional($p->employee)->employee_code ?? 'N/A' }}</div>
-                                    <div class="muted">{{ optional($p->employee->department)->name ?? 'Phòng ban: N/A' }} • {{ optional($p->employee)->position ?? 'Chức vụ: N/A' }}</div>
-                                    <div style="margin-top:8px; font-weight:700;">Tháng: {{ $p->display_month }}</div>
-                                </div>
-                            </div>
-
-                            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap:12px; margin-top:12px;">
-                                <div class="card" style="padding:12px;">
-                                    <div class="muted">Lương cơ bản</div>
-                                    <div style="font-weight:800;">{{ number_format($p->base_salary ?? 0,0,'.',',') }} VNĐ</div>
-                                </div>
-                                <div class="card" style="padding:12px;">
-                                    <div class="muted">Ngày công</div>
-                                    <div style="font-weight:800;">{{ $p->working_days ?? 0 }}</div>
-                                </div>
-                                <div class="card" style="padding:12px;">
-                                    <div class="muted">OT</div>
-                                    <div style="font-weight:800;">{{ $p->overtime_hours ?? 0 }} giờ</div>
-                                </div>
-                                <div class="card" style="padding:12px;">
-                                    <div class="muted">Thưởng</div>
-                                    <div style="font-weight:800; color:#166534;">+ {{ number_format($p->bonus ?? 0,0,'.',',') }} VNĐ</div>
-                                </div>
-                                <div class="card" style="padding:12px;">
-                                    <div class="muted">Phụ cấp</div>
-                                    <div style="font-weight:800; color:#166534;">+ {{ number_format($p->allowance ?? 0,0,'.',',') }} VNĐ</div>
-                                </div>
-                                <div class="card" style="padding:12px;">
-                                    <div class="muted">Khấu trừ</div>
-                                    <div style="font-weight:800; color:#dc2626;">- {{ number_format($p->deduction ?? 0,0,'.',',') }} VNĐ</div>
-                                </div>
-                                <div class="card" style="padding:12px;">
-                                    <div class="muted">BHXH</div>
-                                    <div style="font-weight:800;">- {{ number_format($p->insurance ?? 0,0,'.',',') }} VNĐ</div>
-                                </div>
-                                <div class="card" style="padding:12px;">
-                                    <div class="muted">Thuế</div>
-                                    <div style="font-weight:800;">- {{ number_format($p->tax ?? 0,0,'.',',') }} VNĐ</div>
-                                </div>
-                            </div>
-
-                            <div style="margin-top:12px; padding:12px; border-radius:8px; background:#f8fafc; display:flex; justify-content:space-between; align-items:center;">
-                                <div class="muted">Thực lĩnh</div>
-                                <div style="font-size:22px; font-weight:900; color:#2563eb;">{{ number_format($p->total_salary ?? 0,0,'.',',') }} VNĐ</div>
-                            </div>
-
-                            <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
-                                @if($p->confirmation_status === 'confirmed')
-                                    <span class="badge bg-success">Đã xác nhận</span>
-                                @elseif($p->confirmation_status === 'issue_reported')
-                                    <span class="badge bg-danger">Có phản hồi</span>
-                                @else
-                                    <span class="badge bg-warning text-dark">Chờ xác nhận</span>
-                                @endif
-
-                                @if($p->confirmation_deadline)
-                                    <div class="muted" style="margin-left:8px;">Hạn xác nhận: {{ $p->confirmation_deadline->format('d/m/Y') }}</div>
-                                @endif
-                            </div>
-
-                            <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
-                                @if($p->status !== 'paid' && $p->confirmation_status !== 'confirmed')
-                                    <form method="POST" action="{{ route('me.payroll.confirm', $p) }}">
-                                        @csrf
-                                        <button class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition" type="submit">Xác nhận bảng lương</button>
-                                    </form>
-
-                                    <details class="rounded-lg border border-gray-200 bg-white" style="width:auto;">
-                                        <summary class="px-4 py-2 cursor-pointer text-gray-700 hover:bg-gray-100 rounded-lg">Báo cáo sai sót</summary>
-                                        <div class="p-4">
-                                            <form method="POST" action="{{ route('me.payroll.report_issue', $p) }}" enctype="multipart/form-data">
-                                                @csrf
-                                                <div class="mb-4">
-                                                    <label class="block text-sm font-semibold mb-2">Loại lỗi</label>
-                                                    <select name="issue_type" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-                                                        <option value="amount">Số tiền</option>
-                                                        <option value="attendance">Ngày công/OT</option>
-                                                        <option value="other">Khác</option>
-                                                    </select>
-                                                </div>
-                                                <div class="mb-4">
-                                                    <label class="block text-sm font-semibold mb-2">Mô tả</label>
-                                                    <textarea name="issue_report" class="w-full rounded-lg border border-gray-300 px-3 py-2" rows="4" required></textarea>
-                                                </div>
-                                                <div class="mb-4">
-                                                    <label class="block text-sm font-semibold mb-2">Đính kèm (tùy chọn)</label>
-                                                    <input type="file" name="attachment" class="w-full rounded-lg border border-gray-300 px-3 py-2" />
-                                                </div>
-                                                <button class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition" type="submit">Gửi báo cáo</button>
-                                            </form>
-                                        </div>
-                                    </details>
-
-                                    <a class="px-4 py-2 bg-gray-100 text-gray-900 rounded-lg hover:bg-gray-200 transition" href="#">Tải PDF</a>
-                                @else
-                                    <a class="px-4 py-2 bg-gray-100 text-gray-900 rounded-lg hover:bg-gray-200 transition" href="#">Xem PDF</a>
-                                @endif
-                            </div>
-                        </div>
-
-                        <aside style="width:320px;">
-                            <div class="card" style="padding:12px;">
-                                <h4 style="margin-top:0;">Lịch sử</h4>
-                                <div style="display:flex; flex-direction:column; gap:8px;">
-                                    @if($p->sent_at)
-                                        <div><i class="bi bi-envelope"></i> Đã gửi: {{ $p->sent_at->format('d/m/Y H:i') }}</div>
-                                    @endif
-                                    @if($p->confirmed_at)
-                                        <div><i class="bi bi-check-circle"></i> Đã xác nhận: {{ $p->confirmed_at->format('d/m/Y H:i') }}</div>
-                                    @endif
-                                    @if($p->issue_reported_at)
-                                        <div><i class="bi bi-chat-left-text"></i> Phản hồi: {{ $p->issue_reported_at->format('d/m/Y H:i') }}</div>
-                                    @endif
-                                    <div class="muted">Trạng thái email: {{ $p->email_status ?? 'Chưa gửi' }}</div>
-                                </div>
-                            </div>
-                        </aside>
-                    </div>
-                @endforeach
-            </div>
-
-            <div>
-                <div class="card" style="position:sticky; top:20px;">
-                    <h4 style="margin-top:0;">Thông tin tài khoản</h4>
-                    @php $userEmp = optional($payrolls->first()->employee); @endphp
-                    <div style="display:flex; gap:12px; align-items:center;">
-                        <img src="{{ $userEmp && $userEmp->avatar ? asset('storage/' . $userEmp->avatar) : 'https://ui-avatars.com/api/?name=' . urlencode(optional($userEmp)->name) }}" alt="avatar" style="width:56px;height:56px;border-radius:8px;object-fit:cover;">
+        <div class="space-y-4">
+            @foreach($payrolls as $p)
+                <article class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                    <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
                         <div>
-                            <div style="font-weight:800;">{{ optional($userEmp)->name }}</div>
-                            <div class="muted">Mã NV: {{ optional($userEmp)->employee_code ?? 'N/A' }}</div>
-                            <div class="muted">{{ optional($userEmp->department)->name ?? '' }}</div>
+                            <h3 class="text-xl font-bold text-gray-900">Tháng {{ $p->display_month }}</h3>
+                            <p class="text-sm text-gray-500 mt-1">{{ optional($p->employee)->position }}</p>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            @if($p->status === 'payroll_issue' || $p->confirmation_status === 'issue_reported')
+                                <span class="inline-flex rounded-full bg-amber-100 text-amber-800 text-xs font-semibold px-3 py-1">Đã báo sự cố</span>
+                            @else
+                                <span class="inline-flex rounded-full bg-slate-100 text-slate-700 text-xs font-semibold px-3 py-1">{{ $workflow->statusLabel($p->status) }}</span>
+                            @endif
                         </div>
                     </div>
 
-                    <hr>
-                    <h5 style="margin:0 0 8px;">Hoạt động gần đây</h5>
-                    <div style="display:flex; flex-direction:column; gap:8px;">
-                        @foreach($payrolls as $p)
-                            <div style="font-size:14px;">
-                                <strong>{{ $p->display_month }}</strong>
-                                <div class="muted">Trạng thái: {{ ucfirst($p->confirmation_status ?? 'Chưa') }}</div>
-                            </div>
-                        @endforeach
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 rounded-xl bg-slate-50 border border-slate-100 p-4 mb-4">
+                        <div>
+                            <div class="text-xs text-gray-500 mb-1">Ngày công</div>
+                            <div class="font-bold">{{ $p->working_days ?? 0 }}</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-500 mb-1">Lương cơ bản</div>
+                            <div class="font-bold">{{ number_format($p->base_salary ?? 0, 0, '.', ',') }}</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-500 mb-1">Phụ cấp</div>
+                            <div class="font-bold text-green-700">+{{ number_format($p->allowance ?? 0, 0, '.', ',') }}</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-500 mb-1">Khấu trừ</div>
+                            <div class="font-bold text-red-600">-{{ number_format(($p->insurance ?? 0)+($p->tax ?? 0)+($p->deduction ?? 0), 0, '.', ',') }}</div>
+                        </div>
+                        @if(($p->late_penalty_fee ?? 0) > 0)
+                        <div>
+                            <div class="text-xs text-gray-500 mb-1">Phạt đi muộn</div>
+                            <div class="font-bold text-red-600">-{{ number_format($p->late_penalty_fee ?? 0, 0, '.', ',') }} ₫</div>
+                        </div>
+                        @endif
+                        <div>
+                            <div class="text-xs text-gray-500 mb-1">Thực lĩnh</div>
+                            <div class="font-extrabold text-blue-600 text-xl">{{ number_format($p->total_salary ?? 0, 0, '.', ',') }} ₫</div>
+                        </div>
                     </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        @if($p->status === 'payroll_issue' || $p->confirmation_status === 'issue_reported')
+                            <div class="w-full rounded-xl bg-amber-50 text-amber-800 px-4 py-3 text-sm border border-amber-200">
+                                Đã gửi báo cáo sự cố. Đang chờ HR / kế toán khắc phục, rồi Giám đốc phê duyệt lại.
+                            </div>
+                        @elseif($workflow->isCalculated($p->status) || $workflow->isHrChecked($p->status))
+                            <div class="w-full rounded-xl bg-slate-50 text-slate-700 px-4 py-3 text-sm border border-slate-200">
+                                {{ $workflow->statusLabel($p->status) }}. Bạn chỉ xem phiếu ở bước này.
+                            </div>
+                        @elseif($workflow->isDirectorApproved($p->status) && $p->confirmation_status !== 'confirmed')
+                            <div class="w-full rounded-xl bg-blue-50 text-blue-800 px-4 py-3 text-sm border border-blue-100 mb-1">
+                                Phiếu lương cần bạn xác nhận{{ $p->sent_at ? ' (đã cập nhật '.optional($p->sent_at)->format('d/m/Y H:i').')' : '' }}.
+                            </div>
+                            <form method="POST" action="{{ route('me.payroll.confirm', $p) }}">
+                                @csrf
+                                <button class="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700" type="submit">
+                                    Xác nhận bảng lương
+                                </button>
+                            </form>
+                            <details class="rounded-xl border border-gray-200">
+                                <summary class="px-4 py-2.5 cursor-pointer font-semibold text-gray-700">Báo cáo sai sót bảng lương</summary>
+                                <form method="POST" action="{{ route('me.payroll.report_issue', $p) }}" class="p-4 border-t">
+                                    @csrf
+                                    <p class="text-sm font-semibold mb-2">Loại lỗi</p>
+                                    <div class="grid grid-cols-2 gap-2 text-sm mb-3">
+                                        <label><input type="checkbox" name="issue_types[]" value="working_days"> Sai ngày công</label>
+                                        <label><input type="checkbox" name="issue_types[]" value="allowance"> Sai phụ cấp</label>
+                                        <label><input type="checkbox" name="issue_types[]" value="deduction"> Sai khấu trừ</label>
+                                        <label><input type="checkbox" name="issue_types[]" value="overtime"> Sai OT</label>
+                                        <label><input type="checkbox" name="issue_types[]" value="other"> Khác</label>
+                                    </div>
+                                    <textarea name="issue_report" rows="3" required class="w-full rounded-xl border border-gray-300 px-3 py-2 mb-3" placeholder="Nội dung..."></textarea>
+                                    <button class="px-4 py-2 bg-amber-500 text-white rounded-xl font-semibold" type="submit">Gửi báo cáo sai sót</button>
+                                </form>
+                            </details>
+                        @elseif($workflow->canPay($p))
+                            <div class="w-full rounded-xl bg-blue-50 text-blue-800 px-4 py-3 text-sm border border-blue-100">
+                                Bạn đã xác nhận. Phiếu đang chờ kế toán thanh toán.
+                            </div>
+                        @elseif($p->status === 'paid')
+                            <div class="w-full rounded-xl bg-green-50 text-green-700 px-4 py-3 text-sm">
+                                Đã thanh toán{{ $p->paid_at ? ' lúc '.$p->paid_at->format('d/m/Y H:i') : '' }}
+                                @if($p->payment_method) · {{ $p->payment_method }} @endif
+                            </div>
+                        @endif
+                    </div>
+                </article>
+            @endforeach
+        </div>
+
+        {{-- Lịch sử thanh toán --}}
+        @php $paidList = $payrolls->where('status', 'paid'); @endphp
+        @if($paidList->isNotEmpty())
+            <div class="mt-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                <h2 class="text-lg font-bold mb-4">Lịch sử thanh toán</h2>
+                <div class="space-y-3">
+                    @foreach($paidList as $paid)
+                        <div class="flex justify-between gap-3 border-b border-gray-100 pb-3 text-sm">
+                            <div>
+                                <strong>Tháng {{ $paid->display_month }}</strong>
+                                <div class="text-gray-500">{{ optional($paid->paid_at)->format('d/m/Y H:i') ?? '—' }} · {{ $paid->payment_method ?? '—' }}</div>
+                            </div>
+                            <div class="font-bold text-blue-600">{{ number_format($paid->total_salary ?? 0, 0, '.', ',') }} ₫</div>
+                        </div>
+                    @endforeach
                 </div>
             </div>
-        </div>
+        @endif
     @endif
-
+</div>
 @endsection

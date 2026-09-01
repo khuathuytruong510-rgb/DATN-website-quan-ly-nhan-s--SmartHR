@@ -27,16 +27,16 @@
                         <a href="{{ route('me.attendance') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.attendance*') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-geo-alt me-2"></i> Chấm công</a>
                     </li>
                     <li>
-                        <a href="{{ route('me.attendance') }}" class="flex items-center px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100"><i class="bi bi-calendar3 me-2"></i> Lịch sử chấm công</a>
+                        <a href="{{ route('me.leave_requests') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.leave_requests*') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-journal-text me-2"></i> Nghỉ phép</a>
                     </li>
                     <li>
-                        <a href="{{ route('me.leave_requests') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.leave_requests*') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-journal-text me-2"></i> Đơn xin nghỉ</a>
-                    </li>
-                    <li>
-                        <a href="{{ route('me.overtime_requests') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.overtime_requests*') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-clock me-2"></i> Đăng ký tăng ca</a>
+                        <a href="{{ route('me.overtime_requests') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.overtime_requests*') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-clock me-2"></i> Tăng ca</a>
                     </li>
                     <li>
                         <a href="{{ route('me.payrolls') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.payrolls') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-cash-stack me-2"></i> Bảng lương</a>
+                    </li>
+                    <li>
+                        <a href="{{ route('me.salary_histories') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.salary_histories*') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-clock-history me-2"></i> Lịch sử lương</a>
                     </li>
                     <li>
                         <a href="{{ route('me.contracts') }}" class="flex items-center px-4 py-2 rounded-lg {{ request()->routeIs('me.contracts') ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100' }}"><i class="bi bi-file-earmark-text me-2"></i> Hợp đồng</a>

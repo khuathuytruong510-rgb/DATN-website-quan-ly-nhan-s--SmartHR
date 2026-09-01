@@ -17,7 +17,7 @@ trait HasLeaveLimit
     {
         $start = Carbon::parse($startDate);
         $end = Carbon::parse($endDate);
-        $fullDays = (int) ($end->diffInDays($start) + 1);
+        $fullDays = (int) (abs($end->diffInDays($start)) + 1);
 
         if ($halfDay && $fullDays === 1) {
             return 0.5;
@@ -40,7 +40,10 @@ trait HasLeaveLimit
         $month = $start->month;
 
         $query = LeaveRequest::where('employee_id', $employeeId)
-            ->where('status', '!=', 'rejected')
+            ->where(function ($q) {
+                $q->whereNull('status')
+                    ->orWhereNotIn('status', ['rejected', 'cancelled']);
+            })
             ->whereMonth('start_date', $month)
             ->whereYear('start_date', $year);
 

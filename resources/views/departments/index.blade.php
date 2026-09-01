@@ -26,18 +26,14 @@
                 @forelse ($departments as $i => $department)
                     <tr>
                         <td>{{ $departments->firstItem() + $i }}</td>
-                        <td><strong>{{ $department->name }}</strong></td>
+                        <td><strong><a class="btn link" href="{{ route('departments.show', $department) }}" style="padding:0;">{{ $department->name }}</a></strong></td>
                         <td><span class="badge bg-secondary">{{ $department->code }}</span></td>
                         <td>{{ $department->description ?: '-' }}</td>
                         <td>
                             <div class="actions">
                                 <a class="btn link" href="{{ route('departments.show', $department) }}">Xem</a>
                                 <a class="btn" href="{{ route('departments.edit', $department) }}">Sửa</a>
-                                <form method="POST" action="{{ route('departments.destroy', $department) }}" onsubmit="return confirm('Xóa phòng ban này?')" style="display:inline">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button class="btn danger" type="submit">Xóa</button>
-                                </form>
+                                <a class="btn danger" href="{{ route('deletion_requests.create', ['kind' => 'department', 'target' => $department->id]) }}">Yêu cầu xóa</a>
                             </div>
                         </td>
                     </tr>

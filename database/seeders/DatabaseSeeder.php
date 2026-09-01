@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Models\Payroll;
 use App\Models\User;
+use Database\Seeders\PositionSeeder;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -34,35 +35,55 @@ class DatabaseSeeder extends Seeder
             'is_admin' => true,
             'is_hr' => false,
             'is_accountant' => false,
+            'is_director' => false,
         ]);
 
         $depts = [
             ['name' => 'Ban Giám đốc',                  'code' => 'BGD',  'manager' => 'Phạm Thị Dung',      'description' => 'Điều hành và quản lý toàn bộ hoạt động của công ty.'],
-            ['name' => 'Phòng Hành chính - Nhân sự',    'code' => 'HCNS', 'manager' => 'Trần Thị Bích',      'description' => 'Quản lý nhân sự, tuyển dụng, hợp đồng, chấm công, đào tạo và phúc lợi.'],
-            ['name' => 'Phòng Kế toán - Tài chính',     'code' => 'KTTC', 'manager' => '',                    'description' => 'Quản lý tài chính, kế toán, thu chi, thanh toán lương, báo cáo tài chính.'],
-            ['name' => 'Phòng Kinh doanh',               'code' => 'KD',   'manager' => 'Lê Văn Cường',       'description' => 'Tìm kiếm khách hàng, tư vấn, ký kết hợp đồng và phát triển doanh thu.'],
-            ['name' => 'Phòng Marketing',                'code' => 'MKT',  'manager' => 'Hoàng Văn Nam',      'description' => 'Xây dựng thương hiệu, quảng bá sản phẩm, triển khai các chiến dịch marketing.'],
-            ['name' => 'Phòng Công nghệ thông tin',      'code' => 'CNTT', 'manager' => 'Nguyễn Văn An',      'description' => 'Phát triển và bảo trì hệ thống phần mềm, hạ tầng mạng, hỗ trợ kỹ thuật.'],
-            ['name' => 'Phòng Chăm sóc khách hàng',      'code' => 'CSKH', 'manager' => '',                    'description' => 'Tiếp nhận phản hồi, hỗ trợ khách hàng và giải quyết khiếu nại.'],
-            ['name' => 'Phòng Mua hàng',                 'code' => 'MH',   'manager' => '',                    'description' => 'Tìm kiếm nhà cung cấp, mua sắm vật tư, quản lý đơn hàng.'],
-            ['name' => 'Phòng Kho vận',                  'code' => 'KV',   'manager' => '',                    'description' => 'Quản lý kho hàng, xuất nhập tồn và vận chuyển hàng hóa.'],
-            ['name' => 'Phòng Sản xuất',                 'code' => 'SX',   'manager' => '',                    'description' => 'Quản lý quy trình sản xuất và đảm bảo tiến độ sản xuất.'],
-            ['name' => 'Phòng Kiểm soát chất lượng',    'code' => 'QC',   'manager' => '',                    'description' => 'Kiểm tra chất lượng sản phẩm, quy trình và tiêu chuẩn sản xuất.'],
-            ['name' => 'Phòng Nghiên cứu & Phát triển', 'code' => 'R&D',  'manager' => '',                    'description' => 'Nghiên cứu, phát triển sản phẩm và cải tiến công nghệ.'],
-            ['name' => 'Phòng Pháp chế',                 'code' => 'PC',   'manager' => '',                    'description' => 'Tư vấn pháp lý, soạn thảo hợp đồng và kiểm soát rủi ro pháp lý.'],
-            ['name' => 'Phòng Dự án',                    'code' => 'DA',   'manager' => '',                    'description' => 'Quản lý và triển khai các dự án của công ty.'],
-            ['name' => 'Phòng Đào tạo',                  'code' => 'DT',   'manager' => '',                    'description' => 'Xây dựng kế hoạch đào tạo, nâng cao năng lực nhân viên.'],
+            ['name' => 'Phòng Nhân sự (HR)',            'code' => 'HR',   'manager' => 'Trần Thị Bích',      'description' => 'Quản lý nhân sự, hồ sơ, chấm công, nghỉ phép và chính sách.'],
+            ['name' => 'Phòng Tuyển dụng',              'code' => 'TD',   'manager' => '',                    'description' => 'Tuyển dụng, sàng lọc và onboarding nhân sự mới.'],
+            ['name' => 'Phòng C&B',                     'code' => 'CB',   'manager' => '',                    'description' => 'Lương thưởng, chế độ phúc lợi và đãi ngộ cho nhân viên.'],
+            ['name' => 'Phòng Đào tạo & Phát triển',    'code' => 'DTPT', 'manager' => '',                    'description' => 'Đào tạo kỹ năng và phát triển năng lực nhân viên.'],
+            ['name' => 'Phòng Kế toán - Tài chính',     'code' => 'KTTC', 'manager' => 'Lê Thị Mai',          'description' => 'Quản lý tài chính, kế toán, thu chi, thanh toán lương, báo cáo tài chính.'],
+            ['name' => 'Phòng Kinh doanh',              'code' => 'KD',   'manager' => 'Lê Văn Cường',        'description' => 'Tìm kiếm khách hàng, tư vấn, ký kết hợp đồng và phát triển doanh thu.'],
+            ['name' => 'Phòng Marketing',               'code' => 'MKT',  'manager' => 'Hoàng Văn Nam',       'description' => 'Xây dựng thương hiệu, quảng bá sản phẩm, triển khai các chiến dịch marketing.'],
+            ['name' => 'Phòng IT',                      'code' => 'IT',   'manager' => 'Nguyễn Văn An',       'description' => 'Phát triển phần mềm, vận hành hệ thống và hỗ trợ kỹ thuật.'],
+            ['name' => 'Phòng Vận hành',                'code' => 'VH',   'manager' => '',                    'description' => 'Đảm bảo quy trình vận hành và logistics của công ty.'],
+            ['name' => 'Phòng Pháp chế',                'code' => 'PC',   'manager' => '',                    'description' => 'Tư vấn pháp lý, soạn thảo hợp đồng và kiểm soát rủi ro.'],
+            ['name' => 'Phòng Hành chính',              'code' => 'HC',   'manager' => '',                    'description' => 'Quản lý hành chính, văn phòng và hậu cần nội bộ.'],
         ];
 
         foreach ($depts as $d) {
             Department::updateOrCreate(['code' => $d['code']], $d);
         }
 
-        $it      = Department::where('code', 'CNTT')->first();
-        $hr      = Department::where('code', 'HCNS')->first();
+        $it      = Department::where('code', 'IT')->first();
+        $hr      = Department::where('code', 'HR')->first();
         $sales   = Department::where('code', 'KD')->first();
         $finance = Department::where('code', 'KTTC')->first();
         $mkt     = Department::where('code', 'MKT')->first();
+        $bgd     = Department::where('code', 'BGD')->first();
+
+        $directorUser = User::updateOrCreate([
+            'email' => 'giamdoc@smarthr.com',
+        ], [
+            'name' => 'Phạm Thị Dung',
+            'password' => Hash::make('123456'),
+            'api_token' => Str::random(60),
+            'is_admin' => false,
+            'is_hr' => false,
+            'is_accountant' => false,
+            'is_director' => true,
+        ]);
+
+        Employee::updateOrCreate(['email' => 'giamdoc@smarthr.com'], [
+            'user_id' => $directorUser->id,
+            'name' => 'Phạm Thị Dung',
+            'position' => 'Giám đốc',
+            'department_id' => $bgd?->id,
+            'status' => 'active',
+            'employee_code' => 'BGD0001',
+        ]);
 
         // Employee Users
         $employeeUser1 = User::updateOrCreate([
@@ -245,7 +266,7 @@ class DatabaseSeeder extends Seeder
             'allowance' => 2000000,
             'deduction' => 500000,
             'total_salary' => 19500000,
-            'status' => 'approved',
+            'status' => 'director_approved',
             'paid_at' => null,
         ]);
 
@@ -258,11 +279,9 @@ class DatabaseSeeder extends Seeder
             'allowance' => 1500000,
             'deduction' => 0,
             'total_salary' => 23500000,
-            'status' => 'pending',
+            'status' => 'calculated',
             'paid_at' => null,
         ]);
-
-        // Leave requests sample data
         LeaveRequest::updateOrCreate([
             'employee_id' => $employee4->id,
             'start_date' => '2026-06-14',
@@ -305,5 +324,8 @@ class DatabaseSeeder extends Seeder
             'reason' => 'Hỗ trợ khách hàng',
             'status' => 'pending',
         ]);
+
+        $this->call(DefenseDemoSeeder::class);
+        $this->call(PositionSeeder::class);
     }
 }

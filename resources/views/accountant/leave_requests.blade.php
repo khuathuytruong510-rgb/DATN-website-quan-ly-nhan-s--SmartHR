@@ -20,10 +20,9 @@
 <div class="page-head">
     <div>
         <h1>Nghỉ phép</h1>
-        <p class="muted">Quản lý trạng thái và thao tác với đơn nghỉ phép.</p>
+        <p class="muted">Xem đơn nghỉ phép đã duyệt để đối chiếu khi tính lương. Tạo và duyệt đơn thuộc HR — kế toán không duyệt nghỉ phép.</p>
     </div>
     <div class="actions">
-        <a class="btn primary" href="{{ route('accountant.leave_requests.create') }}">+ Tạo đơn nghỉ</a>
         <a class="btn" href="{{ route('accountant.dashboard') }}">Quay lại</a>
     </div>
 </div>
@@ -36,7 +35,7 @@
                 <option value="">-- Tất cả trạng thái --</option>
                 <option value="pending" {{ request('status') === 'pending' ? 'selected' : '' }}>Chờ duyệt</option>
                 <option value="approved" {{ request('status') === 'approved' ? 'selected' : '' }}>Đã duyệt</option>
-                <option value="rejected" {{ request('status') === 'rejected' ? 'selected' : '' }}>Từ chối</option>
+                <option value="cancelled" {{ request('status') === 'cancelled' ? 'selected' : '' }}>Đã hủy</option>
             </select>
         </div>
         <div class="field">
@@ -69,7 +68,6 @@
                     <th>Lý do</th>
                     <th>Khẩn cấp</th>
                     <th>Trạng thái</th>
-                    <th>Hành động</th>
                 </tr>
             </thead>
             <tbody>
@@ -103,24 +101,10 @@
                             <span class="badge @if($leave->status === 'approved') approved @elseif($leave->status === 'rejected') rejected @else pending @endif">
                                 @if($leave->status === 'approved') ✓ Đã duyệt
                                 @elseif($leave->status === 'rejected') ✗ Từ chối
+                                @elseif($leave->status === 'cancelled') Đã hủy
                                 @else ⏳ Chờ duyệt
                                 @endif
                             </span>
-                        </td>
-                        <td>
-                            <div class="actions">
-                                @if($leave->status === 'pending')
-                                    <form method="POST" action="{{ route('accountant.leave_requests.approve', $leave) }}" style="display:inline">
-                                        @csrf
-                                        <button class="btn" type="submit">Duyệt</button>
-                                    </form>
-                                    <form method="POST" action="{{ route('accountant.leave_requests.reject', $leave) }}" style="display:inline" onsubmit="return submitRejectReason(this)">
-                                        @csrf
-                                        <input type="hidden" name="rejection_reason" value="">
-                                        <button class="btn" type="submit">Từ chối</button>
-                                    </form>
-                                @endif
-                            </div>
                         </td>
                     </tr>
                 @endforeach
@@ -132,17 +116,5 @@
         <div class="empty">Không có đơn nghỉ phép nào.</div>
     </div>
 @endif
-
-<script>
-    function submitRejectReason(form) {
-        var reason = prompt('Vui lòng nhập lý do từ chối:');
-        if (!reason || !reason.trim()) {
-            alert('Bạn phải nhập lý do từ chối.');
-            return false;
-        }
-        form.querySelector('input[name="rejection_reason"]').value = reason.trim();
-        return true;
-    }
-</script>
 
 @endsection

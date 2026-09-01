@@ -6,7 +6,7 @@
     <div class="page-head">
         <div>
             <h1>Phân quyền</h1>
-            <p class="muted">Gán vai trò Admin, HR hoặc Kế toán cho người dùng.</p>
+            <p class="muted">Gán đúng một vai trò hệ thống. Chức vụ trên hồ sơ nhân viên không cấp quyền đăng nhập. Admin ≠ Giám đốc.</p>
         </div>
         <div>
             <a class="btn link" href="{{ route('accounts.index') }}">Xem danh sách tài khoản</a>
@@ -23,6 +23,7 @@
                         <th>Họ tên</th>
                         <th>Email</th>
                         <th>Admin</th>
+                        <th>Giám đốc</th>
                         <th>HR</th>
                         <th>Kế toán</th>
                         <th>Hành động</th>
@@ -34,15 +35,20 @@
                             <td>{{ $user->name }}</td>
                             <td>{{ $user->email }}</td>
                             <td>{{ $user->is_admin ? 'Có' : 'Không' }}</td>
+                            <td>{{ $user->is_director ? 'Có' : 'Không' }}</td>
                             <td>{{ $user->is_hr ? 'Có' : 'Không' }}</td>
                             <td>{{ $user->is_accountant ? 'Có' : 'Không' }}</td>
                             <td>
-                                <form method="POST" action="{{ route('permissions.update', $user) }}" style="display:inline-flex; gap: 8px; align-items:center;">
+                                <form method="POST" action="{{ route('permissions.update', $user) }}" style="display:inline-flex; gap: 8px; align-items:center; flex-wrap:wrap;">
                                     @csrf
                                     @method('PUT')
                                     <label style="display:inline-flex; align-items:center; gap: 6px;">
                                         <input type="checkbox" name="is_admin" value="1" {{ $user->is_admin ? 'checked' : '' }}>
                                         Admin
+                                    </label>
+                                    <label style="display:inline-flex; align-items:center; gap: 6px;">
+                                        <input type="checkbox" name="is_director" value="1" {{ $user->is_director ? 'checked' : '' }}>
+                                        Giám đốc
                                     </label>
                                     <label style="display:inline-flex; align-items:center; gap: 6px;">
                                         <input type="checkbox" name="is_hr" value="1" {{ $user->is_hr ? 'checked' : '' }}>

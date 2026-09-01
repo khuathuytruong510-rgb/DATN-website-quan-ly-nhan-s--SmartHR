@@ -2,18 +2,42 @@
 
 namespace App\Services;
 
+use App\Models\Payroll;
+use App\Models\SalaryHistory;
 use App\Models\SalaryPayment;
 use App\Models\SalaryPaymentLog;
-use Illuminate\Support\Facades\DB;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Mail;
-use App\Mail\SalaryPaidMail;
+use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 class SalaryService
 {
-    public function processPayment(SalaryPayment $payment, array $data = []) : SalaryPayment
+    public function processPayment(SalaryPayment $payment, array $data = []): SalaryPayment
     {
         return DB::transaction(function () use ($payment, $data) {
+            $payment = SalaryPayment::query()->whereKey($payment->id)->lockForUpdate()->firstOrFail();
+
+            if ($payment->payroll_id) {
+                $payroll = Payroll::query()->whereKey($payment->payroll_id)->lockForUpdate()->first();
+                $payment->setRelation('payroll', $payroll);
+            } else {
+                $payment->loadMissing('payroll');
+            }
+
+            if ($payment->status === 'paid' || $payment->payroll?->status === PayrollPaymentWorkflowService::PAID) {
+                throw new RuntimeException('Phiếu đã thanh toán. Không thể thanh toán lần hai.');
+            }
+
+            if ($payment->payroll_id && $payment->payroll) {
+                $status = $payment->payroll->status;
+                if (! in_array($status, PayrollPaymentWorkflowService::payableStatuses(), true)) {
+                    throw new RuntimeException(
+                        'Chỉ thanh toán khi bảng lương đủ điều kiện (nhân viên đã xác nhận).'
+                    );
+                }
+            }
+
             $payment->fill([
                 'payment_method' => $data['payment_method'] ?? $payment->payment_method,
                 'bank' => $data['bank'] ?? $payment->bank,
@@ -31,14 +55,21 @@ class SalaryService
 
             $this->recordLog($payment, 'paid', $data['notes'] ?? null);
 
-            // send mail to employee if email exists
-            if ($payment->employee && !empty($payment->employee->email)) {
-                try {
-                    Mail::to($payment->employee->email)->send(new SalaryPaidMail($payment));
-                } catch (\Throwable $e) {
-                    // record mail failure
-                    $this->recordLog($payment, 'mail_failed', $e->getMessage());
+            if ($payment->payroll_id && $payment->payroll) {
+                $payroll = $payment->payroll;
+                if ($payroll->status !== PayrollPaymentWorkflowService::PAID) {
+                    $payroll->update([
+                        'status' => PayrollPaymentWorkflowService::PAID,
+                        'paid_at' => $payroll->paid_at ?? now(),
+                        'paid_by' => $payroll->paid_by ?? Auth::id(),
+                        'payment_method' => $payroll->payment_method ?? ($data['payment_method'] ?? $payment->payment_method),
+                    ]);
                 }
+
+                SalaryHistory::recordFromPaidPayroll(
+                    $payroll->fresh(['employee', 'salaryPayment']),
+                    Auth::user() instanceof User ? Auth::user() : null
+                );
             }
 
             return $payment;

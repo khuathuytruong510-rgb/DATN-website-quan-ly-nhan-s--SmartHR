@@ -5,11 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Benefit;
+use App\Models\Contract;
 use App\Models\EmployeeBenefit;
 use App\Models\EmployeeEvaluation;
 use App\Models\Position;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Employee extends Model
 {
@@ -35,8 +37,9 @@ class Employee extends Model
         'leave_balance',
         'position_id',
         'bank_name',
-        'bank_account_number',
-        'bank_account_holder',
+        'account_number',
+        'account_holder',
+        'qr_image',
         'address_detail',
     ];
 
@@ -60,9 +63,19 @@ class Employee extends Model
         return $this->hasMany(Attendance::class);
     }
 
+    public function faceProfile(): HasOne
+    {
+        return $this->hasOne(FaceProfile::class);
+    }
+
     public function payrolls(): HasMany
     {
         return $this->hasMany(Payroll::class);
+    }
+
+    public function contracts(): HasMany
+    {
+        return $this->hasMany(Contract::class);
     }
 
     public function leaveRequests(): HasMany
@@ -93,6 +106,37 @@ class Employee extends Model
     public function salaryPayments(): HasMany
     {
         return $this->hasMany(SalaryPayment::class, 'employee_id');
+    }
+
+    /**
+     * Alias tương thích Payment Center (main) với cột account_* của workflow lương.
+     */
+    public function getBankAccountNumberAttribute($value = null): ?string
+    {
+        if (filled($value)) {
+            return $value;
+        }
+
+        return $this->attributes['account_number'] ?? null;
+    }
+
+    public function getBankAccountHolderAttribute($value = null): ?string
+    {
+        if (filled($value)) {
+            return $value;
+        }
+
+        return $this->attributes['account_holder'] ?? null;
+    }
+
+    public function setBankAccountNumberAttribute($value): void
+    {
+        $this->attributes['account_number'] = $value;
+    }
+
+    public function setBankAccountHolderAttribute($value): void
+    {
+        $this->attributes['account_holder'] = $value;
     }
 
     /**

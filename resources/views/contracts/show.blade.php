@@ -10,7 +10,7 @@
         </div>
         <div class="d-flex gap-2">
             <a class="btn btn-outline-secondary" href="{{ route('contracts.index') }}">Quay lại</a>
-            @if(auth()->user()?->is_admin || auth()->user()?->is_hr)
+            @if(auth()->user()?->canManageHr())
                 <a class="btn btn-outline-secondary" href="{{ route('contracts.edit', $contract) }}">Sửa</a>
                 <a class="btn btn-outline-info" href="{{ route('contracts.renew', $contract) }}">Gia hạn</a>
             @endif
@@ -155,49 +155,150 @@
         </div>
 
         <div class="col-lg-4">
-            <div class="card shadow-sm">
-                <div class="card-header bg-white">
-                    <h5 class="mb-0">Trạng thái</h5>
-                </div>
+
+            {{-- Trạng thái --}}
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-white"><h5 class="mb-0">Trạng thái</h5></div>
                 <div class="card-body">
                     @php
                         $badge = match($contract->status) {
-                            'waiting_employee_signature', 'waiting_director_signature', 'waiting_employee', 'waiting_director' => 'warning',
-                            'active' => 'success',
-                            'expiring' => 'info',
-                            'expired' => 'danger',
-                            'rejected' => 'dark',
+                            'waiting_employee_signature','waiting_director_signature',
+                            'waiting_employee','waiting_director' => 'warning',
+                            'active'    => 'success',
+                            'expiring'  => 'info',
+                            'expired'   => 'danger',
+                            'rejected'  => 'dark',
                             'cancelled' => 'secondary',
-                            default => 'secondary',
+                            default     => 'secondary',
                         };
                         $label = match($contract->status) {
                             'waiting_employee_signature' => 'Chờ nhân viên ký',
                             'waiting_director_signature' => 'Chờ giám đốc ký',
-                            'waiting_employee' => 'Chờ nhân viên ký',
-                            'waiting_director' => 'Chờ giám đốc ký',
-                            'active' => 'Có hiệu lực',
-                            'expiring' => 'Sắp hết hạn',
-                            'expired' => 'Hết hạn',
-                            'rejected' => 'Từ chối',
+                            'waiting_employee'           => 'Chờ nhân viên ký',
+                            'waiting_director'           => 'Chờ giám đốc ký',
+                            'active'    => 'Có hiệu lực',
+                            'expiring'  => 'Sắp hết hạn',
+                            'expired'   => 'Hết hạn',
+                            'rejected'  => 'Từ chối',
                             'cancelled' => 'Đã hủy',
-                            default => 'Chờ xử lý',
+                            default     => 'Chờ xử lý',
                         };
                     @endphp
+                    <div class="mb-3"><span class="badge bg-{{ $badge }}">{{ $label }}</span></div>
                     <div class="mb-3">
-                        <span class="badge bg-{{ $badge }}">{{ $label }}</span>
+                        <strong>Ngày còn lại:</strong>
+                        @if($daysRemaining === null) —
+                        @elseif($daysRemaining < 0) <span class="text-danger">Đã hết hạn {{ abs($daysRemaining) }} ngày trước</span>
+                        @elseif($daysRemaining <= 30) <span class="text-warning fw-bold">{{ $daysRemaining }} ngày ⚠️</span>
+                        @else {{ $daysRemaining }} ngày
+                        @endif
                     </div>
-                    <div class="mb-3">
-                        <strong>Ngày còn lại:</strong> {{ $daysRemaining !== null ? $daysRemaining . ' ngày' : '—' }}
-                    </div>
-                    @if(auth()->user()?->is_admin || auth()->user()?->is_hr || optional($contract->employee)->email === auth()->user()?->email)
-                        <form action="{{ route('contracts.sign', $contract) }}" method="POST">
-                            @csrf
-                            <input type="hidden" name="party" value="{{ optional($contract->employee)->email === auth()->user()?->email ? 'employee' : 'director' }}">
-                            <button class="btn btn-primary w-100" type="submit">Ký hợp đồng</button>
-                        </form>
+
+                    @if(optional($contract->employee)->email === auth()->user()?->email && ! $contract->employee_signed_at)
+                    <form action="{{ route('contracts.sign', $contract) }}" method="POST" class="mb-2">
+                        @csrf
+                        <input type="hidden" name="party" value="employee">
+                        <button class="btn btn-primary w-100" type="submit">✍️ Nhân viên ký hợp đồng</button>
+                    </form>
+                    @elseif(auth()->user()?->is_director && $contract->employee_signed_at && ! $contract->director_signed_at)
+                    <form action="{{ route('contracts.sign', $contract) }}" method="POST" class="mb-2">
+                        @csrf
+                        <input type="hidden" name="party" value="director">
+                        <button class="btn btn-primary w-100" type="submit">✍️ Giám đốc ký hợp đồng</button>
+                    </form>
+                    @endif
+
+                    @if(in_array($contract->status, ['active','expiring','expired']) && auth()->user()?->canManageHr())
+                    <a href="{{ route('contracts.renew', $contract) }}" class="btn btn-outline-success w-100">🔄 Gia hạn hợp đồng</a>
                     @endif
                 </div>
             </div>
+
+            {{-- So sánh lương hợp đồng vs bảng lương gần nhất --}}
+            @if($payroll)
+            @php
+                $cBase  = (float)($contract->base_salary ?? $contract->salary ?? 0);
+                $pBase  = (float)($payroll->base_salary ?? 0);
+                $lDiff  = $pBase - $cBase;
+                $hasDif = abs($lDiff) > 0;
+                $borderColor = $hasDif ? '#fde68a' : '#86efac';
+            @endphp
+            <div class="card shadow-sm" style="border:1.5px solid {{ $borderColor }};">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0" style="font-size:15px;">💰 So sánh lương</h5>
+                    @if($hasDif)
+                        <span class="badge bg-warning text-dark">⚠ Chênh lệch</span>
+                    @else
+                        <span class="badge bg-success">✓ Khớp</span>
+                    @endif
+                </div>
+                <div class="card-body">
+                    @if($hasDif)
+                    <div style="background:#fffbeb;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;color:#92400e;">
+                        Bảng lương tháng <strong>{{ $payroll->month }}/{{ $payroll->year }}</strong>
+                        có mức lương khác hợp đồng hiện tại.
+                    </div>
+                    @endif
+
+                    <table class="table table-sm mb-3">
+                        <thead>
+                            <tr style="font-size:12px;">
+                                <th></th>
+                                <th>Hợp đồng</th>
+                                <th>Bảng lương</th>
+                            </tr>
+                        </thead>
+                        <tbody style="font-size:13px;">
+                            <tr>
+                                <td style="color:#64748b;">Lương CB</td>
+                                <td><strong>{{ number_format($cBase,0,',','.') }}₫</strong></td>
+                                <td>
+                                    <strong style="color:{{ $lDiff>0?'#16a34a':($lDiff<0?'#dc2626':'inherit') }};">
+                                        {{ number_format($pBase,0,',','.') }}₫
+                                        @if($hasDif)
+                                        <span style="font-size:11px;font-weight:400;">
+                                            ({{ $lDiff>0?'+':'' }}{{ number_format($lDiff,0,',','.') }})
+                                        </span>
+                                        @endif
+                                    </strong>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="color:#64748b;">Phụ cấp</td>
+                                <td>{{ number_format($contract->allowance??0,0,',','.') }}₫</td>
+                                <td>{{ number_format($payroll->allowance??0,0,',','.') }}₫</td>
+                            </tr>
+                            <tr>
+                                <td style="color:#64748b;">Tháng</td>
+                                <td colspan="2" style="color:#475569;">{{ $payroll->month }}/{{ $payroll->year }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    @if($hasDif && auth()->user()?->canManageHr())
+                    <form method="POST" action="{{ route('contracts.sync_salary', $contract) }}" class="mb-2">
+                        @csrf
+                        <button type="submit" class="btn btn-warning w-100"
+                            onclick="return confirm('Cập nhật lương hợp đồng theo bảng lương tháng {{ $payroll->month }}/{{ $payroll->year }}?')">
+                            🔄 Đồng bộ lương hợp đồng
+                        </button>
+                    </form>
+                    @endif
+
+                    <a href="{{ route('payroll.show', $payroll) }}" class="btn btn-outline-secondary w-100" style="font-size:13px;">
+                        Xem bảng lương tháng {{ $payroll->month }}/{{ $payroll->year }}
+                    </a>
+                </div>
+            </div>
+            @else
+            <div class="card shadow-sm">
+                <div class="card-body text-center" style="color:#94a3b8;padding:20px;">
+                    <div style="font-size:32px;margin-bottom:8px;">📄</div>
+                    <p style="margin:0;font-size:13px;">Nhân viên chưa có bảng lương nào.</p>
+                </div>
+            </div>
+            @endif
+
         </div>
     </div>
 </div>

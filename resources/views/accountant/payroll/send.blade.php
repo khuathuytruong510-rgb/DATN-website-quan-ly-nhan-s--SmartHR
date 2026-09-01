@@ -28,8 +28,8 @@
 <div class="card">
     <form method="POST" action="{{ route('accountant.payroll.send_all') }}">
         @csrf
-        <p class="muted">Gửi email xác nhận cho tất cả bảng lương hiện có. Nhân viên sẽ nhận email và có thể xác nhận trực tiếp trên hệ thống.</p>
-        <button class="btn primary" type="submit">Gửi tất cả bảng lương</button>
+        <p class="muted">Chỉ gửi cho các phiếu Giám đốc đã duyệt, chưa thanh toán. Nhân viên xác nhận trên cổng hoặc qua email.</p>
+        <button class="btn primary" type="submit">Gửi email xác nhận</button>
     </form>
 </div>
 

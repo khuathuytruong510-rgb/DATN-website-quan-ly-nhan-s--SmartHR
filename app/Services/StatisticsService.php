@@ -243,4 +243,94 @@ class StatisticsService
 
         return $csv;
     }
+
+    /**
+     * Xuất thống kê lương dạng HTML table — Excel mở được (.xls).
+     */
+    public function exportSalaryStatisticsExcel(int $month, int $year): string
+    {
+        $overview = $this->getOverview($month, $year);
+        $departments = $this->getByDepartment($month, $year);
+        $topEarners = $this->getTopEarners($month, $year, 20);
+        $comparison = $this->getComparison($month, $year);
+        $distribution = $this->getSalaryDistribution($month, $year);
+
+        $avgSalary = $overview['totalEmployees'] > 0
+            ? $overview['totalNetSalary'] / $overview['totalEmployees']
+            : 0;
+
+        $e = static fn ($v) => htmlspecialchars((string) $v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $n = static fn ($v) => number_format((float) $v, 0, ',', '.');
+
+        $html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">';
+        $html .= '<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>';
+        $html .= '<x:Name>Thong ke luong</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>';
+        $html .= '</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>';
+
+        $html .= '<h2>THỐNG KÊ &amp; BÁO CÁO LƯƠNG — Tháng '.$e(sprintf('%02d/%d', $month, $year)).'</h2>';
+        $html .= '<p>Ngày xuất: '.$e(now()->format('d/m/Y H:i')).'</p>';
+
+        $html .= '<h3>1. Tổng quan</h3><table border="1" cellpadding="4" cellspacing="0">';
+        $rows = [
+            ['Chỉ tiêu', 'Giá trị'],
+            ['Tổng lương thực nhận', $n($overview['totalNetSalary']).' đ'],
+            ['Số nhân viên có lương', (string) $overview['totalEmployees']],
+            ['Lương trung bình', $n($avgSalary).' đ'],
+            ['Tổng lương cơ bản', $n($overview['totalBaseSalary']).' đ'],
+            ['Tổng lương công', $n($overview['totalWorkingSalary']).' đ'],
+            ['Tổng tăng ca', $n($overview['totalOvertime']).' đ'],
+            ['Tổng phụ cấp', $n($overview['totalAllowance']).' đ'],
+            ['Tổng thưởng', $n($overview['totalBonus']).' đ'],
+            ['Tổng bảo hiểm', $n($overview['totalInsurance']).' đ'],
+            ['Tổng thuế', $n($overview['totalTax']).' đ'],
+            ['Đã thanh toán', $n($overview['paidAmount']).' đ ('.$overview['paidCount'].' phiếu)'],
+            ['Chờ thanh toán', $n($overview['pendingAmount']).' đ ('.$overview['pendingCount'].' phiếu)'],
+            ['% thay đổi tổng lương vs tháng trước', ($comparison['total_change'] ?? 0).'%'],
+        ];
+        foreach ($rows as $row) {
+            $html .= '<tr><td>'.$e($row[0]).'</td><td>'.$e($row[1]).'</td></tr>';
+        }
+        $html .= '</table>';
+
+        $html .= '<h3>2. Theo phòng ban</h3><table border="1" cellpadding="4" cellspacing="0">';
+        $html .= '<tr><th>Phòng ban</th><th>Số NV</th><th>Tổng lương</th><th>Lương TB</th><th>Tăng ca</th><th>Phụ cấp</th><th>Thưởng</th><th>BH</th><th>Thuế</th></tr>';
+        foreach ($departments as $dept) {
+            $deptAvg = $dept->employee_count > 0 ? $dept->total_net / $dept->employee_count : 0;
+            $html .= '<tr>'
+                .'<td>'.$e($dept->department_name).'</td>'
+                .'<td>'.$e($dept->employee_count).'</td>'
+                .'<td>'.$e($n($dept->total_net)).'</td>'
+                .'<td>'.$e($n($deptAvg)).'</td>'
+                .'<td>'.$e($n($dept->total_overtime)).'</td>'
+                .'<td>'.$e($n($dept->total_allowance)).'</td>'
+                .'<td>'.$e($n($dept->total_bonus)).'</td>'
+                .'<td>'.$e($n($dept->total_insurance)).'</td>'
+                .'<td>'.$e($n($dept->total_tax)).'</td>'
+                .'</tr>';
+        }
+        $html .= '</table>';
+
+        $html .= '<h3>3. Top lương cao</h3><table border="1" cellpadding="4" cellspacing="0">';
+        $html .= '<tr><th>STT</th><th>Nhân viên</th><th>Phòng ban</th><th>Chức vụ</th><th>Thực nhận</th><th>Trạng thái</th></tr>';
+        foreach ($topEarners->values() as $i => $p) {
+            $html .= '<tr>'
+                .'<td>'.$e($i + 1).'</td>'
+                .'<td>'.$e(optional($p->employee)->name).'</td>'
+                .'<td>'.$e(optional(optional($p->employee)->department)->name).'</td>'
+                .'<td>'.$e(optional($p->employee)->position).'</td>'
+                .'<td>'.$e($n($p->total_salary)).'</td>'
+                .'<td>'.$e($p->status).'</td>'
+                .'</tr>';
+        }
+        $html .= '</table>';
+
+        $html .= '<h3>4. Phân bố mức lương</h3><table border="1" cellpadding="4" cellspacing="0">';
+        $html .= '<tr><th>Khoảng</th><th>Số nhân viên</th></tr>';
+        foreach ($distribution as $bracket) {
+            $html .= '<tr><td>'.$e($bracket['label']).'</td><td>'.$e($bracket['count']).'</td></tr>';
+        }
+        $html .= '</table></body></html>';
+
+        return $html;
+    }
 }

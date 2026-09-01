@@ -1,10 +1,13 @@
-@extends('layouts.employee')
+@extends('layouts.app')
 
-@section('content')
+@section('title', 'Chấm công')
+
 @section('breadcrumb')
 <li><a href="{{ route('me.dashboard') }}">Dashboard</a></li>
 <li>Chấm công</li>
 @endsection
+
+@section('content')
 <div class="container mx-auto px-4 py-8">
     <div class="max-w-4xl mx-auto">
         <!-- CSRF Token Meta -->
@@ -14,6 +17,12 @@
         <div class="mb-8">
             <h1 class="text-3xl font-bold text-gray-800 mb-2">Chấm Công</h1>
             <p class="text-gray-600">Hôm nay: <strong>{{ date('d/m/Y H:i:s') }}</strong></p>
+            @if(session('success'))
+                <div class="mt-3 rounded-lg bg-green-50 text-green-800 px-4 py-2">{{ session('success') }}</div>
+            @endif
+            @if(session('error'))
+                <div class="mt-3 rounded-lg bg-red-50 text-red-700 px-4 py-2">{{ session('error') }}</div>
+            @endif
         </div>
 
         <!-- Map Section -->
@@ -76,6 +85,58 @@
             </div>
         </div>
 
+        <!-- Face Attendance Section -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div class="flex flex-col gap-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800 mb-2">📸 Chấm Công Bằng Khuôn Mặt</h3>
+                        <p class="text-sm text-gray-600">Sử dụng camera để xác thực khuôn mặt và chấm công.</p>
+                    </div>
+                    <span id="face-registration-status" class="text-sm font-semibold text-blue-600">Đang kiểm tra đăng ký...</span>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div>
+                        <button id="open-face-camera-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200" onclick="initializeFaceCamera()">
+                            📷 Mở Camera
+                        </button>
+                    </div>
+                    <div>
+                        <button id="capture-face-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed" onclick="captureFaceImage()" disabled>
+                            🖼️ Chụp Ảnh
+                        </button>
+                    </div>
+                    <div>
+                        <button id="register-face-btn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed" onclick="registerFace()" disabled>
+                            ✅ Đăng Ký Khuôn Mặt
+                        </button>
+                    </div>
+                    <div>
+                        <button id="face-attendance-btn" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed" onclick="submitFaceAttendance()" disabled>
+                            📸 Chấm Công Bằng Face
+                        </button>
+                    </div>
+                </div>
+
+                <div id="face-preview-panel" class="grid grid-cols-1 lg:grid-cols-2 gap-4 hidden">
+                    <div class="rounded-lg border border-gray-200 overflow-hidden">
+                        <div class="bg-gray-50 p-3 text-sm font-semibold text-gray-700">Camera Preview</div>
+                        <video id="face-video" class="w-full h-72 bg-black" autoplay muted playsinline></video>
+                    </div>
+                    <div class="rounded-lg border border-gray-200 overflow-hidden">
+                        <div class="bg-gray-50 p-3 text-sm font-semibold text-gray-700">Ảnh Chụp</div>
+                        <div class="flex items-center justify-center p-4">
+                            <img id="face-preview" class="max-h-72 rounded-md" src="" alt="Ảnh khuôn mặt" />
+                        </div>
+                    </div>
+                </div>
+
+                <div id="face-status-message" class="text-sm text-gray-700"></div>
+                <canvas id="face-canvas" class="hidden"></canvas>
+            </div>
+        </div>
+
         <!-- Distance Alert -->
         <div id="distance-alert" class="mb-6 hidden">
             <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
@@ -132,11 +193,12 @@
                             <th class="px-4 py-2 text-left">Chấm Ra</th>
                             <th class="px-4 py-2 text-left">Trạng Thái</th>
                             <th class="px-4 py-2 text-left">Vị Trí Vào</th>
+                            <th class="px-4 py-2 text-left"></th>
                         </tr>
                     </thead>
                     <tbody id="history-table">
                         <tr>
-                            <td class="px-4 py-2 text-center" colspan="5">Đang tải...</td>
+                            <td class="px-4 py-2 text-center" colspan="6">Đang tải...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -144,6 +206,30 @@
         </div>
     </div>
 </div>
+
+<dialog id="adjust-dialog" class="rounded-xl p-0 w-full max-w-md shadow-xl">
+    <form method="POST" id="adjust-form" class="p-5">
+        @csrf
+        <h3 class="text-lg font-bold mb-1">Yêu cầu điều chỉnh chấm công</h3>
+        <p class="text-sm text-gray-500 mb-4" id="adjust-date-label"></p>
+        <div class="mb-3">
+            <label class="block text-sm font-semibold mb-1">Giờ vào đề nghị</label>
+            <input type="time" name="requested_check_in" class="w-full border rounded-lg px-3 py-2">
+        </div>
+        <div class="mb-3">
+            <label class="block text-sm font-semibold mb-1">Giờ ra đề nghị</label>
+            <input type="time" name="requested_check_out" class="w-full border rounded-lg px-3 py-2">
+        </div>
+        <div class="mb-4">
+            <label class="block text-sm font-semibold mb-1">Lý do</label>
+            <textarea name="reason" required rows="3" class="w-full border rounded-lg px-3 py-2" placeholder="Ví dụ: Quên chấm công"></textarea>
+        </div>
+        <div class="flex gap-2 justify-end">
+            <button type="button" class="px-4 py-2 rounded-lg border" onclick="document.getElementById('adjust-dialog').close()">Đóng</button>
+            <button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold">Gửi HR</button>
+        </div>
+    </form>
+</dialog>
 
 <!-- Leaflet Map Library (local copy) -->
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
@@ -186,6 +272,7 @@
         loadTodayAttendance();
         startLocationTracking();
         loadAttendanceHistory();
+        loadFaceProfile();
     });
 
     // Initialize Map
@@ -600,7 +687,7 @@
         table.innerHTML = '';
 
         if (attendances.length === 0) {
-            table.innerHTML = '<tr><td class="px-4 py-2 text-center" colspan="5">Không có dữ liệu</td></tr>';
+            table.innerHTML = '<tr><td class="px-4 py-2 text-center" colspan="6">Không có dữ liệu</td></tr>';
             return;
         }
 
@@ -622,6 +709,10 @@
                 'leave': 'Nghỉ'
             }[attendance.status] || attendance.status;
 
+            const adjustBtn = attendance.pending_adjustment
+                ? '<span class="text-xs text-amber-700">Đang chờ HR</span>'
+                : `<button type="button" class="text-xs font-semibold text-indigo-600" onclick="openAdjust(${attendance.id}, '${new Date(attendance.date).toLocaleDateString('vi-VN')}')">Yêu cầu điều chỉnh</button>`;
+
             const row = document.createElement('tr');
             row.className = 'border-t border-gray-200 hover:bg-gray-50';
             row.innerHTML = `
@@ -630,9 +721,18 @@
                 <td class="px-4 py-2">${checkOutTime}</td>
                 <td class="px-4 py-2"><span class="px-2 py-1 rounded text-xs font-semibold ${statusColor}">${statusText}</span></td>
                 <td class="px-4 py-2 text-xs">${attendance.check_in_location || '---'}</td>
+                <td class="px-4 py-2">${adjustBtn}</td>
             `;
             table.appendChild(row);
         });
+    }
+
+    function openAdjust(id, dateLabel) {
+        const dialog = document.getElementById('adjust-dialog');
+        const form = document.getElementById('adjust-form');
+        document.getElementById('adjust-date-label').textContent = 'Ngày ' + dateLabel + ' — bạn không tự sửa giờ.';
+        form.action = `/me/attendance/${id}/adjust`;
+        dialog.showModal();
     }
 
     // Show message helper
@@ -788,6 +888,170 @@
 
         return '';
     }
+
+    // Face attendance helpers
+    let faceStream = null;
+    let faceCapturedImage = null;
+
+    async function loadFaceProfile() {
+        try {
+            const response = await fetch('/api/employee/attendance/face-profile', {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'include',
+            });
+            const data = await response.json();
+
+            if (data.success && data.face_profile) {
+                document.getElementById('face-registration-status').textContent = 'Đã đăng ký khuôn mặt';
+                document.getElementById('face-registration-status').classList.remove('text-blue-600');
+                document.getElementById('face-registration-status').classList.add('text-green-600');
+            } else {
+                document.getElementById('face-registration-status').textContent = 'Chưa đăng ký khuôn mặt';
+                document.getElementById('face-registration-status').classList.remove('text-blue-600');
+                document.getElementById('face-registration-status').classList.add('text-red-600');
+            }
+        } catch (error) {
+            console.error('Face profile error:', error);
+            document.getElementById('face-registration-status').textContent = 'Không thể kiểm tra đăng ký';
+            document.getElementById('face-registration-status').classList.remove('text-blue-600');
+            document.getElementById('face-registration-status').classList.add('text-yellow-600');
+        }
+    }
+
+    async function initializeFaceCamera() {
+        try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('Trình duyệt không hỗ trợ camera');
+            }
+
+            const constraints = { video: { facingMode: 'user' } };
+            faceStream = await navigator.mediaDevices.getUserMedia(constraints);
+            const video = document.getElementById('face-video');
+            video.srcObject = faceStream;
+            video.play();
+
+            document.getElementById('face-preview-panel').classList.remove('hidden');
+            document.getElementById('capture-face-btn').disabled = false;
+            document.getElementById('face-status-message').textContent = 'Camera đã sẵn sàng. Vui lòng đưa khuôn mặt vào khung hình và chụp.';
+        } catch (error) {
+            console.error('Camera error:', error);
+            document.getElementById('face-status-message').textContent = 'Không thể mở camera: ' + error.message;
+        }
+    }
+
+    function captureFaceImage() {
+        const video = document.getElementById('face-video');
+        const canvas = document.getElementById('face-canvas');
+        const preview = document.getElementById('face-preview');
+
+        if (!video || !canvas || !preview) {
+            return;
+        }
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const context = canvas.getContext('2d');
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        faceCapturedImage = canvas.toDataURL('image/jpeg', 0.85);
+        preview.src = faceCapturedImage;
+        preview.alt = 'Ảnh chụp khuôn mặt';
+        preview.classList.remove('hidden');
+
+        document.getElementById('register-face-btn').disabled = false;
+        document.getElementById('face-attendance-btn').disabled = false;
+        document.getElementById('face-status-message').textContent = 'Đã chụp ảnh. Bạn có thể đăng ký hoặc chấm công bằng khuôn mặt.';
+    }
+
+    async function registerFace() {
+        if (!faceCapturedImage) {
+            showFaceMessage('Vui lòng chụp ảnh trước khi đăng ký.');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/employee/attendance/register-face', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                },
+                credentials: 'include',
+                body: JSON.stringify({ face_image: faceCapturedImage }),
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                showFaceMessage(data.message, true);
+                document.getElementById('face-registration-status').textContent = 'Đã đăng ký khuôn mặt';
+                document.getElementById('face-registration-status').classList.remove('text-red-600', 'text-yellow-600');
+                document.getElementById('face-registration-status').classList.add('text-green-600');
+            } else {
+                showFaceMessage(data.message || 'Đăng ký khuôn mặt không thành công.');
+            }
+        } catch (error) {
+            console.error('Register face error:', error);
+            showFaceMessage('Lỗi khi đăng ký khuôn mặt. Vui lòng thử lại.');
+        }
+    }
+
+    async function submitFaceAttendance() {
+        if (!faceCapturedImage) {
+            showFaceMessage('Vui lòng chụp ảnh khuôn mặt trước khi chấm công.');
+            return;
+        }
+
+        const notes = document.getElementById('check-in-notes').value || document.getElementById('check-out-notes').value || null;
+
+        try {
+            const response = await fetch('/api/employee/attendance/face', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    face_image: faceCapturedImage,
+                    latitude: currentLatitude || null,
+                    longitude: currentLongitude || null,
+                    notes,
+                }),
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                showFaceMessage(data.message, true);
+                loadTodayAttendance();
+                setTimeout(() => loadAttendanceHistory(), 500);
+            } else {
+                showFaceMessage(data.message || 'Chấm công bằng khuôn mặt thất bại.');
+            }
+        } catch (error) {
+            console.error('Face attendance error:', error);
+            showFaceMessage('Lỗi khi chấm công bằng khuôn mặt. Vui lòng thử lại.');
+        }
+    }
+
+    function showFaceMessage(message, success = false) {
+        const element = document.getElementById('face-status-message');
+        element.textContent = message;
+        element.className = success ? 'text-sm text-green-600' : 'text-sm text-red-600';
+    }
+
+    function stopFaceCamera() {
+        if (faceStream) {
+            faceStream.getTracks().forEach(track => track.stop());
+            faceStream = null;
+        }
+    }
+
+    window.addEventListener('beforeunload', stopFaceCamera);
 </script>
 </script>
 

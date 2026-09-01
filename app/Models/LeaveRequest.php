@@ -22,6 +22,9 @@ class LeaveRequest extends Model
         'approved_by',
         'approved_at',
         'rejection_reason',
+        'cancelled_by',
+        'cancelled_at',
+        'cancel_reason',
     ];
 
     protected function casts(): array
@@ -30,6 +33,8 @@ class LeaveRequest extends Model
             'start_date' => 'date',
             'end_date' => 'date',
             'approved_at' => 'datetime',
+            'cancelled_at' => 'datetime',
+            'days' => 'float',
             'half_day' => 'boolean',
             'is_urgent' => 'boolean',
         ];
@@ -43,5 +48,10 @@ class LeaveRequest extends Model
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 }

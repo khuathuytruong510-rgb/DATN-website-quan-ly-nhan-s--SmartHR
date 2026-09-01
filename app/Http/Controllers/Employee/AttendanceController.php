@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Services\AttendanceCalculationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class AttendanceController extends Controller
@@ -58,6 +59,12 @@ class AttendanceController extends Controller
         ]);
 
         $today = Carbon::today();
+
+        try {
+            app(\App\Services\PayrollPeriodLockService::class)->assertWritableDate($today->toDateString(), 'chấm công');
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
         
         // Check if already checked in today
         $existingAttendance = Attendance::where('employee_id', $employee->id)
@@ -77,7 +84,6 @@ class AttendanceController extends Controller
 
         $distance = null;
         if (!$locationMissing) {
-            // Calculate distance from office
             $distance = $this->calculateDistance(
                 $latitude,
                 $longitude,
@@ -85,7 +91,6 @@ class AttendanceController extends Controller
                 self::OFFICE_LONGITUDE
             );
 
-            // Check if within allowed distance
             if ($distance > self::ALLOWED_DISTANCE_METERS) {
                 return response()->json([
                     'success' => false,
@@ -96,38 +101,44 @@ class AttendanceController extends Controller
             }
         }
 
-        // Get location name from coordinates (reverse geocoding)
         $locationName = $locationMissing ? null : $this->getLocationName($latitude, $longitude);
         $ipAddress = $request->ip();
 
-        // Create or update attendance record
-        if ($existingAttendance) {
-            $attendance = $existingAttendance;
-        } else {
-            $attendance = Attendance::firstOrCreate([
-                'employee_id' => $employee->id,
-                'date' => $today,
+        return DB::transaction(function () use ($employee, $user, $today, $latitude, $longitude, $locationMissing, $distance, $locationName, $ipAddress, $request) {
+            $attendance = Attendance::lockForEmployeeDate($employee->id, $today);
+
+            if ($attendance->check_in) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bạn đã chấm công vào hôm nay lúc ' . $attendance->check_in->format('H:i:s'),
+                ], 400);
+            }
+
+            $attendance->update([
+                'check_in' => Carbon::now(),
+                'check_in_latitude' => $latitude,
+                'check_in_longitude' => $longitude,
+                'check_in_location' => $locationName,
+                'check_in_ip_address' => $ipAddress,
+                'check_in_distance' => $distance ? round($distance, 2) : null,
+                'check_in_notes' => $request->notes,
+                'check_in_location_missing' => $locationMissing,
+                'status' => $this->determineStatus($today),
             ]);
-        }
 
-        $attendance->update([
-            'check_in' => Carbon::now(),
-            'check_in_latitude' => $latitude,
-            'check_in_longitude' => $longitude,
-            'check_in_location' => $locationName,
-            'check_in_ip_address' => $ipAddress,
-            'check_in_distance' => $distance ? round($distance, 2) : null,
-            'check_in_notes' => $request->notes,
-            'check_in_location_missing' => $locationMissing,
-            'status' => $this->determineStatus($today),
-        ]);
+            \App\Models\ActivityLog::create([
+                'user_id' => $user->id,
+                'action' => 'attendance_check_in',
+                'meta' => $attendance->check_in?->format('H:i'),
+            ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Chấm công vào lúc ' . $attendance->check_in->format('H:i:s') . ' thành công!',
-            'attendance' => $attendance,
-            'distance' => round($distance, 2),
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Chấm công vào lúc ' . $attendance->check_in->format('H:i:s') . ' thành công!',
+                'attendance' => $attendance->fresh(),
+                'distance' => $distance ? round($distance, 2) : null,
+            ]);
+        });
     }
 
     /**
@@ -145,32 +156,19 @@ class AttendanceController extends Controller
         ]);
 
         $today = Carbon::today();
+
+        try {
+            app(\App\Services\PayrollPeriodLockService::class)->assertWritableDate($today->toDateString(), 'chấm công');
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
         
-        $attendance = Attendance::where('employee_id', $employee->id)
-            ->whereDate('date', $today)
-            ->firstOrFail();
-
-        if (!$attendance->check_in) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Bạn chưa chấm công vào. Vui lòng chấm công vào trước.',
-            ], 400);
-        }
-
-        if ($attendance->check_out) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Bạn đã chấm công ra lúc ' . $attendance->check_out->format('H:i:s'),
-            ], 400);
-        }
-
         $latitude = $request->input('latitude');
         $longitude = $request->input('longitude');
         $locationMissing = is_null($latitude) || is_null($longitude);
 
         $distance = null;
         if (!$locationMissing) {
-            // Calculate distance from office
             $distance = $this->calculateDistance(
                 $latitude,
                 $longitude,
@@ -179,37 +177,64 @@ class AttendanceController extends Controller
             );
         }
 
-        // Get location name from coordinates
         $locationName = $locationMissing ? null : $this->getLocationName($latitude, $longitude);
         $ipAddress = $request->ip();
 
-        $attendance->update([
-            'check_out' => Carbon::now(),
-            'check_out_latitude' => $latitude,
-            'check_out_longitude' => $longitude,
-            'check_out_location' => $locationName,
-            'check_out_ip_address' => $ipAddress,
-            'check_out_distance' => $distance ? round($distance, 2) : null,
-            'check_out_notes' => $request->notes,
-            'check_out_location_missing' => $locationMissing,
-        ]);
+        return DB::transaction(function () use ($employee, $user, $today, $latitude, $longitude, $locationMissing, $distance, $locationName, $ipAddress, $request) {
+            $attendance = Attendance::query()
+                ->where('employee_id', $employee->id)
+                ->whereDate('date', $today)
+                ->lockForUpdate()
+                ->first();
 
-        // Calculate all metrics after check-out
-        $attendance = $this->calculationService->updateAttendanceMetrics($attendance);
+            if (! $attendance || ! $attendance->check_in) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bạn chưa chấm công vào. Vui lòng chấm công vào trước.',
+                ], 400);
+            }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Chấm công ra lúc ' . $attendance->check_out->format('H:i:s') . ' thành công!',
-            'attendance' => $attendance,
-            'distance' => round($distance, 2),
-            'metrics' => [
-                'work_hours' => $attendance->work_hours,
-                'late_minutes' => $attendance->late_minutes,
-                'early_leave_minutes' => $attendance->early_leave_minutes,
-                'overtime_hours' => $attendance->overtime_hours,
-                'status' => $attendance->status_label,
-            ],
-        ]);
+            if ($attendance->check_out) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bạn đã chấm công ra lúc ' . $attendance->check_out->format('H:i:s'),
+                ], 400);
+            }
+
+            $attendance->update([
+                'check_out' => Carbon::now(),
+                'check_out_latitude' => $latitude,
+                'check_out_longitude' => $longitude,
+                'check_out_location' => $locationName,
+                'check_out_ip_address' => $ipAddress,
+                'check_out_distance' => $distance ? round($distance, 2) : null,
+                'check_out_notes' => $request->notes,
+                'check_out_location_missing' => $locationMissing,
+            ]);
+
+            $attendance = $this->calculationService->updateAttendanceMetrics($attendance);
+
+            \App\Models\ActivityLog::create([
+                'user_id' => $user->id,
+                'action' => 'attendance_check_out',
+                'meta' => $attendance->check_out?->format('H:i'),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Chấm công ra lúc ' . $attendance->check_out->format('H:i:s') . ' thành công!',
+                'attendance' => $attendance,
+                'distance' => $distance ? round($distance, 2) : null,
+                'metrics' => [
+                    'work_hours' => $attendance->work_hours,
+                    'late_minutes' => $attendance->late_minutes,
+                    'late_penalty_fee' => $attendance->late_penalty_fee,
+                    'early_leave_minutes' => $attendance->early_leave_minutes,
+                    'overtime_hours' => $attendance->overtime_hours,
+                    'status' => $attendance->status_label,
+                ],
+            ]);
+        });
     }
 
     /**
@@ -226,8 +251,15 @@ class AttendanceController extends Controller
         $attendances = Attendance::where('employee_id', $employee->id)
             ->whereMonth('date', $month)
             ->whereYear('date', $year)
+            ->with(['adjustmentRequests' => fn ($q) => $q->where('status', 'pending')])
             ->orderBy('date', 'desc')
-            ->get();
+            ->get()
+            ->map(function (Attendance $attendance) {
+                $payload = $attendance->toArray();
+                $payload['pending_adjustment'] = $attendance->adjustmentRequests->isNotEmpty();
+
+                return $payload;
+            });
 
         return response()->json([
             'success' => true,
@@ -320,6 +352,7 @@ class AttendanceController extends Controller
                 'total_early_leave_days' => $stats['total_early_leave_days'],
                 'total_work_hours' => round($stats['total_work_hours'], 2),
                 'total_late_minutes' => $stats['total_late_minutes'],
+                'total_late_penalty_fee' => round($stats['total_late_penalty_fee'], 2),
                 'total_overtime_hours' => round($stats['total_overtime_hours'], 2),
                 'average_work_hours_per_day' => round($stats['average_work_hours_per_day'], 2),
             ],
@@ -382,6 +415,7 @@ class AttendanceController extends Controller
                 'early_leave_days' => $stats['total_early_leave_days'],
                 'total_hours' => round($stats['total_work_hours'], 2),
                 'total_late_minutes' => $stats['total_late_minutes'],
+                'total_late_penalty_fee' => round($stats['total_late_penalty_fee'], 2),
                 'overtime_hours' => round($stats['total_overtime_hours'], 2),
                 'average_daily_hours' => round($stats['average_work_hours_per_day'], 2),
             ],

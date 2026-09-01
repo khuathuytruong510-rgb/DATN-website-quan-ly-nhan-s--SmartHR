@@ -24,7 +24,7 @@
 
         <div class="field">
             <label>Mã phòng ban</label>
-            <input type="text" name="code" value="{{ old('code', $department->code) }}" maxlength="10" required placeholder="VD: BGD, HCNS, CNTT...">
+            <input type="text" name="code" value="{{ old('code', $department->code) }}" maxlength="10" required placeholder="VD: BGD, HR, IT...">
             @error('code')<span class="error">{{ $message }}</span>@enderror
         </div>
 

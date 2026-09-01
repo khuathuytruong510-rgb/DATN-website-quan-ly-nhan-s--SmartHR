@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class Attendance extends Model
@@ -27,10 +29,13 @@ class Attendance extends Model
         'check_out_notes',
         'work_hours',
         'late_minutes',
+        'late_penalty_fee',
         'early_leave_minutes',
         'overtime_hours',
         'status',
         'notes',
+        'attendance_method',
+        'attendance_status',
         'approved_by',
         'approved_at',
     ];
@@ -45,6 +50,7 @@ class Attendance extends Model
         'check_out_distance' => 'float',
         'work_hours' => 'float',
         'late_minutes' => 'integer',
+        'late_penalty_fee' => 'float',
         'early_leave_minutes' => 'integer',
         'overtime_hours' => 'float',
     ];
@@ -100,6 +106,45 @@ class Attendance extends Model
         return $this->belongsTo(Employee::class);
     }
 
+    public function adjustmentRequests()
+    {
+        return $this->hasMany(AttendanceAdjustmentRequest::class);
+    }
+
+    /**
+     * Khóa bản ghi chấm công trong ngày để tránh double check-in.
+     */
+    public static function lockForEmployeeDate(int $employeeId, $date): self
+    {
+        $dateString = $date instanceof Carbon ? $date->toDateString() : (string) $date;
+
+        $row = static::query()
+            ->where('employee_id', $employeeId)
+            ->whereDate('date', $dateString)
+            ->lockForUpdate()
+            ->first();
+
+        if ($row) {
+            return $row;
+        }
+
+        try {
+            $created = static::create([
+                'employee_id' => $employeeId,
+                'date' => $dateString,
+                'status' => 'absent',
+            ]);
+
+            return static::query()->whereKey($created->id)->lockForUpdate()->firstOrFail();
+        } catch (QueryException) {
+            return static::query()
+                ->where('employee_id', $employeeId)
+                ->whereDate('date', $dateString)
+                ->lockForUpdate()
+                ->firstOrFail();
+        }
+    }
+
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
@@ -151,5 +196,27 @@ class Attendance extends Model
     public function getFormattedCheckOutAttribute(): ?string
     {
         return $this->check_out?->format('H:i:s');
+    }
+
+    /**
+     * Get formatted late penalty fee with Vietnamese currency
+     */
+    public function getFormattedLatePenaltyFeeAttribute(): string
+    {
+        return number_format($this->late_penalty_fee ?? 0, 0, '.', ',') . ' ₫';
+    }
+
+    /**
+     * Get late penalty fee label in Vietnamese
+     */
+    public function getLatePenaltyLabelAttribute(): string
+    {
+        $fee = $this->late_penalty_fee ?? 0;
+
+        if ($fee <= 0) {
+            return 'Không phạt';
+        }
+
+        return number_format($fee, 0, '.', ',') . ' ₫';
     }
 }

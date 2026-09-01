@@ -93,6 +93,7 @@
                         <th>Giờ Ra</th>
                         <th>Giờ Làm</th>
                         <th>Đi Muộn</th>
+                        <th>Tiền Phạt</th>
                         <th>Về Sớm</th>
                         <th>Tăng Ca</th>
                         <th>Trạng Thái</th>
@@ -100,7 +101,7 @@
                 </thead>
                 <tbody id="detailsTable">
                     <tr>
-                        <td colspan="8" class="text-center py-4">Đang tải...</td>
+                        <td colspan="9" class="text-center py-4">Đang tải...</td>
                     </tr>
                 </tbody>
             </table>
@@ -197,6 +198,14 @@ function renderStatisticsCards(stats) {
         <div class="col-md-3 mt-3">
             <div class="card shadow-sm">
                 <div class="card-body text-center">
+                    <h6 class="text-muted mb-2">Tổng Tiền Phạt</h6>
+                    <h2 class="text-danger">${formatCurrency(stats.total_late_penalty_fee)}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mt-3">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
                     <h6 class="text-muted mb-2">Giờ Tăng Ca</h6>
                     <h2 class="text-success">${stats.total_overtime_hours.toFixed(2)}</h2>
                 </div>
@@ -219,7 +228,7 @@ function renderDetailedTable(details) {
     const tbody = document.getElementById('detailsTable');
 
     if (details.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">Không có dữ liệu</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">Không có dữ liệu</td></tr>';
         return;
     }
 
@@ -230,11 +239,16 @@ function renderDetailedTable(details) {
             <td>${item.check_out || '-'}</td>
             <td>${item.work_hours > 0 ? item.work_hours.toFixed(2) : '-'}</td>
             <td>${item.late_minutes > 0 ? item.late_minutes + ' phút' : '-'}</td>
+            <td>${item.late_penalty_fee > 0 ? '<span class="text-danger">' + formatCurrency(item.late_penalty_fee) + '</span>' : '-'}</td>
             <td>${item.early_leave_minutes > 0 ? item.early_leave_minutes + ' phút' : '-'}</td>
             <td>${item.overtime_hours > 0 ? item.overtime_hours.toFixed(2) + ' giờ' : '-'}</td>
             <td>${getStatusBadge(item.status)}</td>
         </tr>
     `).join('');
+}
+
+function formatCurrency(amount) {
+    return new Intl.NumberFormat('vi-VN').format(amount || 0) + ' ₫';
 }
 
 function renderCharts(details) {

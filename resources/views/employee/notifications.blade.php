@@ -10,7 +10,7 @@
     <div class="page-head">
         <div>
             <h1>Thông báo</h1>
-            <p class="muted">Thông báo dành cho nhân viên sẽ hiển thị tại đây.</p>
+            <p class="muted">Thông báo dành cho bạn. Có thể đánh dấu đã đọc, không sửa hoặc xóa thông báo hệ thống.</p>
         </div>
     </div>
 
@@ -20,10 +20,21 @@
         @else
             <div class="list-group list-group-flush">
                 @foreach ($notifications as $notification)
-                    <div class="list-group-item">
-                        <h5>{{ $notification->title }}</h5>
-                        <p>{{ $notification->message }}</p>
-                        <small class="text-muted">{{ $notification->created_at->format('d/m/Y H:i') }}</small>
+                    @php $isRead = $notification->isReadBy(auth()->id()); @endphp
+                    <div class="list-group-item" style="{{ $isRead ? '' : 'background:#f8fafc;' }}">
+                        <div class="d-flex justify-content-between gap-3">
+                            <div>
+                                <h5>{{ $notification->title }} @if(!$isRead)<span class="badge">Chưa đọc</span>@endif</h5>
+                                <p>{{ $notification->message }}</p>
+                                <small class="text-muted">{{ $notification->created_at->format('d/m/Y H:i') }}</small>
+                            </div>
+                            @if(! $isRead)
+                                <form method="POST" action="{{ route('me.notifications.read', $notification) }}">
+                                    @csrf
+                                    <button class="btn" type="submit">Đánh dấu đã đọc</button>
+                                </form>
+                            @endif
+                        </div>
                     </div>
                 @endforeach
             </div>

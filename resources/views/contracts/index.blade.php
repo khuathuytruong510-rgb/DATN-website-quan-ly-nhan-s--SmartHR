@@ -5,79 +5,131 @@
 @include('components.module_header', [
     'title' => 'Hợp đồng',
     'subtitle' => 'Danh sách hợp đồng lao động và trạng thái ký kết.',
-    'buttonText' => 'Tạo hợp đồng',
-    'buttonRoute' => route('contracts.create'),
+    'buttonText' => auth()->user()?->canManageHr() ? 'Tạo hợp đồng' : null,
+    'buttonRoute' => auth()->user()?->canManageHr() ? route('contracts.create') : null,
 ])
+
+@if(session('success'))
+    <div class="alert alert-success mb-3">{{ session('success') }}</div>
+@endif
+@if(session('error'))
+    <div class="alert alert-danger mb-3">{{ session('error') }}</div>
+@endif
 
 <div class="card p-3">
     @if($contracts->count())
-        <table class="table table-hover align-middle">
-                <thead>
+        <div style="overflow-x: auto;">
+        <table class="table table-hover align-middle" style="min-width: 1100px;">
+            <thead>
+                <tr>
+                    <th>Mã HĐ</th>
+                    <th>Nhân viên</th>
+                    <th>Loại HĐ</th>
+                    <th>Lương CB (HĐ)</th>
+                    <th>Phụ cấp (HĐ)</th>
+                    <th>Lương (BL gần nhất)</th>
+                    <th>Bắt đầu</th>
+                    <th>Kết thúc</th>
+                    <th>Trạng thái</th>
+                    <th>Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($contracts as $contract)
+                    @php
+                        $latestPayroll = $contract->employee
+                            ? $contract->employee->payrolls()->orderByDesc('year')->orderByDesc('month')->first()
+                            : null;
+                        $cBase = (float)($contract->base_salary ?? $contract->salary ?? 0);
+                        $pBase = $latestPayroll ? (float)($latestPayroll->base_salary ?? 0) : null;
+                        $hasMismatch = $pBase !== null && abs($pBase - $cBase) > 0;
+
+                        $badge = match($contract->status) {
+                            'waiting_employee_signature', 'waiting_director_signature',
+                            'waiting_employee', 'waiting_director' => 'warning',
+                            'active'    => 'success',
+                            'expiring'  => 'info',
+                            'expired'   => 'danger',
+                            'rejected'  => 'dark',
+                            'cancelled' => 'secondary',
+                            default     => 'secondary',
+                        };
+                        $label = match($contract->status) {
+                            'waiting_employee_signature' => 'Chờ NV ký',
+                            'waiting_director_signature' => 'Chờ GĐ ký',
+                            'waiting_employee'           => 'Chờ NV ký',
+                            'waiting_director'           => 'Chờ GĐ ký',
+                            'active'    => 'Có hiệu lực',
+                            'expiring'  => 'Sắp hết hạn',
+                            'expired'   => 'Hết hạn',
+                            'rejected'  => 'Từ chối',
+                            'cancelled' => 'Đã hủy',
+                            default     => 'Chờ xử lý',
+                        };
+                    @endphp
                     <tr>
-                        <th>Mã hợp đồng</th>
-                        <th>Nhân viên</th>
-                        <th>Loại hợp đồng</th>
-                        <th>Lương</th>
-                        <th>Nghỉ phép</th>
-                        <th>Bù công</th>
-                        <th>Thai sản</th>
-                        <th>Ngày bắt đầu</th>
-                        <th>Ngày kết thúc</th>
-                        <th>Trạng thái</th>
-                        <th>Thao tác</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($contracts as $contract)
-                        <tr>
-                            <td>{{ $contract->contract_code ?? '—' }}</td>
-                            <td>{{ optional($contract->employee)->name }}</td>
-                            <td>{{ $contract->contract_type ? ucfirst(str_replace('_', ' ', $contract->contract_type)) : '—' }}</td>
-                            <td>{{ number_format($contract->salary ?? 0, 0, ',', '.') }} VNĐ</td>
-                            <td>{{ $contract->allowed_unpaid_leave_days_per_month ?? 1 }} ngày</td>
-                            <td>{{ $contract->allowed_makeup_attendance_per_month ?? 3 }} lần</td>
-                            <td>{{ $contract->allowed_maternity_leave_days ?? 180 }} ngày</td>
-                        <td>{{ optional($contract->start_date)->format('d/m/Y') ?? '—' }}</td>
-                        <td>{{ optional($contract->end_date)->format('d/m/Y') ?? '—' }}</td>
-                        <td>{{ optional($contract->createdBy)->name ?? '—' }}</td>
                         <td>
-                            @php
-                                $badge = match($contract->status) {
-                                    'waiting_employee_signature', 'waiting_director_signature', 'waiting_employee', 'waiting_director' => 'warning',
-                                    'active' => 'success',
-                                    'expiring' => 'info',
-                                    'expired' => 'danger',
-                                    'rejected' => 'dark',
-                                    'cancelled' => 'secondary',
-                                    default => 'secondary',
-                                };
-                                $label = match($contract->status) {
-                                    'waiting_employee_signature' => 'Chờ nhân viên ký',
-                                    'waiting_director_signature' => 'Chờ giám đốc ký',
-                                    'waiting_employee' => 'Chờ nhân viên ký',
-                                    'waiting_director' => 'Chờ giám đốc ký',
-                                    'active' => 'Có hiệu lực',
-                                    'expiring' => 'Sắp hết hạn',
-                                    'expired' => 'Hết hạn',
-                                    'rejected' => 'Từ chối',
-                                    'cancelled' => 'Đã hủy',
-                                    default => 'Chờ xử lý',
-                                };
-                            @endphp
-                            <span class="badge bg-{{ $badge }}">{{ $label }}</span>
+                            <a href="{{ route('contracts.show', $contract) }}" style="font-weight:600;">
+                                {{ $contract->contract_code ?? '—' }}
+                            </a>
+                            @if($contract->parent_contract_id)
+                                <span title="Hợp đồng gia hạn" style="font-size:11px;color:#7c3aed;margin-left:4px;">🔄</span>
+                            @endif
                         </td>
+                        <td>{{ optional($contract->employee)->name ?? '—' }}</td>
+                        <td>
+                            @php $typeMap = ['internship'=>'Thực tập','probation'=>'Thử việc','fixed_term'=>'Xác định TH','indefinite'=>'Không XĐ TH','official'=>'Chính thức','seasonal'=>'Thời vụ']; @endphp
+                            {{ $typeMap[$contract->contract_type] ?? ucfirst(str_replace('_',' ',$contract->contract_type ?? '—')) }}
+                        </td>
+                        <td>{{ number_format($cBase, 0, ',', '.') }}₫</td>
+                        <td>{{ number_format($contract->allowance ?? 0, 0, ',', '.') }}₫</td>
+                        <td>
+                            @if($pBase !== null)
+                                <span style="color:{{ $hasMismatch ? '#d97706' : '#16a34a' }}; font-weight:600;">
+                                    {{ number_format($pBase, 0, ',', '.') }}₫
+                                </span>
+                                @if($hasMismatch)
+                                    <span title="Lương bảng lương khác hợp đồng" style="font-size:12px;"> ⚠️</span>
+                                @endif
+                                <div style="font-size:11px;color:#94a3b8;">T{{ $latestPayroll->month }}/{{ $latestPayroll->year }}</div>
+                            @else
+                                <span style="color:#94a3b8;font-size:12px;">Chưa có BL</span>
+                            @endif
+                        </td>
+                        <td>{{ optional($contract->start_date)->format('d/m/Y') ?? '—' }}</td>
+                        <td>{{ optional($contract->end_date)->format('d/m/Y') ?? 'Không XĐ' }}</td>
+                        <td><span class="badge bg-{{ $badge }}">{{ $label }}</span></td>
                         <td>
                             <div class="d-flex flex-wrap gap-1">
                                 <a class="btn btn-sm btn-outline-primary" href="{{ route('contracts.show', $contract) }}">Xem</a>
-                                @if(auth()->user()?->is_admin || auth()->user()?->is_hr)
+                                @if(auth()->user()?->canManageHr())
                                     <a class="btn btn-sm btn-outline-secondary" href="{{ route('contracts.edit', $contract) }}">Sửa</a>
-                                    <a class="btn btn-sm btn-outline-info" href="{{ route('contracts.renew', $contract) }}">Gia hạn</a>
+                                    <a class="btn btn-sm btn-outline-info" href="{{ route('contracts.renew', $contract) }}"
+                                       title="{{ in_array($contract->status, ['expired','expiring']) ? 'Gia hạn hợp đồng' : 'Tạo hợp đồng kế tiếp' }}">
+                                        🔄 Gia hạn
+                                    </a>
+                                    @if($hasMismatch)
+                                        <form action="{{ route('contracts.sync_salary', $contract) }}" method="POST" class="d-inline">
+                                            @csrf
+                                            <button type="submit" class="btn btn-sm btn-warning"
+                                                onclick="return confirm('Cập nhật lương hợp đồng [{{ $contract->contract_code }}] theo bảng lương T{{ $latestPayroll->month }}/{{ $latestPayroll->year }}?')"
+                                                title="Đồng bộ lương từ bảng lương">
+                                                💰 Đồng bộ lương
+                                            </button>
+                                        </form>
+                                    @endif
                                 @endif
-                                @if(auth()->user()?->is_admin || auth()->user()?->is_hr || optional($contract->employee)->email === auth()->user()?->email)
+                                @if(optional($contract->employee)->email === auth()->user()?->email && ! $contract->employee_signed_at)
                                     <form action="{{ route('contracts.sign', $contract) }}" method="POST" class="d-inline">
                                         @csrf
-                                        <input type="hidden" name="party" value="{{ optional($contract->employee)->email === auth()->user()?->email ? 'employee' : 'director' }}">
-                                        <button class="btn btn-sm btn-outline-success" type="submit">Ký hợp đồng</button>
+                                        <input type="hidden" name="party" value="employee">
+                                        <button class="btn btn-sm btn-outline-success" type="submit">✍️ NV ký</button>
+                                    </form>
+                                @elseif(auth()->user()?->is_director && $contract->employee_signed_at && ! $contract->director_signed_at)
+                                    <form action="{{ route('contracts.sign', $contract) }}" method="POST" class="d-inline">
+                                        @csrf
+                                        <input type="hidden" name="party" value="director">
+                                        <button class="btn btn-sm btn-outline-success" type="submit">✍️ GĐ ký</button>
                                     </form>
                                 @endif
                             </div>
@@ -86,10 +138,11 @@
                 @endforeach
             </tbody>
         </table>
+        </div>
 
-        <div class="pagination">{{ $contracts->links() }}</div>
+        <div class="pagination mt-2">{{ $contracts->links() }}</div>
     @else
-        <div class="empty">Chưa có hợp đồng.</div>
+        <div class="empty">Chưa có hợp đồng nào.</div>
     @endif
 </div>
 </div>

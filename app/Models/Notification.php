@@ -31,6 +31,24 @@ class Notification extends Model
         return $this->belongsTo(User::class, 'sender_id');
     }
 
+    public function reads()
+    {
+        return $this->hasMany(NotificationRead::class);
+    }
+
+    public function isReadBy(?int $userId): bool
+    {
+        if (! $userId) {
+            return (bool) $this->is_read;
+        }
+
+        if ($this->relationLoaded('reads')) {
+            return $this->reads->contains(fn ($read) => (int) $read->user_id === (int) $userId);
+        }
+
+        return $this->reads()->where('user_id', $userId)->exists();
+    }
+
     public function markAsRead(): void
     {
         $this->update([

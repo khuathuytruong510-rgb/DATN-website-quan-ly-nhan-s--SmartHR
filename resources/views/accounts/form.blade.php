@@ -6,7 +6,7 @@
     <div class="page-head">
         <div>
             <h1>Tạo tài khoản</h1>
-            <p class="muted">Chỉ admin được tạo tài khoản đăng nhập cho hệ thống.</p>
+            <p class="muted">Tạo tài khoản đăng nhập cho hệ thống.</p>
         </div>
         <a class="btn" href="{{ route('accounts.index') }}">Quay lại</a>
     </div>
@@ -43,13 +43,22 @@
             </div>
 
             <div class="field">
-                <label for="role">Vai trò</label>
+                <label for="role">Vai trò hệ thống</label>
+                @php
+                    $currentRole = old('role', isset($user) && $user->id
+                        ? ($user->is_admin ? 'admin' : ($user->is_director ? 'director' : ($user->is_hr ? 'hr' : ($user->is_accountant ? 'accountant' : 'employee'))))
+                        : 'employee');
+                @endphp
                 <select id="role" name="role" required>
-                    <option value="employee" {{ old('role', isset($user) ? ($user->is_admin ? 'admin' : ($user->is_hr ? 'hr' : ($user->is_accountant ? 'accountant' : 'employee'))) : 'employee') === 'employee' ? 'selected' : '' }}>Nhân viên</option>
-                    <option value="hr" {{ old('role', isset($user) ? ($user->is_hr ? 'hr' : ($user->is_admin ? 'admin' : ($user->is_accountant ? 'accountant' : 'employee'))) : 'employee') === 'hr' ? 'selected' : '' }}>HR</option>
-                    <option value="accountant" {{ old('role', isset($user) ? ($user->is_accountant ? 'accountant' : ($user->is_admin ? 'admin' : ($user->is_hr ? 'hr' : 'employee'))) : 'employee') === 'accountant' ? 'selected' : '' }}>Kế toán</option>
-                    <option value="admin" {{ old('role', isset($user) ? ($user->is_admin ? 'admin' : ($user->is_hr ? 'hr' : ($user->is_accountant ? 'accountant' : 'employee'))) : 'employee') === 'admin' ? 'selected' : '' }}>Admin</option>
+                    <option value="employee" {{ $currentRole === 'employee' ? 'selected' : '' }}>Nhân viên</option>
+                    <option value="hr" {{ $currentRole === 'hr' ? 'selected' : '' }}>HR</option>
+                    <option value="accountant" {{ $currentRole === 'accountant' ? 'selected' : '' }}>Kế toán</option>
+                    <option value="director" {{ $currentRole === 'director' ? 'selected' : '' }}>Giám đốc</option>
+                    @if (auth()->user()?->is_admin)
+                        <option value="admin" {{ $currentRole === 'admin' ? 'selected' : '' }}>Admin (quản trị hệ thống)</option>
+                    @endif
                 </select>
+                <p class="muted" style="margin:6px 0 0;font-size:13px;">Admin quản trị CNTT. Giám đốc phê duyệt nghiệp vụ. Vai trò Admin hệ thống chỉ Admin quản trị mới được gán.</p>
                 @error('role')<span class="error">{{ $message }}</span>@enderror
             </div>
 

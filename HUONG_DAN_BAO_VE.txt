@@ -1,0 +1,135 @@
+SmartHR — Hướng dẫn bảo vệ đồ án
+================================
+Không mở lại 4 cổng. Không thêm module. File này phục vụ demo và viết báo cáo.
+
+Lệnh nạp dữ liệu demo (MySQL đang dùng trong .env):
+  php artisan db:seed --class=DefenseDemoSeeder
+
+Mật khẩu mọi tài khoản demo: 123456
+
+
+1. Tài khoản
+------------
+HR         hr@smarthr.com
+Kế toán    accountant@smarthr.com
+Giám đốc   giamdoc@smarthr.com
+Nhân viên  nv@smarthr.com   (Nguyễn Văn Nam)
+
+
+2. Snapshot thầy cô nhìn thấy ngay
+----------------------------------
+Kỳ 08/2026 đã chốt (HR). Kỳ 09/2026 chưa chốt — dùng để duyệt nghỉ / correction.
+
+HR
+  - Bảng lương 08/2026: kỳ đã khóa; phiếu Lê Minh Khoa = calculated (nút Kiểm tra dữ liệu)
+  - Nghỉ phép: đơn pending của Nguyễn Văn Nam (10–11/09)
+  - Chấm công: yêu cầu điều chỉnh 01/09 (kỳ chưa khóa, HR duyệt được)
+
+KT
+  - Tính lương: 08/2026 = Đã chốt (có nút Tính lương; phiếu đã vào vòng duyệt sẽ bị bỏ qua)
+  - Các tháng chưa chốt hiện “Chờ HR chốt kỳ”
+  - Thanh toán: Phạm Quốc Bảo = employee_confirmed
+
+GĐ
+  - Dashboard: chờ phê duyệt cuối
+  - Bảng lương 08/2026: Trần Thị Hoa = hr_checked (Phê duyệt cuối)
+  - Hợp đồng HD-DEMO-GD-2026: chờ GĐ ký (NV Hoa đã ký)
+
+NV (Nguyễn Văn Nam)
+  - Chấm công tháng 8
+  - Đơn nghỉ pending
+  - Bảng lương 08/2026 = director_approved (Xác nhận)
+  - Hợp đồng HD-DEMO-NV-2026: chờ NV ký
+
+
+3. Kịch bản demo (theo nghiệp vụ, không theo menu)
+--------------------------------------------------
+Mở http://127.0.0.1:8000
+
+A. Một phiếu đi hết chuỗi (khoảng 8 phút)
+   1. HR  — Bảng lương 08/2026 — Kiểm tra dữ liệu phiếu Lê Minh Khoa
+            (calculated → hr_checked)
+   2. GĐ  — Bảng lương — Phê duyệt cuối phiếu Khoa
+            (hr_checked → director_approved)
+      *Khoa không có tài khoản NV; bước xác nhận trình trên phiếu Nam.*
+   3. NV  — nv@smarthr.com — Bảng lương — Xác nhận phiếu Nam
+            (director_approved → employee_confirmed)
+   4. KT  — Thanh toán lương — thanh toán phiếu Phạm Quốc Bảo
+            (employee_confirmed → paid, một salary_payment)
+
+B. Chốt kỳ + tính lương (nếu còn thời gian)
+   1. KT  — Tính lương: chỉ tháng đã chốt mới có nút Tính
+   2. HR  — chọn tháng chưa chốt → Chốt dữ liệu kỳ
+   3. KT  — Tính lương tháng vừa chốt
+            Nhấn mạnh: form không gửi total_salary; backend tự tính.
+
+C. Hợp đồng hai chữ ký
+   1. NV  — Hợp đồng — ký HD-DEMO-NV-2026
+   2. GĐ  — Hợp đồng — ký HD-DEMO-GD-2026 (chỉ sau khi NV đã ký)
+
+D. Câu chốt cho hội đồng (nói, đừng click lung tung)
+   “Ở mỗi bước, nếu role khác gọi đúng URL thì backend từ chối.
+    Không phải ẩn nút trên giao diện. PHPUnit: CrossRolePayrollWorkflowTest
+    — 4 cổng khóa + audit xuyên role 77 test nghiệp vụ.”
+
+   Ví dụ nói:
+   - CALCULATED mà GĐ duyệt → 403
+   - HR_CHECKED mà NV xác nhận / KT trả → không đổi trạng thái
+   - DIRECTOR_APPROVED mà KT trả trước NV → không tạo payment
+   - NV A xác nhận phiếu B → 403
+   - Báo sự cố rồi KT trả thẳng PAID → không được; phải HR kiểm tra → GĐ duyệt lại
+
+
+4. Dàn ý báo cáo (viết “tại sao”, không dán code)
+-------------------------------------------------
+4.1 Phân quyền RBAC
+    Năm cờ boolean trên users: admin, hr, accountant, director, còn lại = NV.
+    Middleware tách cổng. Một người một vai trò nghiệp vụ (không HR kiêm GĐ).
+
+4.2 Authorization ở backend
+    UI ẩn nút chỉ là tiện. Mọi POST/PUT đi qua middleware + controller + service.
+    Sai role = 403 kể cả gọi URL trực tiếp.
+
+4.3 Ownership
+    NV chỉ thao tác hồ sơ / phiếu / hợp đồng của chính mình (employee_id).
+    IDOR: cùng payroll_id, đổi user → 403.
+
+4.4 State machine
+    draft/calculated → hr_checked → director_approved → employee_confirmed → paid
+    Nhánh sự cố: director_approved → payroll_issue → calculated → lặp lại HR rồi GĐ.
+    Không có đường tắt NV báo sai → KT sửa → paid.
+
+4.5 Transaction + lockForUpdate
+    Chuyển trạng thái trong DB::transaction, khóa dòng phiếu/kỳ
+    để hai request không duyệt/trả hai lần.
+
+4.6 Unique constraints
+    Một chấm công / nhân viên / ngày.
+    Một pending điều chỉnh / một attendance.
+    Một salary_payment / payroll_id.
+    MySQL 8: unique function index (không dùng generated UNSIGNED trên cột FK).
+
+4.7 Audit log
+    Chốt/mở kỳ (mở kỳ bắt buộc lý do ≥ 10 ký tự), tính lương, kiểm tra,
+    duyệt, xác nhận, thanh toán — ghi user_id + action + meta.
+
+4.8 Mass-assignment
+    Client gửi status=paid, total_salary=999... bị bỏ. Service tự gán trạng thái.
+
+4.9 Kỳ lương
+    HR chốt cả kỳ trước khi KT tính. Khóa kỳ chặn ghi chấm công/nghỉ.
+    Mở khóa: chỉ khi chưa vào vòng HR_CHECKED+; có lý do và nhật ký.
+
+4.10 Kiểm thử
+    PHPUnit SQLite in-memory + migrate MySQL thật.
+    CrossRolePayrollWorkflowTest: happy path + phá từng cạnh + vòng sự cố + IDOR.
+
+Câu kết chương:
+    Hệ thống không chỉ CRUD theo menu. Mỗi hành động là:
+    vai trò → quyền → trạng thái hiện tại → điều kiện → hành động → trạng thái tiếp theo.
+
+
+5. Việc không làm khi bảo vệ
+----------------------------
+Không thêm role Manager, không HR theo chi nhánh, không chữ ký số,
+không mở lại 4 cổng đã khóa, không demo từng trang dashboard.
