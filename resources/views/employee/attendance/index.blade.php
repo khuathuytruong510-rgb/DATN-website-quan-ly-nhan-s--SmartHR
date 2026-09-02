@@ -69,6 +69,7 @@
                 <div class="rounded-lg border border-gray-200 overflow-hidden bg-black relative">
                     <video id="face-video" class="w-full h-72 object-cover" autoplay muted playsinline></video>
                     <canvas id="face-overlay" class="absolute inset-0 w-full h-72"></canvas>
+                    <canvas id="face-canvas" class="hidden"></canvas>
                     <div id="face-guide" class="absolute inset-x-0 bottom-0 bg-black/50 text-white text-sm px-3 py-2">Đang mở camera...</div>
                 </div>
                 <div class="flex flex-col gap-3">
@@ -179,6 +180,16 @@
         startLocationTracking();
         loadAttendanceHistory();
         loadFaceProfile();
+        initializeFaceCamera();
+        document.getElementById('retry-camera-btn')?.addEventListener('click', initializeFaceCamera);
+        document.getElementById('register-face-btn')?.addEventListener('click', function () {
+            captureFaceImage();
+            registerFace();
+        });
+        document.getElementById('punch-face-btn')?.addEventListener('click', function () {
+            captureFaceImage();
+            submitFaceAttendance();
+        });
     });
 
     // Initialize Map
@@ -816,7 +827,7 @@
             });
             const data = await response.json();
 
-            if (data.success && data.face_profile) {
+            if (data.success && data.registered) {
                 document.getElementById('face-registration-status').textContent = 'Đã đăng ký khuôn mặt';
                 document.getElementById('face-registration-status').classList.remove('text-blue-600');
                 document.getElementById('face-registration-status').classList.add('text-green-600');
@@ -845,8 +856,7 @@
             video.srcObject = faceStream;
             video.play();
 
-            document.getElementById('face-preview-panel').classList.remove('hidden');
-            document.getElementById('capture-face-btn').disabled = false;
+            document.getElementById('face-guide').textContent = 'Camera đã sẵn sàng. Nhấn nút đăng ký hoặc chấm công để chụp ảnh.';
             document.getElementById('face-status-message').textContent = 'Camera đã sẵn sàng. Vui lòng đưa khuôn mặt vào khung hình và chụp.';
         } catch (error) {
             console.error('Camera error:', error);
@@ -874,7 +884,6 @@
         preview.classList.remove('hidden');
 
         document.getElementById('register-face-btn').disabled = false;
-        document.getElementById('face-attendance-btn').disabled = false;
         document.getElementById('face-status-message').textContent = 'Đã chụp ảnh. Bạn có thể đăng ký hoặc chấm công bằng khuôn mặt.';
     }
 
@@ -965,6 +974,5 @@
 
     window.addEventListener('beforeunload', stopFaceCamera);
 </script>
-</script>
 
-@endsection
+@endpush

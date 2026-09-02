@@ -10,7 +10,7 @@
 </div>
 
 <div class="card">
-    <form method="POST" action="{{ $leaveRequest->exists ? route('leave_requests.update', $leaveRequest) : route('leave_requests.store') }}" onsubmit="return confirm('Xác nhận gửi? Hệ thống sẽ kiểm tra điều kiện nghỉ phép trên hợp đồng và luật lao động trước khi chuyển duyệt.');">
+    <form method="POST" action="{{ $leaveRequest->exists ? route('leave_requests.update', $leaveRequest) : route('leave_requests.store') }}" data-confirm="Xác nhận gửi? Hệ thống sẽ kiểm tra điều kiện nghỉ phép trên hợp đồng và luật lao động trước khi chuyển duyệt.">
         @csrf
         @if($leaveRequest->exists)
             @method('PUT')

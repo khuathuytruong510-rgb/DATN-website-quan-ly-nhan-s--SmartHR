@@ -884,7 +884,7 @@
                     }
                     const submit = function () {
                         formEl.removeAttribute('data-confirm');
-                        if (formEl.requestSubmit) formEl.requestSubmit();
+                        if (formEl.requestSubmit) formEl.requestSubmit(el.matches('button, input') ? el : undefined);
                         else formEl.submit();
                     };
                     submit();

@@ -35,6 +35,7 @@
                     <option value="">Tất cả</option>
                     <option value="employee" {{ ($filters['kind'] ?? '') === 'employee' ? 'selected' : '' }}>Nhân viên</option>
                     <option value="department" {{ ($filters['kind'] ?? '') === 'department' ? 'selected' : '' }}>Phòng ban</option>
+                    <option value="transfer" {{ ($filters['kind'] ?? '') === 'transfer' ? 'selected' : '' }}>Điều chuyển nhân viên</option>
                 </select>
             </div>
             <div>

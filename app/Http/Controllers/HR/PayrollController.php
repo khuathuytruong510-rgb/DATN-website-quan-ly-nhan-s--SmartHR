@@ -404,6 +404,6 @@ class PayrollController extends Controller
 
         return redirect()
             ->route('payroll.index', ['month' => $data['month'], 'year' => $data['year']])
-            ->with('success', 'Đã mở khóa kỳ lương. Sau khi chỉnh dữ liệu, HR phải chốt lại trước khi Kế toán tính.');
+            ->with('success', 'Đã hủy chốt lương. Sau khi chỉnh dữ liệu, HR phải chốt lại trước khi Kế toán tính.');
     }
 }

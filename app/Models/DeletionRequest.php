@@ -10,6 +10,7 @@ class DeletionRequest extends Model
 {
     public const KIND_EMPLOYEE = 'employee';
     public const KIND_DEPARTMENT = 'department';
+    public const KIND_TRANSFER = 'transfer';
 
     public const STATUS_PENDING = 'pending';
     public const STATUS_APPROVED = 'approved';
@@ -67,6 +68,26 @@ class DeletionRequest extends Model
         return $this->status === self::STATUS_PENDING;
     }
 
+    public function isEmployee(): bool
+    {
+        return $this->kind === self::KIND_EMPLOYEE;
+    }
+
+    public function isDepartment(): bool
+    {
+        return $this->kind === self::KIND_DEPARTMENT;
+    }
+
+    public function isTransfer(): bool
+    {
+        return $this->kind === self::KIND_TRANSFER;
+    }
+
+    public function approveActionLabel(): string
+    {
+        return $this->isTransfer() ? 'Duyệt và chuyển' : 'Duyệt và xóa';
+    }
+
     public function isApproved(): bool
     {
         return $this->status === self::STATUS_APPROVED;
@@ -89,7 +110,12 @@ class DeletionRequest extends Model
 
     public function kindLabel(): string
     {
-        return $this->kind === self::KIND_EMPLOYEE ? 'Nhân viên' : 'Phòng ban';
+        return match ($this->kind) {
+            self::KIND_EMPLOYEE => 'Nhân viên',
+            self::KIND_DEPARTMENT => 'Phòng ban',
+            self::KIND_TRANSFER => 'Điều chuyển nhân viên',
+            default => 'Yêu cầu',
+        };
     }
 
     public function statusLabel(): string

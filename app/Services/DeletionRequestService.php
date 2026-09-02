@@ -15,6 +15,117 @@ use RuntimeException;
 
 class DeletionRequestService
 {
+    public function pendingFor(string $kind, int $targetId): ?DeletionRequest
+    {
+        $model = match ($kind) {
+            DeletionRequest::KIND_EMPLOYEE => Employee::class,
+            DeletionRequest::KIND_DEPARTMENT => Department::class,
+            default => null,
+        };
+
+        if ($model === null) {
+            return null;
+        }
+
+        return DeletionRequest::query()
+            ->where('kind', $kind)
+            ->where('requestable_type', $model)
+            ->where('requestable_id', $targetId)
+            ->where('status', DeletionRequest::STATUS_PENDING)
+            ->latest('id')
+            ->first();
+    }
+
+    public function pendingTransferIdForEmployee(int $employeeId): ?int
+    {
+        return DeletionRequest::query()
+            ->where('kind', DeletionRequest::KIND_TRANSFER)
+            ->where('requestable_type', Employee::class)
+            ->where('requestable_id', $employeeId)
+            ->where('status', DeletionRequest::STATUS_PENDING)
+            ->latest('id')
+            ->value('id');
+    }
+
+    public function pendingTransferMap(array $employeeIds): array
+    {
+        if ($employeeIds === []) {
+            return [];
+        }
+
+        return DeletionRequest::query()
+            ->where('kind', DeletionRequest::KIND_TRANSFER)
+            ->where('requestable_type', Employee::class)
+            ->whereIn('requestable_id', $employeeIds)
+            ->where('status', DeletionRequest::STATUS_PENDING)
+            ->latest('id')
+            ->get(['id', 'requestable_id'])
+            ->unique('requestable_id')
+            ->pluck('id', 'requestable_id')
+            ->all();
+    }
+
+    public function transferEmployees(
+        Department $from,
+        Department $target,
+        array $employeeIds,
+        User $actor,
+        ?string $reason = null,
+        mixed $document = null
+    ): void {
+        $employeeIds = array_values(array_unique(array_map('intval', $employeeIds)));
+        if ($employeeIds === []) {
+            throw new RuntimeException('Vui lòng chọn ít nhất một nhân viên để điều chuyển.');
+        }
+
+        DB::transaction(function () use ($from, $target, $employeeIds, $actor, $reason): void {
+            $employees = Employee::query()
+                ->whereIn('id', $employeeIds)
+                ->where('department_id', $from->id)
+                ->lockForUpdate()
+                ->get();
+
+            if ($employees->count() !== count($employeeIds)) {
+                throw new RuntimeException('Danh sách nhân viên điều chuyển không còn thuộc phòng ban hiện tại.');
+            }
+
+            foreach ($employees as $employee) {
+                if ($this->pendingTransferIdForEmployee($employee->id) !== null) {
+                    throw new RuntimeException('Nhân viên "'.$employee->name.'" đã có yêu cầu điều chuyển đang chờ duyệt.');
+                }
+
+                $request = DeletionRequest::create([
+                    'code' => $this->resolveCode(),
+                    'kind' => DeletionRequest::KIND_TRANSFER,
+                    'requestable_id' => $employee->id,
+                    'requestable_type' => Employee::class,
+                    'name' => $employee->name,
+                    'payload' => [
+                        'employee' => $employee->getAttributes(),
+                        'from_department_id' => $from->id,
+                        'target_department_id' => $target->id,
+                    ],
+                    'reason' => $reason ?: 'Điều chuyển nhân sự theo yêu cầu HR.',
+                    'status' => DeletionRequest::STATUS_PENDING,
+                    'submitted_by' => $actor->id,
+                ]);
+
+                ActivityLog::create([
+                    'user_id' => $actor->id,
+                    'action' => 'transfer_request_created',
+                    'meta' => sprintf('deletion:%d;employee:%d;from:%d;to:%d', $request->id, $employee->id, $from->id, $target->id),
+                ]);
+            }
+
+            $this->notify(
+                $actor,
+                'Yêu cầu điều chuyển nhân viên',
+                $actor->name.' đề nghị điều chuyển '.count($employeeIds).' nhân viên từ '.$from->name.' sang '.$target->name.'.',
+                ['kind' => DeletionRequest::KIND_TRANSFER, 'type' => 'transfer_request_pending']
+            );
+        });
+    }
+
     public function submit(User $actor, string $kind, int $targetId, string $reason): DeletionRequest
     {
         $target = $this->resolveTarget($kind, $targetId);
@@ -233,6 +344,23 @@ class DeletionRequestService
 
     protected function performDeletion(DeletionRequest $request): void
     {
+        if ($request->kind === DeletionRequest::KIND_TRANSFER) {
+            $employee = Employee::query()->whereKey($request->requestable_id)->lockForUpdate()->first();
+            $targetDepartmentId = (int) data_get($request->payload, 'target_department_id');
+            $target = Department::query()->whereKey($targetDepartmentId)->first();
+
+            if (! $employee || ! $target) {
+                throw new RuntimeException('Không tìm thấy hồ sơ nhân viên hoặc phòng ban đích để điều chuyển.');
+            }
+
+            $fromDepartmentId = $employee->department_id;
+            $employee->update(['department_id' => $target->id]);
+            self::syncDepartmentCount($fromDepartmentId);
+            self::syncDepartmentCount($target->id);
+
+            return;
+        }
+
         if ($request->kind === DeletionRequest::KIND_EMPLOYEE) {
             $employee = Employee::query()->whereKey($request->requestable_id)->lockForUpdate()->first();
 

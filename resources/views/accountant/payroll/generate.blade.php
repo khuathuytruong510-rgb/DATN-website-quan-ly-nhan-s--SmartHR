@@ -115,7 +115,7 @@
         </div>
         @if($periodLocked && $recalculableCount > 0)
             <form method="POST" action="{{ route('accountant.payroll.generate_post') }}"
-                  onsubmit="return confirm('Xác nhận tính lương kỳ {{ $periodLabel }} cho {{ $recalculableCount }} nhân viên?\nSố liệu đang hiển thị sẽ được ghi vào phiếu.');">
+                  data-confirm="Xác nhận tính lương kỳ {{ $periodLabel }} cho {{ $recalculableCount }} nhân viên? Số liệu đang hiển thị sẽ được ghi vào phiếu.">
                 @csrf
                 <input type="hidden" name="month" value="{{ $periodValue }}">
                 <button class="btn primary" type="submit">Tính lương kỳ {{ $periodLabel }}</button>
@@ -137,7 +137,7 @@
                     <th class="num">Lương CB</th>
                     <th class="num">Ngày công (thực/đủ tháng)</th>
                     <th class="num">TC ngày</th>
-                    <th class="num">Nghỉ phép (Có/Không)</th>
+                    <th class="num">Nghỉ phép<br><small>(hưởng lương / không lương)</small></th>
                     <th class="num">Lễ hưởng lương</th>
                     <th class="num">TC giờ</th>
                     <th class="num">Lương đi làm</th>
@@ -182,7 +182,9 @@
                         </td>
                         <td class="num">{{ $row->overtime_days > 0 ? '+'.$row->overtime_days : '0' }}</td>
                         <td class="num">
-                            {{ $paidLeaveDays }} / {{ $row->unpaid_leave_days ?? 0 }} ngày
+                            <span title="Ngày nghỉ hưởng lương / ngày nghỉ không hưởng lương">
+                                {{ $paidLeaveDays }} hưởng lương / {{ $row->unpaid_leave_days ?? 0 }} không lương
+                            </span>
                             @if($paidLeaveSalary > 0)
                                 <br><small style="color:#15803d;font-weight:700;">+{{ number_format($paidLeaveSalary) }}</small>
                             @endif
@@ -245,7 +247,7 @@
     @if($periodLocked && $recalculableCount > 0 && $rows->count() > 0)
         <div style="margin-top:16px;display:flex;justify-content:flex-end;">
             <form method="POST" action="{{ route('accountant.payroll.generate_post') }}"
-                  onsubmit="return confirm('Xác nhận tính lương kỳ {{ $periodLabel }} cho {{ $recalculableCount }} nhân viên?\nSố liệu đang hiển thị sẽ được ghi vào phiếu.');">
+                  data-confirm="Xác nhận tính lương kỳ {{ $periodLabel }} cho {{ $recalculableCount }} nhân viên? Số liệu đang hiển thị sẽ được ghi vào phiếu.">
                 @csrf
                 <input type="hidden" name="month" value="{{ $periodValue }}">
                 <button class="btn primary" type="submit">Tính lương kỳ {{ $periodLabel }}</button>

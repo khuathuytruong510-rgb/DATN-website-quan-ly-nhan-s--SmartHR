@@ -28,7 +28,7 @@ class DeletionRequestController extends Controller
             ->orderByRaw("CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END")
             ->orderByDesc('id');
 
-        if (in_array($status, [DeletionRequest::PENDING, DeletionRequest::APPROVED, DeletionRequest::REJECTED], true)) {
+        if (in_array($status, [DeletionRequest::STATUS_PENDING, DeletionRequest::STATUS_APPROVED, DeletionRequest::STATUS_REJECTED], true)) {
             $query->where('status', $status);
         }
 
@@ -56,21 +56,15 @@ class DeletionRequestController extends Controller
         $this->assertHr();
         abort_unless(\App\Support\RequestApprover::hrMayManage(auth()->user(), $employee), 403, 'HR không quản lý hồ sơ Giám đốc.');
 
-        if ($pending = $this->service->pendingFor(DeletionRequest::EMPLOYEE, $employee->id)) {
+        if ($pending = $this->service->pendingFor(DeletionRequest::KIND_EMPLOYEE, $employee->id)) {
             return redirect()
                 ->route('deletion_requests.show', $pending)
                 ->with('error', 'Đã có yêu cầu xóa nhân viên này đang chờ Giám đốc duyệt.');
         }
-        if ($transferId = $this->service->pendingTransferIdForEmployee($employee->id)) {
-            return redirect()
-                ->route('deletion_requests.show', $transferId)
-                ->with('error', 'Nhân viên này đang chờ Giám đốc duyệt chuyển phòng ban.');
-        }
-
         $employee->loadMissing('user', 'department');
 
         return view('hr.deletions.form', [
-            'subjectType' => DeletionRequest::EMPLOYEE,
+            'subjectType' => DeletionRequest::KIND_EMPLOYEE,
             'employee' => $employee,
             'department' => null,
             'action' => route('deletion_requests.store_employee', $employee),
@@ -87,7 +81,7 @@ class DeletionRequestController extends Controller
                 ->with('error', 'Không xóa hoặc điều chuyển Ban Giám đốc.');
         }
 
-        if ($pending = $this->service->pendingFor(DeletionRequest::DEPARTMENT, $department->id)) {
+        if ($pending = $this->service->pendingFor(DeletionRequest::KIND_DEPARTMENT, $department->id)) {
             return redirect()
                 ->route('deletion_requests.show', $pending)
                 ->with('error', 'Đã có yêu cầu xóa phòng ban này đang chờ Giám đốc duyệt.');
@@ -97,7 +91,7 @@ class DeletionRequestController extends Controller
             ->reject(fn (Employee $row) => \App\Support\RequestApprover::isDirectorEmployee($row));
 
         return view('hr.deletions.form', [
-            'subjectType' => DeletionRequest::DEPARTMENT,
+            'subjectType' => DeletionRequest::KIND_DEPARTMENT,
             'employee' => null,
             'department' => $department,
             'action' => route('deletion_requests.store_department', $department),
@@ -108,10 +102,10 @@ class DeletionRequestController extends Controller
                 ->orderBy('name')
                 ->get(),
             'pendingEmployeeDeletions' => DeletionRequest::query()
-                ->where('subject_type', DeletionRequest::EMPLOYEE)
-                ->where('status', DeletionRequest::PENDING)
-                ->whereIn('subject_id', $employees->pluck('id'))
-                ->pluck('id', 'subject_id'),
+                ->where('requestable_type', Employee::class)
+                ->where('status', DeletionRequest::STATUS_PENDING)
+                ->whereIn('requestable_id', $employees->pluck('id'))
+                ->pluck('id', 'requestable_id'),
             'pendingEmployeeTransfers' => $this->service->pendingTransferMap($employees->pluck('id')->all()),
         ]);
     }
@@ -313,15 +307,10 @@ class DeletionRequestController extends Controller
             )) {
                 abort(403, 'HR không quản lý hồ sơ Ban Giám đốc.');
             }
-            if ($employee && $this->service->pendingFor(DeletionRequest::EMPLOYEE, $employee->id)) {
+            if ($employee && $this->service->pendingFor(DeletionRequest::KIND_EMPLOYEE, $employee->id)) {
                 return redirect()
-                    ->route('deletion_requests.show', $this->service->pendingFor(DeletionRequest::EMPLOYEE, $employee->id))
+                    ->route('deletion_requests.show', $this->service->pendingFor(DeletionRequest::KIND_EMPLOYEE, $employee->id))
                     ->with('error', 'Nhân viên đang chờ Giám đốc duyệt xóa.');
-            }
-            if ($employee && $transferId = $this->service->pendingTransferIdForEmployee($employee->id)) {
-                return redirect()
-                    ->route('deletion_requests.show', $transferId)
-                    ->with('error', 'Nhân viên này đang chờ Giám đốc duyệt chuyển phòng ban.');
             }
             if ($employee && ! $fromFilterId) {
                 $fromFilterId = $employee->department_id ? (int) $employee->department_id : null;

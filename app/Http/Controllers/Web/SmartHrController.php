@@ -421,17 +421,38 @@ class SmartHrController extends Controller
         return view('notifications.index');
     }
 
-    public function accounts(): View
+    public function accounts(Request $request): View
     {
         $pendingAccountIds = DeletionRequest::query()
-            ->where('status', DeletionRequest::APPROVED)
-            ->whereNotNull('account_user_id')
-            ->whereNull('account_cleared_at')
-            ->pluck('subject_label', 'account_user_id');
+            ->with('requestable.user')
+            ->where('kind', DeletionRequest::KIND_EMPLOYEE)
+            ->where('status', DeletionRequest::STATUS_APPROVED)
+            ->get()
+            ->mapWithKeys(function (DeletionRequest $request): array {
+                $userId = $request->requestable?->user_id ?: $request->requestable?->user?->id;
+
+                return $userId ? [$userId => $request->name] : [];
+            });
+
+        $query = User::query();
+
+        if ($search = trim((string) $request->query('search'))) {
+            $query->where(function ($query) use ($search): void {
+                $query->where('name', 'like', '%'.$search.'%')
+                    ->orWhere('email', 'like', '%'.$search.'%');
+            });
+        }
+
+        if ($request->query('status') === 'locked') {
+            $query->where('is_locked', true);
+        } elseif ($request->query('status') === 'active') {
+            $query->where('is_locked', false);
+        }
 
         return view('accounts.index', [
-            'users' => User::latest()->paginate(10),
+            'users' => $query->latest()->paginate(10)->withQueryString(),
             'pendingAccountIds' => $pendingAccountIds,
+            'filters' => $request->only(['search', 'status']),
         ]);
     }
 
@@ -697,11 +718,6 @@ class SmartHrController extends Controller
 
     public function departments(): View
     {
-        $pendingDepartmentDeletions = DeletionRequest::query()
-            ->where('subject_type', DeletionRequest::DEPARTMENT)
-            ->where('status', DeletionRequest::PENDING)
-            ->pluck('id', 'subject_id');
-
         return view('departments.index', [
             'departments' => Department::withCount(['employees', 'positions'])->latest()->paginate(10),
         ]);
@@ -757,19 +773,39 @@ class SmartHrController extends Controller
             ]);
         }
 
-        $employees = Employee::with([
+        $query = Employee::with([
             'department',
             'contracts' => fn ($q) => $q->latest('id'),
-        ])->latest()->paginate(10);
+        ]);
+
+        if ($search = trim((string) $request->query('search'))) {
+            $query->where(function ($query) use ($search): void {
+                $query->where('employee_code', 'like', '%'.$search.'%')
+                    ->orWhere('name', 'like', '%'.$search.'%')
+                    ->orWhere('email', 'like', '%'.$search.'%')
+                    ->orWhere('position', 'like', '%'.$search.'%');
+            });
+        }
+
+        if ($departmentId = $request->integer('department_id')) {
+            $query->where('department_id', $departmentId);
+        }
+
+        if ($status = $request->query('status')) {
+            $query->where('status', $status);
+        }
+
+        $employees = $query->latest()->paginate(10)->withQueryString();
 
         return view('employees.index', [
             'employees' => $employees,
+            'departments' => Department::query()->orderBy('name')->get(),
+            'filters' => $request->only(['search', 'department_id', 'status']),
             'pendingEmployeeDeletions' => DeletionRequest::query()
-                ->where('subject_type', DeletionRequest::EMPLOYEE)
-                ->where('status', DeletionRequest::PENDING)
-                ->pluck('id', 'subject_id'),
-            'pendingEmployeeTransfers' => app(DeletionRequestService::class)
-                ->pendingTransferMap($employees->pluck('id')->all()),
+                ->where('requestable_type', Employee::class)
+                ->where('status', DeletionRequest::STATUS_PENDING)
+                ->whereIn('requestable_id', $employees->pluck('id'))
+                ->pluck('id', 'requestable_id'),
         ]);
     }
 
@@ -835,7 +871,10 @@ class SmartHrController extends Controller
         return view('employees.form', [
             'employee' => $employee,
             'departments' => Department::orderBy('name')->get(),
-            'positions' => Position::orderBy('name')->get(),
+            'positions' => Position::query()
+                ->where('department_id', $employee->department_id)
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
@@ -877,10 +916,46 @@ class SmartHrController extends Controller
         ])->with('info', 'Xóa nhân viên phải qua Giám đốc duyệt. Vui lòng nhập lý do và gửi yêu cầu.');
     }
 
-    public function contracts(): View
+    public function contracts(Request $request): View
     {
         $user = Auth::user();
         $query = Contract::with(['employee.department', 'latestExpiryAction', 'renewals']);
+
+        $status = $request->query('status', Contract::STATUS_ACTIVE);
+        if ($status === Contract::STATUS_EXPIRED) {
+            $query->where('status', Contract::STATUS_EXPIRED);
+        } elseif ($status === 'expiring') {
+            $query->where('status', Contract::STATUS_ACTIVE)
+                ->whereBetween('end_date', [today(), today()->addDays((int) config('contracts.notice_days', 30))]);
+        } else {
+            $query->where('status', '!=', Contract::STATUS_EXPIRED)
+                ->where(function ($query): void {
+                    $query->whereNull('end_date')->orWhereDate('end_date', '>=', today());
+                });
+        }
+
+        if ($search = trim((string) $request->query('search'))) {
+            $query->where(function ($query) use ($search): void {
+                $query->where('contract_code', 'like', '%'.$search.'%')
+                    ->orWhere('title', 'like', '%'.$search.'%')
+                    ->orWhereHas('employee', function ($query) use ($search): void {
+                        $query->where('name', 'like', '%'.$search.'%')
+                            ->orWhere('employee_code', 'like', '%'.$search.'%');
+                    });
+            });
+        }
+
+        if ($status && ! in_array($status, [Contract::STATUS_EXPIRED, 'expiring'], true)) {
+            $query->where('status', $status);
+        }
+
+        if ($contractType = $request->query('contract_type')) {
+            $query->where('contract_type', $contractType);
+        }
+
+        if ($departmentId = $request->integer('department_id')) {
+            $query->whereHas('employee', fn ($query) => $query->where('department_id', $departmentId));
+        }
 
         if ($user && ! $user->is_hr && ! $user->is_director) {
             $employee = Employee::where('email', $user->email)->first();
@@ -891,8 +966,20 @@ class SmartHrController extends Controller
             }
         }
 
+        $contracts = $query->latest()->paginate(10)->withQueryString();
+        $contractService = app(ContractService::class);
+
+        foreach ($contracts as $contract) {
+            $contractService->syncStatus($contract);
+        }
+
         return view('contracts.index', [
-            'contracts' => $query->latest()->paginate(10),
+            'contracts' => $contracts,
+            'departments' => Department::query()->orderBy('name')->get(),
+            'filters' => array_merge(
+                $request->only(['search', 'contract_type', 'department_id']),
+                ['status' => $status]
+            ),
         ]);
     }
 
@@ -1709,11 +1796,6 @@ class SmartHrController extends Controller
 
         return view('hr.leave.index', [
             'leaveRequests' => $query->paginate(10)->withQueryString(),
-            'overtimeRequests' => OvertimeRequest::with(['employee.user', 'approver'])
-                ->where('status', OvertimeRequest::STATUS_PENDING)
-                ->latest()
-                ->limit(20)
-                ->get(),
         ]);
     }
 
@@ -2449,7 +2531,11 @@ class SmartHrController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:employees,email,' . $employeeId],
             'position' => ['nullable', 'string', 'max:255'],
-            'position_id' => ['nullable', 'exists:positions,id'],
+            'position_id' => [
+                'nullable',
+                Rule::exists('positions', 'id')
+                    ->where(fn ($query) => $query->where('department_id', $request->input('department_id'))),
+            ],
             'department_id' => ['required', 'exists:departments,id'],
             'status' => ['required', 'in:active,inactive,on_leave'],
             'gender' => ['nullable', 'in:male,female,other'],

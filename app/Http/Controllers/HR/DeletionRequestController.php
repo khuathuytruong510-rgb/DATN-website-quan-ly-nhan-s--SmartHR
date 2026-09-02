@@ -34,7 +34,7 @@ class DeletionRequestController extends Controller
             $query->where('status', $request->query('status'));
         }
 
-        if (in_array($request->query('kind'), [DeletionRequest::KIND_EMPLOYEE, DeletionRequest::KIND_DEPARTMENT], true)) {
+        if (in_array($request->query('kind'), [DeletionRequest::KIND_EMPLOYEE, DeletionRequest::KIND_DEPARTMENT, DeletionRequest::KIND_TRANSFER], true)) {
             $query->where('kind', $request->query('kind'));
         }
 

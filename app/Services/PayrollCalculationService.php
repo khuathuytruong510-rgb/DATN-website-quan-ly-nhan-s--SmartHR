@@ -115,6 +115,34 @@ class PayrollCalculationService
         return compact('calculated', 'skipped', 'month', 'year');
     }
 
+    public function previewPeriod(int $month, int $year): Collection
+    {
+        return Employee::query()
+            ->with(['positionDetail', 'contracts', 'payrolls' => function ($query) use ($month, $year): void {
+                $query->where('month', $month)->where('year', $year);
+            }])
+            ->where('status', 'active')
+            ->orderBy('id')
+            ->get()
+            ->map(function (Employee $employee) use ($month, $year): object {
+                $payroll = $employee->payrolls->first();
+                $canRecalculate = ! $payroll
+                    || in_array($payroll->status, PayrollPaymentWorkflowService::recalculableStatuses(), true);
+                $amounts = $payroll && ! $canRecalculate
+                    ? $this->amountsFromPayroll($payroll)
+                    : $this->buildAmounts($employee, $month, $year);
+
+                return (object) array_merge($amounts, [
+                    'employee' => $employee,
+                    'payroll' => $payroll,
+                    'month' => $month,
+                    'year' => $year,
+                    'can_recalculate' => $canRecalculate,
+                    'status' => $payroll?->status,
+                ]);
+            });
+    }
+
     /**
      * Lương cơ bản của nhân viên khi tính lương:
      * - Theo chức vụ: lấy mức lương chuẩn của vị trí (positions.base_salary).
@@ -149,46 +177,6 @@ class PayrollCalculationService
         }
 
         return max($positionSalary, $contractSalary);
-    }
-
-    protected function persistCalculated(Employee $employee, int $month, int $year, ?Payroll $existing): Payroll
-    {
-        /*
-        |--------------------------------------------------------------------------
-        | 1. Lương cơ bản: ưu tiên theo hợp đồng đang hiệu lực của nhân viên.
-        | Chỉ khi không có hợp đồng mới dùng lương mặc định theo chức vụ.
-        |--------------------------------------------------------------------------
-        */
-        $baseSalary = $this->baseSalaryFor($employee);
-
-        /*
-        |--------------------------------------------------------------------------
-        | 2. Quy định công chuẩn
-        |--------------------------------------------------------------------------
-        */
-        $requiredWorkingDays = 26;
-        $dailySalary = $baseSalary / $requiredWorkingDays;
-        $hourSalary = $dailySalary / 8;
-
-        /*
-        |--------------------------------------------------------------------------
-        | 3. Lấy dữ liệu chấm công
-        |--------------------------------------------------------------------------
-        */
-        $attendances = Attendance::where('employee_id', $employee->id)
-            ->whereMonth('date', $month)
-            ->whereYear('date', $year)
-            ->get();
-
-        return [
-            'work_hours' => round((float) $attendances->sum('work_hours'), 2),
-            'late_days' => $attendances->filter(
-                fn ($row) => (int) ($row->late_minutes ?? 0) > 0 || $row->status === 'late'
-            )->count(),
-            'late_minutes' => (int) $attendances->sum('late_minutes'),
-            'absent_days' => $attendances->where('status', 'absent')->count(),
-            'early_leave_minutes' => (int) $attendances->sum('early_leave_minutes'),
-        ];
     }
 
     /**
