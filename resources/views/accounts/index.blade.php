@@ -6,9 +6,10 @@
     <div class="page-head">
         <div>
             <h1>Quản lý tài khoản</h1>
-            <p class="muted">Danh sách và quản lý tài khoản người dùng hệ thống.</p>
+            <p class="muted">Danh sách và quản lý tài khoản người dùng hệ thống. Tài khoản gắn hồ sơ nhân viên đã xóa được đánh dấu để xóa.</p>
         </div>
-        <div>
+        <div class="page-actions">
+            <a class="btn" href="{{ route('admin.notifications.index') }}">Thông báo</a>
             <a class="btn primary" href="{{ route('accounts.create') }}">Tạo tài khoản</a>
             @if (auth()->user()->is_admin)
                 <a class="btn" href="{{ route('permissions.index') }}">Quản lý phân quyền</a>
@@ -32,8 +33,14 @@
                 </thead>
                 <tbody>
                     @foreach ($users as $user)
-                        <tr>
-                            <td>{{ $user->name }}</td>
+                        @php $pendingEmployeeLabel = ($pendingAccountIds ?? collect())[$user->id] ?? null; @endphp
+                        <tr @if($pendingEmployeeLabel) style="background:#fff7ed;" @endif>
+                            <td>
+                                {{ $user->name }}
+                                @if($pendingEmployeeLabel)
+                                    <div class="muted" style="font-size:13px;color:#c2410c;">Cần xóa tài khoản — hồ sơ {{ $pendingEmployeeLabel }} đã được Giám đốc duyệt xóa</div>
+                                @endif
+                            </td>
                             <td>{{ $user->email }}</td>
                             <td>
                                 @if ($user->is_admin)

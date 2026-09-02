@@ -20,6 +20,9 @@ class Payroll extends Model
         'required_working_days',
         'paid_leave_days',
         'unpaid_leave_days',
+        'paid_holiday_days',
+        'holiday_work_salary',
+        'weekly_rest_work_salary',
         'overtime_days',
         'overtime_hours',
         'overtime_day_salary',
@@ -36,6 +39,9 @@ class Payroll extends Model
         'paid_at',
         'sent_at',
         'sent_by',
+        'director_approved_by',
+        'director_approved_name',
+        'director_approved_at',
         'email_status',
         'confirmed_at',
         'confirmation_status',
@@ -53,6 +59,7 @@ class Payroll extends Model
     protected $casts = [
         'paid_at' => 'datetime',
         'sent_at' => 'datetime',
+        'director_approved_at' => 'datetime',
         'confirmed_at' => 'datetime',
         'confirmation_deadline' => 'datetime',
         'issue_reported_at' => 'datetime',
@@ -66,6 +73,21 @@ class Payroll extends Model
     public function paidByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'paid_by');
+    }
+
+    public function directorApprovedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'director_approved_by');
+    }
+
+    /** Người duyệt tại thời điểm phê duyệt — không đổi khi thay Giám đốc. */
+    public function directorApproverLabel(): string
+    {
+        if (filled($this->director_approved_name)) {
+            return $this->director_approved_name;
+        }
+
+        return optional($this->directorApprovedBy)->name ?: '—';
     }
 
     /**

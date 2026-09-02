@@ -25,16 +25,9 @@
                                     <p class="text-muted mb-2">Mã hợp đồng: {{ $contract->contract_code ?? '—' }}</p>
                                 </div>
                                 @php
-                                    $statusLabel = match($contract->status) {
-                                        'waiting_employee_signature', 'waiting_employee' => 'Chờ bạn ký',
-                                        'waiting_director_signature', 'waiting_director' => 'Bạn đã ký — chờ Giám đốc ký',
-                                        'active' => 'Có hiệu lực',
-                                        'expired' => 'Hết hạn',
-                                        'cancelled', 'terminated' => 'Đã hủy',
-                                        default => 'Chờ hiệu lực',
-                                    };
+                                    $statusLabel = $contract->statusLabel();
                                     $statusClass = match($contract->status) {
-                                        'active' => 'success',
+                                        'active', 'signed' => 'success',
                                         'expired' => 'danger',
                                         default => 'warning',
                                     };
@@ -51,12 +44,17 @@
                                 <div class="col-md-4"><strong>Kết thúc:</strong> {{ optional($contract->end_date)->format('d/m/Y') ?? '—' }}</div>
                                 <div class="col-md-4"><strong>Lương cơ bản:</strong> {{ number_format($contract->base_salary ?? 0, 0, ',', '.') }} VNĐ</div>
                             </div>
-                            @if(in_array($contract->status, ['waiting_employee_signature', 'waiting_employee'], true) && ! $contract->employee_signed_at)
+                            @if($contract->isPendingEmployeeEsign())
                                 <form method="POST" action="{{ route('me.contracts.sign', $contract) }}" class="mt-3">
                                     @csrf
                                     <button class="btn btn-primary" type="submit" data-confirm="Xác nhận ký hợp đồng này?">✍️ Ký hợp đồng</button>
                                 </form>
+                            @elseif(! $contract->director_signed_at && ! $contract->employee_signed_at)
+                                <p class="text-muted mt-3 mb-0">Chờ HR gửi và Giám đốc ký phía doanh nghiệp trước.</p>
                             @endif
+                            <div class="mt-3">
+                                <a class="btn btn-outline-secondary" href="{{ route('me.contracts.document', $contract) }}" target="_blank">Xem / tải tài liệu</a>
+                            </div>
                         </div>
                     </div>
                 </div>

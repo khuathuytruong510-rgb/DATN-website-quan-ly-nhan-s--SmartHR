@@ -24,9 +24,9 @@
     {{-- Tài khoản nhận lương --}}
     <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm mb-6">
         <h2 class="text-lg font-bold text-gray-900 mb-1">Tài khoản nhận lương</h2>
-        <p class="text-sm text-gray-500 mb-4">Không sửa trực tiếp. Gửi yêu cầu để HR duyệt trước khi cập nhật.</p>
-
         @php $emp = optional($payrolls->first())->employee ?? auth()->user()?->linkedEmployee(); @endphp
+        <p class="text-sm text-gray-500 mb-4">Không sửa trực tiếp. Gửi yêu cầu để {{ \App\Support\RequestApprover::queueLabel($emp) }} duyệt trước khi cập nhật.</p>
+
         @if($emp)
             @php
                 $acct = (string) ($emp->account_number ?? '');

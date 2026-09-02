@@ -15,7 +15,7 @@
 <div class="page-head">
     <div>
         <h1>Quản Lý Đơn Nghỉ Phép</h1>
-        <p class="muted">Nhân viên gửi đơn → HR duyệt/từ chối. Đơn đã duyệt được kế toán dùng làm dữ liệu đầu vào khi tính lương. Giám đốc không duyệt từng đơn nghỉ phép.</p>
+        <p class="muted">Nhân viên gửi đơn → HR duyệt. Đơn của chính HR → Giám đốc duyệt. Đơn đã duyệt được dùng khi tính lương.</p>
     </div>
 </div>
 
@@ -35,10 +35,9 @@
             <label>Loại Phép Nghỉ</label>
             <select name="type">
                 <option value="">-- Tất cả loại phép --</option>
-                <option value="annual" {{ request('type') === 'annual' ? 'selected' : '' }}>Nghỉ hàng năm</option>
-                <option value="sick" {{ request('type') === 'sick' ? 'selected' : '' }}>Nghỉ ốm đau</option>
-                <option value="unpaid" {{ request('type') === 'unpaid' ? 'selected' : '' }}>Nghỉ không lương</option>
-                <option value="maternity" {{ request('type') === 'maternity' ? 'selected' : '' }}>Nghỉ sinh con</option>
+                @foreach(\App\Support\LeaveTypes::all() as $value => $meta)
+                    <option value="{{ $value }}" {{ request('type') === $value ? 'selected' : '' }}>{{ $meta['label'] }}</option>
+                @endforeach
             </select>
         </div>
 
@@ -56,8 +55,54 @@
     @endif
 </div>
 
+@php $currentUser = Auth::user(); @endphp
+
+@if(!empty($overtimeRequests) && $overtimeRequests->isNotEmpty())
+<div class="card" style="margin-bottom:20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+        <h2 style="margin:0;">Đăng ký tăng ca chờ duyệt</h2>
+        <a class="btn" href="{{ route('overtime_requests.index') }}">Quản lý tăng ca</a>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Nhân viên</th>
+                <th>Ngày</th>
+                <th>Giờ</th>
+                <th>Lý do</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($overtimeRequests as $ot)
+                <tr>
+                    <td>{{ optional($ot->employee)->name }}</td>
+                    <td>{{ optional($ot->date)->format('d/m/Y') }}</td>
+                    <td>{{ $ot->start_time }} – {{ $ot->end_time }}</td>
+                    <td>{{ $ot->reason ?: '—' }}</td>
+                    <td>
+                        @if(\App\Support\RequestApprover::canReview($currentUser, $ot->employee))
+                            <form method="POST" action="{{ route('overtime_requests.approve', $ot) }}" style="display:inline">
+                                @csrf
+                                <button class="btn" type="submit">Duyệt</button>
+                            </form>
+                            <form method="POST" action="{{ route('overtime_requests.reject', $ot) }}" style="display:inline" onsubmit="return submitRejectReason(this)">
+                                @csrf
+                                <input type="hidden" name="rejection_reason" value="">
+                                <button class="btn" type="submit">Từ chối</button>
+                            </form>
+                        @elseif(\App\Support\RequestApprover::needsDirector($ot->employee))
+                            <span class="muted">Chờ Giám đốc duyệt</span>
+                        @endif
+                    </td>
+                </tr>
+            @endforeach
+        </tbody>
+    </table>
+</div>
+@endif
+
 @if($leaveRequests->count())
-    @php $currentUser = Auth::user(); @endphp
     <div class="card">
         <table>
             <thead>
@@ -77,7 +122,7 @@
                 @foreach($leaveRequests as $leave)
                     <tr>
                         <td><strong>{{ optional($leave->employee)->name }}</strong></td>
-                        <td>{{ ucfirst(str_replace('_', ' ', $leave->type ?? 'N/A')) }}</td>
+                        <td>{{ $leave->type_label }}</td>
                         <td>{{ \Carbon\Carbon::parse($leave->start_date)->format('d/m/Y') }}</td>
                         <td>{{ \Carbon\Carbon::parse($leave->end_date)->format('d/m/Y') }}</td>
                         <td>
@@ -126,7 +171,7 @@
                         </td>
                         <td>
                             <div class="actions">
-                                @if($leave->status === 'pending' && $currentUser->is_hr)
+                                @if($leave->status === 'pending' && \App\Support\RequestApprover::canReview($currentUser, $leave->employee))
                                     <form method="POST" action="{{ route('leave_requests.approve', $leave) }}" style="display:inline">
                                         @csrf
                                         <button class="btn" type="submit">Duyệt</button>
@@ -136,6 +181,8 @@
                                         <input type="hidden" name="rejection_reason" value="">
                                         <button class="btn" type="submit">Từ chối</button>
                                     </form>
+                                @elseif($leave->status === 'pending' && \App\Support\RequestApprover::needsDirector($leave->employee))
+                                    <span class="muted">Chờ Giám đốc duyệt</span>
                                 @endif
                                 @if($currentUser->is_hr && $leave->status === 'pending')
                                     <form method="POST" action="{{ route('leave_requests.destroy', $leave) }}" style="display:inline" data-confirm="Xóa đơn nghỉ phép đang chờ duyệt?">

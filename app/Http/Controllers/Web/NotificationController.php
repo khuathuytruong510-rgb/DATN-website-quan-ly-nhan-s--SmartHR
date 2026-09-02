@@ -17,12 +17,30 @@ class NotificationController extends Controller
 
         $notifications = Notification::with('sender')
             ->where(function ($query) use ($user) {
-                $query->where('target', 'all')
-                    ->orWhere('target', 'hr');
+                $query->where('target', 'all');
 
-                if ($user->is_director || $user->is_hr) {
-                    $query->orWhere('target', 'employee');
+                if ($user->is_director && ! $user->is_hr) {
+                    $query->orWhere('target', 'director');
+                } elseif ($user->is_hr) {
+                    $query->orWhere('target', 'hr');
+                } elseif ($user->is_admin) {
+                    $query->orWhere('target', 'admin');
                 }
+            })
+            ->latest()
+            ->paginate(10);
+
+        return view('notifications.index', compact('notifications', 'user'));
+    }
+
+    public function adminIndex(): View
+    {
+        abort_unless(Auth::user()?->is_admin, 403);
+
+        $user = Auth::user();
+        $notifications = Notification::with('sender')
+            ->where(function ($query) {
+                $query->where('target', 'all')->orWhere('target', 'admin');
             })
             ->latest()
             ->paginate(10);

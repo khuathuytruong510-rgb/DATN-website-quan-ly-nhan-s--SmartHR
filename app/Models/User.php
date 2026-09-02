@@ -78,6 +78,11 @@ class User extends Authenticatable
         return $this->employee ?: Employee::where('email', $this->email)->first();
     }
 
+    public function positionHistories(): HasMany
+    {
+        return $this->hasMany(EmployeePositionHistory::class);
+    }
+
     public function leaveRequestsApproved(): HasMany
     {
         return $this->hasMany(LeaveRequest::class, 'approved_by');

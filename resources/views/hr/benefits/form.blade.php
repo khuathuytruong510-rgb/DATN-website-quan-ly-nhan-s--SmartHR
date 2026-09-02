@@ -3,7 +3,7 @@
 @section('title', $benefit->exists ? 'Cập nhật phúc lợi' : 'Tạo phúc lợi')
 
 @section('content')
-<div class="content">
+<div class="max-w-4xl">
     <div class="page-head">
         <div>
             <h1>{{ $benefit->exists ? 'Cập nhật phúc lợi' : 'Tạo phúc lợi mới' }}</h1>
@@ -12,7 +12,7 @@
     </div>
 
     @if ($errors->any())
-        <div class="alert">
+        <div class="alert error">
             <h3>Lỗi xác thực</h3>
             <ul>
                 @foreach ($errors->all() as $error)
@@ -133,19 +133,5 @@
         </form>
     </div>
 </div>
-
-<style>
-    .content { max-width: 720px; }
-    .page-head { margin-bottom: 22px; }
-    .muted { color: #64748b; }
-    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
-    .field { margin-bottom: 18px; }
-    label { display: block; font-weight: 700; margin-bottom: 8px; }
-    input, select, textarea { width: 100%; padding: 11px 14px; border: 1px solid #cbd5e1; border-radius: 8px; }
-    textarea { min-height: 120px; }
-    .actions { display: flex; gap: 12px; margin-top: 20px; }
-    .btn { display: inline-flex; align-items: center; justify-content: center; padding: 10px 14px; border-radius: 8px; border: none; text-decoration: none; font-weight: 700; background: #f8fafc; color: inherit; }
-    .btn.primary { background: #2563eb; color: #fff; }
-    .alert { border-left: 4px solid #dc2626; padding: 16px; background: #fee2e2; margin-bottom: 20px; }
-</style>
 @endsection
+

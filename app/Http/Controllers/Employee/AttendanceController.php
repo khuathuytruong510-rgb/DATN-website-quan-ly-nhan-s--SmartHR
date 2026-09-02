@@ -2,36 +2,36 @@
 
 namespace App\Http\Controllers\Employee;
 
+use App\Exceptions\AttendanceException;
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
-use App\Models\Employee;
 use App\Services\AttendanceCalculationService;
+use App\Services\EmployeeAttendanceRecorder;
+use App\Services\OfficeLocationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class AttendanceController extends Controller
 {
-    private AttendanceCalculationService $calculationService;
-
-    public function __construct(AttendanceCalculationService $calculationService)
-    {
-        $this->calculationService = $calculationService;
+    public function __construct(
+        private AttendanceCalculationService $calculationService,
+        private EmployeeAttendanceRecorder $recorder,
+        private OfficeLocationService $office,
+    ) {
     }
-    // Office location coordinates (Hà Nội coordinates as default)
-    private const OFFICE_LATITUDE = 21.0285;
-    private const OFFICE_LONGITUDE = 105.8542;
-    private const ALLOWED_DISTANCE_METERS = 100; // 100 meters radius
 
     /**
      * Get today's attendance record for current employee
      */
     public function getTodayAttendance()
     {
-        $user = Auth::user();
-        $employee = Employee::where('user_id', $user->id)->firstOrFail();
-        
+        try {
+            $employee = $this->recorder->resolveEmployee(Auth::user());
+        } catch (AttendanceException $e) {
+            return $e->toResponse();
+        }
+
         $today = Carbon::today();
         $attendance = Attendance::where('employee_id', $employee->id)
             ->whereDate('date', $today)
@@ -49,96 +49,7 @@ class AttendanceController extends Controller
      */
     public function checkIn(Request $request)
     {
-        $user = Auth::user();
-        $employee = Employee::where('user_id', $user->id)->firstOrFail();
-
-        $request->validate([
-            'latitude' => 'nullable|numeric',
-            'longitude' => 'nullable|numeric',
-            'notes' => 'nullable|string|max:500',
-        ]);
-
-        $today = Carbon::today();
-
-        try {
-            app(\App\Services\PayrollPeriodLockService::class)->assertWritableDate($today->toDateString(), 'chấm công');
-        } catch (\Throwable $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
-        }
-        
-        // Check if already checked in today
-        $existingAttendance = Attendance::where('employee_id', $employee->id)
-            ->whereDate('date', $today)
-            ->first();
-
-        if ($existingAttendance && $existingAttendance->check_in) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Bạn đã chấm công vào hôm nay lúc ' . $existingAttendance->check_in->format('H:i:s'),
-            ], 400);
-        }
-
-        $latitude = $request->input('latitude');
-        $longitude = $request->input('longitude');
-        $locationMissing = is_null($latitude) || is_null($longitude);
-
-        $distance = null;
-        if (!$locationMissing) {
-            $distance = $this->calculateDistance(
-                $latitude,
-                $longitude,
-                self::OFFICE_LATITUDE,
-                self::OFFICE_LONGITUDE
-            );
-
-            if ($distance > self::ALLOWED_DISTANCE_METERS) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Bạn đang cách văn phòng ' . round($distance, 0) . ' mét. Không thể chấm công.',
-                    'distance' => round($distance, 2),
-                    'allowed_distance' => self::ALLOWED_DISTANCE_METERS,
-                ], 400);
-            }
-        }
-
-        $locationName = $locationMissing ? null : $this->getLocationName($latitude, $longitude);
-        $ipAddress = $request->ip();
-
-        return DB::transaction(function () use ($employee, $user, $today, $latitude, $longitude, $locationMissing, $distance, $locationName, $ipAddress, $request) {
-            $attendance = Attendance::lockForEmployeeDate($employee->id, $today);
-
-            if ($attendance->check_in) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Bạn đã chấm công vào hôm nay lúc ' . $attendance->check_in->format('H:i:s'),
-                ], 400);
-            }
-
-            $attendance->update([
-                'check_in' => Carbon::now(),
-                'check_in_latitude' => $latitude,
-                'check_in_longitude' => $longitude,
-                'check_in_location' => $locationName,
-                'check_in_ip_address' => $ipAddress,
-                'check_in_distance' => $distance ? round($distance, 2) : null,
-                'check_in_notes' => $request->notes,
-                'check_in_location_missing' => $locationMissing,
-                'status' => $this->determineStatus($today),
-            ]);
-
-            \App\Models\ActivityLog::create([
-                'user_id' => $user->id,
-                'action' => 'attendance_check_in',
-                'meta' => $attendance->check_in?->format('H:i'),
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Chấm công vào lúc ' . $attendance->check_in->format('H:i:s') . ' thành công!',
-                'attendance' => $attendance->fresh(),
-                'distance' => $distance ? round($distance, 2) : null,
-            ]);
-        });
+        return $this->punch($request, requireCheckIn: true);
     }
 
     /**
@@ -146,95 +57,63 @@ class AttendanceController extends Controller
      */
     public function checkOut(Request $request)
     {
-        $user = Auth::user();
-        $employee = Employee::where('user_id', $user->id)->firstOrFail();
+        return $this->punch($request, requireCheckIn: false);
+    }
 
-        $request->validate([
-            'latitude' => 'nullable|numeric',
-            'longitude' => 'nullable|numeric',
+    private function punch(Request $request, bool $requireCheckIn)
+    {
+        try {
+            $employee = $this->recorder->resolveEmployee(Auth::user());
+        } catch (AttendanceException $e) {
+            return $e->toResponse();
+        }
+
+        $data = $request->validate([
+            'latitude' => 'required|numeric',
+            'longitude' => 'required|numeric',
             'notes' => 'nullable|string|max:500',
         ]);
 
         $today = Carbon::today();
+        $existing = Attendance::where('employee_id', $employee->id)
+            ->whereDate('date', $today)
+            ->first();
+
+        if ($requireCheckIn && $existing?->check_in) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn đã chấm công vào hôm nay lúc '.$existing->check_in->format('H:i:s'),
+            ], 400);
+        }
+
+        if (! $requireCheckIn && ! $existing?->check_in) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn chưa chấm công vào. Vui lòng chấm công vào trước.',
+            ], 400);
+        }
 
         try {
-            app(\App\Services\PayrollPeriodLockService::class)->assertWritableDate($today->toDateString(), 'chấm công');
-        } catch (\Throwable $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
-        }
-        
-        $latitude = $request->input('latitude');
-        $longitude = $request->input('longitude');
-        $locationMissing = is_null($latitude) || is_null($longitude);
-
-        $distance = null;
-        if (!$locationMissing) {
-            $distance = $this->calculateDistance(
-                $latitude,
-                $longitude,
-                self::OFFICE_LATITUDE,
-                self::OFFICE_LONGITUDE
+            $result = $this->recorder->record(
+                $employee,
+                Auth::user(),
+                (float) $data['latitude'],
+                (float) $data['longitude'],
+                $data['notes'] ?? null,
+                'gps',
+                (string) $request->ip(),
             );
+        } catch (AttendanceException $e) {
+            return $e->toResponse();
         }
 
-        $locationName = $locationMissing ? null : $this->getLocationName($latitude, $longitude);
-        $ipAddress = $request->ip();
-
-        return DB::transaction(function () use ($employee, $user, $today, $latitude, $longitude, $locationMissing, $distance, $locationName, $ipAddress, $request) {
-            $attendance = Attendance::query()
-                ->where('employee_id', $employee->id)
-                ->whereDate('date', $today)
-                ->lockForUpdate()
-                ->first();
-
-            if (! $attendance || ! $attendance->check_in) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Bạn chưa chấm công vào. Vui lòng chấm công vào trước.',
-                ], 400);
-            }
-
-            if ($attendance->check_out) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Bạn đã chấm công ra lúc ' . $attendance->check_out->format('H:i:s'),
-                ], 400);
-            }
-
-            $attendance->update([
-                'check_out' => Carbon::now(),
-                'check_out_latitude' => $latitude,
-                'check_out_longitude' => $longitude,
-                'check_out_location' => $locationName,
-                'check_out_ip_address' => $ipAddress,
-                'check_out_distance' => $distance ? round($distance, 2) : null,
-                'check_out_notes' => $request->notes,
-                'check_out_location_missing' => $locationMissing,
-            ]);
-
-            $attendance = $this->calculationService->updateAttendanceMetrics($attendance);
-
-            \App\Models\ActivityLog::create([
-                'user_id' => $user->id,
-                'action' => 'attendance_check_out',
-                'meta' => $attendance->check_out?->format('H:i'),
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Chấm công ra lúc ' . $attendance->check_out->format('H:i:s') . ' thành công!',
-                'attendance' => $attendance,
-                'distance' => $distance ? round($distance, 2) : null,
-                'metrics' => [
-                    'work_hours' => $attendance->work_hours,
-                    'late_minutes' => $attendance->late_minutes,
-                    'late_penalty_fee' => $attendance->late_penalty_fee,
-                    'early_leave_minutes' => $attendance->early_leave_minutes,
-                    'overtime_hours' => $attendance->overtime_hours,
-                    'status' => $attendance->status_label,
-                ],
-            ]);
-        });
+        return response()->json([
+            'success' => true,
+            'message' => $result['message'],
+            'attendance' => $result['attendance'],
+            'distance' => $result['distance'],
+            'metrics' => $result['metrics'] ?? null,
+        ]);
     }
 
     /**
@@ -242,8 +121,11 @@ class AttendanceController extends Controller
      */
     public function getAttendanceHistory(Request $request)
     {
-        $user = Auth::user();
-        $employee = Employee::where('user_id', $user->id)->firstOrFail();
+        try {
+            $employee = $this->recorder->resolveEmployee(Auth::user());
+        } catch (AttendanceException $e) {
+            return $e->toResponse();
+        }
 
         $month = $request->query('month', Carbon::now()->month);
         $year = $request->query('year', Carbon::now()->year);
@@ -276,56 +158,8 @@ class AttendanceController extends Controller
     {
         return response()->json([
             'success' => true,
-            'office_latitude' => self::OFFICE_LATITUDE,
-            'office_longitude' => self::OFFICE_LONGITUDE,
-            'allowed_distance' => self::ALLOWED_DISTANCE_METERS,
+            ...$this->office->settings(),
         ]);
-    }
-
-    /**
-     * Calculate distance between two coordinates using Haversine formula
-     */
-    private function calculateDistance($lat1, $lon1, $lat2, $lon2)
-    {
-        $earthRadius = 6371000; // meters
-
-        $dLat = deg2rad($lat2 - $lat1);
-        $dLon = deg2rad($lon2 - $lon1);
-
-        $a = sin($dLat / 2) * sin($dLat / 2) +
-            cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
-            sin($dLon / 2) * sin($dLon / 2);
-
-        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
-        $distance = $earthRadius * $c;
-
-        return $distance;
-    }
-
-    /**
-     * Get location name from coordinates (simple implementation)
-     * In production, use Google Maps Reverse Geocoding API
-     */
-    private function getLocationName($latitude, $longitude)
-    {
-        // For now, return coordinates as location
-        // TODO: Integrate with Google Maps API or OpenStreetMap API for actual location names
-        return "Vị trí: " . round($latitude, 6) . ", " . round($longitude, 6);
-    }
-
-    /**
-     * Determine attendance status based on check-in time
-     */
-    private function determineStatus($date)
-    {
-        $checkInTime = Carbon::now();
-        $standardCheckInTime = Carbon::createFromTime(8, 0, 0); // 8:00 AM
-
-        if ($checkInTime->greaterThan($standardCheckInTime)) {
-            return 'late';
-        }
-
-        return 'present';
     }
 
     /**
@@ -333,8 +167,11 @@ class AttendanceController extends Controller
      */
     public function getMonthlyStatistics(Request $request)
     {
-        $user = Auth::user();
-        $employee = Employee::where('user_id', $user->id)->firstOrFail();
+        try {
+            $employee = $this->recorder->resolveEmployee(Auth::user());
+        } catch (AttendanceException $e) {
+            return $e->toResponse();
+        }
 
         $month = $request->query('month', Carbon::now()->month);
         $year = $request->query('year', Carbon::now()->year);
@@ -367,8 +204,11 @@ class AttendanceController extends Controller
      */
     public function getTodaySummary()
     {
-        $user = Auth::user();
-        $employee = Employee::where('user_id', $user->id)->firstOrFail();
+        try {
+            $employee = $this->recorder->resolveEmployee(Auth::user());
+        } catch (AttendanceException $e) {
+            return $e->toResponse();
+        }
 
         $today = Carbon::today();
         $attendance = Attendance::where('employee_id', $employee->id)
@@ -396,8 +236,11 @@ class AttendanceController extends Controller
      */
     public function getMonthlySummary(Request $request)
     {
-        $user = Auth::user();
-        $employee = Employee::where('user_id', $user->id)->firstOrFail();
+        try {
+            $employee = $this->recorder->resolveEmployee(Auth::user());
+        } catch (AttendanceException $e) {
+            return $e->toResponse();
+        }
 
         $month = $request->query('month', Carbon::now()->month);
         $year = $request->query('year', Carbon::now()->year);

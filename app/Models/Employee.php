@@ -48,6 +48,16 @@ class Employee extends Model
         'start_date' => 'date',
     ];
 
+    public function statusLabel(): string
+    {
+        return match ($this->status) {
+            'active' => 'Còn làm việc',
+            'inactive' => 'Nghỉ việc',
+            'on_leave' => 'Tạm nghỉ',
+            default => $this->status ?: '—',
+        };
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -78,6 +88,21 @@ class Employee extends Model
         return $this->hasMany(Contract::class);
     }
 
+    public function activeContract(): ?Contract
+    {
+        return $this->contracts()
+            ->where('status', Contract::STATUS_ACTIVE)
+            ->latest('start_date')
+            ->first();
+    }
+
+    public function isFemale(): bool
+    {
+        $gender = mb_strtolower(trim((string) $this->gender));
+
+        return in_array($gender, ['female', 'nu', 'nữ'], true);
+    }
+
     public function leaveRequests(): HasMany
     {
         return $this->hasMany(LeaveRequest::class);
@@ -101,6 +126,16 @@ class Employee extends Model
     public function positionDetail(): BelongsTo
     {
         return $this->belongsTo(Position::class, 'position_id');
+    }
+
+    public function positionHistories(): HasMany
+    {
+        return $this->hasMany(EmployeePositionHistory::class);
+    }
+
+    public function directorTenures(): HasMany
+    {
+        return $this->positionHistories()->where('is_director_role', true);
     }
 
     public function salaryPayments(): HasMany

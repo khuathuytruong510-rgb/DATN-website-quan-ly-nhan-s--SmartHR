@@ -99,7 +99,7 @@
                                 @if($promo->isPending() && $isDirector)
                                     <form method="POST" action="{{ route('promotion_requests.approve', $promo) }}">
                                         @csrf
-                                        <button class="btn primary" type="submit" data-confirm="Duyệt đề xuất này? Hệ thống sẽ cập nhật mức lương ngay, ghi lịch sử và báo cho nhân viên.">Duyệt</button>
+                                        <button class="btn primary" type="submit" data-confirm="Duyệt đề xuất này?">Duyệt</button>
                                     </form>
                                     <form method="POST" action="{{ route('promotion_requests.reject', $promo) }}">
                                         @csrf

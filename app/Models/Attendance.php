@@ -20,6 +20,7 @@ class Attendance extends Model
         'check_in_ip_address',
         'check_in_distance',
         'check_in_notes',
+        'check_in_location_missing',
         'check_out',
         'check_out_latitude',
         'check_out_longitude',
@@ -27,6 +28,7 @@ class Attendance extends Model
         'check_out_ip_address',
         'check_out_distance',
         'check_out_notes',
+        'check_out_location_missing',
         'work_hours',
         'late_minutes',
         'late_penalty_fee',
@@ -153,6 +155,15 @@ class Attendance extends Model
     /**
      * Get the status label in Vietnamese
      */
+    public function getMethodLabelAttribute(): string
+    {
+        return match ($this->attendance_method) {
+            'face' => 'Khuôn mặt',
+            'gps' => 'GPS',
+            default => 'Thủ công',
+        };
+    }
+
     public function getStatusLabelAttribute(): string
     {
         return match($this->status) {

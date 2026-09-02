@@ -31,13 +31,26 @@ class EnsureAdminOrHr
         'contracts.create',
         'contracts.edit',
         'contracts.renew',
+        'contracts.handle_expiry',
         'attendance.create',
         'attendance.edit',
         'leave_requests.create',
+        'overtime_requests.index',
         'evaluations.create',
         'evaluations.edit',
         'payroll.issues.fix_form',
         'payroll.bank_requests.index',
+        'deletion_requests.create_employee',
+        'deletion_requests.create_department',
+        'deletion_requests.index',
+        'deletion_requests.show',
+        'deletion_requests.transfer_employees',
+        'transfers.create',
+        'transfers.store',
+        'support_requests.index',
+        'support_requests.show',
+        'support_requests.approve',
+        'support_requests.resolve',
     ];
 
     /** Form ghi dữ liệu HR/KT — Giám đốc xem, không mở màn hình sửa nguồn hay thanh toán. */
@@ -57,6 +70,9 @@ class EnsureAdminOrHr
         'payroll.issues.fix_form',
         'payroll.payment.show',
         'payroll.email.index',
+        'deletion_requests.create_employee',
+        'deletion_requests.create_department',
+        'transfers.create',
     ];
 
     public function handle(Request $request, Closure $next)
@@ -73,7 +89,28 @@ class EnsureAdminOrHr
                 abort(403, 'Giám đốc chỉ xem dữ liệu phục vụ phê duyệt, không dùng form ghi của HR hoặc Kế toán.');
             }
             if (! $request->isMethodSafe()) {
-                $allowed = ['payroll.approve', 'payroll.approve_all', 'contracts.sign', 'notifications.store'];
+                $allowed = [
+                    'payroll.approve',
+                    'payroll.approve_all',
+                    'contracts.sign',
+                    'contracts.reject_signature',
+                    'notifications.store',
+                    'leave_requests.approve',
+                    'leave_requests.reject',
+                    'overtime_requests.approve',
+                    'overtime_requests.reject',
+                    'overtime_requests.verify',
+                    'attendance.adjustments.approve',
+                    'attendance.adjustments.reject',
+                    'face_profiles.approve',
+                    'face_profiles.reject',
+                    'payroll.bank_requests.approve',
+                    'payroll.bank_requests.reject',
+                    'deletion_requests.approve',
+                    'deletion_requests.reject',
+                    'support_requests.approve',
+                    'support_requests.resolve',
+                ];
                 if (! in_array($routeName, $allowed, true)) {
                     abort(403, 'Giám đốc chỉ được phê duyệt cấp cao, không chỉnh sửa dữ liệu nhân sự hay cấu hình hệ thống.');
                 }

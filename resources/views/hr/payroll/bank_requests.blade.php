@@ -50,6 +50,7 @@
                         <td>
                             @if($req->status === 'pending')
                                 <div class="actions" style="justify-content:flex-end;">
+                                    @if(\App\Support\RequestApprover::canReview(auth()->user(), $req->employee))
                                     <form method="POST" action="{{ route('payroll.bank_requests.approve', $req) }}">
                                         @csrf
                                         <button class="btn primary" type="submit">Duyệt</button>
@@ -59,6 +60,9 @@
                                         <input type="hidden" name="review_note" value="Từ chối yêu cầu">
                                         <button class="btn danger" type="submit" data-confirm="Từ chối yêu cầu này?">Từ chối</button>
                                     </form>
+                                    @elseif(\App\Support\RequestApprover::needsDirector($req->employee))
+                                        <span class="muted">Chờ Giám đốc duyệt</span>
+                                    @endif
                                 </div>
                             @else
                                 <span class="muted">{{ optional($req->reviewer)->name }}</span>

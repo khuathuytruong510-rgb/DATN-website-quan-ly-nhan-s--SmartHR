@@ -10,6 +10,9 @@ class Department extends Model
 {
     use HasFactory;
 
+    public const BOARD_CODE = 'BGD';
+    public const BOARD_NAME = 'Ban Giám đốc';
+
     protected $fillable = [
         'name',
         'code',

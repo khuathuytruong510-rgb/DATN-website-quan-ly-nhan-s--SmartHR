@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\Payroll;
 use App\Services\PayrollPaymentWorkflowService;
+use App\Support\RequestApprover;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -134,6 +135,6 @@ class PayrollConfirmationController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Đã gửi yêu cầu thay đổi thông tin nhận lương. Chờ HR duyệt.');
+        return back()->with('success', 'Đã gửi yêu cầu thay đổi thông tin nhận lương. Chờ '.RequestApprover::queueLabel($employee).' duyệt.');
     }
 }

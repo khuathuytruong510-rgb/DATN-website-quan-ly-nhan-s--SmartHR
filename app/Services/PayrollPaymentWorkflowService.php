@@ -12,6 +12,8 @@ use App\Models\SalaryHistory;
 use App\Models\SalaryPayment;
 use App\Models\SalaryReceiveChangeRequest;
 use App\Models\User;
+use App\Support\HrApprovalNotifier;
+use App\Support\RequestApprover;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -168,6 +170,22 @@ class PayrollPaymentWorkflowService
     }
 
     /**
+     * NV xác nhận / báo sự cố: phiếu phải thuộc hồ sơ gắn user đăng nhập.
+     * Không đọc employee_id từ request. actor = null chỉ dùng cho link email / job tự động.
+     */
+    protected function assertActorOwnsPayroll(Payroll $payroll, ?User $actor): void
+    {
+        if (! $actor) {
+            return;
+        }
+
+        $employeeId = $actor->linkedEmployee()?->id;
+        if (! $employeeId || (int) $payroll->employee_id !== (int) $employeeId) {
+            throw new RuntimeException('Bạn chỉ được thao tác phiếu lương của chính mình.');
+        }
+    }
+
+    /**
      * Một cửa kiểm tra transition. Controller không được tự gán status từ request.
      */
     public function assertTransition(Payroll $payroll, string $to, ?User $actor = null): void
@@ -203,6 +221,7 @@ class PayrollPaymentWorkflowService
 
         return DB::transaction(function () use ($payroll, $issue, $actor) {
             $payroll = $this->lockPayroll($payroll);
+            $this->assertActorOwnsPayroll($payroll, $actor);
             $this->assertTransition($payroll, self::PAYROLL_ISSUE, $actor);
 
             $payroll->update([
@@ -293,6 +312,9 @@ class PayrollPaymentWorkflowService
                 'issue_reported_at' => null,
                 'sent_at' => null,
                 'email_status' => 'pending',
+                'director_approved_by' => null,
+                'director_approved_name' => null,
+                'director_approved_at' => null,
             ]);
 
             $payroll = $payroll->fresh(['employee']);
@@ -361,6 +383,9 @@ class PayrollPaymentWorkflowService
                 'confirmation_token' => $token,
                 'sent_at' => now(),
                 'sent_by' => $actor->id,
+                'director_approved_by' => $actor->id,
+                'director_approved_name' => $actor->name,
+                'director_approved_at' => now(),
                 'email_status' => 'pending',
             ]);
 
@@ -406,6 +431,10 @@ class PayrollPaymentWorkflowService
 
             if (in_array($payroll->status, self::payableStatuses(), true)) {
                 return $payroll;
+            }
+
+            if (! $auto) {
+                $this->assertActorOwnsPayroll($payroll, $actor);
             }
 
             $this->assertTransition($payroll, self::EMPLOYEE_CONFIRMED, $actor);
@@ -594,7 +623,7 @@ class PayrollPaymentWorkflowService
                 ->exists();
 
             if ($pending) {
-                throw new RuntimeException('Bạn đang có yêu cầu chờ duyệt. Vui lòng đợi HR xử lý.');
+                throw new RuntimeException('Bạn đang có yêu cầu chờ duyệt. Vui lòng đợi '.RequestApprover::queueLabel($employee).' xử lý.');
             }
 
             $qrPath = null;
@@ -613,14 +642,15 @@ class PayrollPaymentWorkflowService
                     'status' => 'pending',
                 ]);
             } catch (QueryException) {
-                throw new RuntimeException('Bạn đang có yêu cầu chờ duyệt. Vui lòng đợi HR xử lý.');
+                throw new RuntimeException('Bạn đang có yêu cầu chờ duyệt. Vui lòng đợi '.RequestApprover::queueLabel($employee).' xử lý.');
             }
 
-            $this->notifyHr(
+            RequestApprover::notifyQueue(
+                $employee,
                 Auth::user(),
                 'Yêu cầu đổi thông tin nhận lương',
                 ($employee->name ?? 'Nhân viên').' gửi yêu cầu thay đổi QR/STK.',
-                ['change_request_id' => $request->id, 'employee_id' => $employee->id]
+                ['type' => 'bank_change', 'change_request_id' => $request->id]
             );
 
             return $request;
@@ -633,8 +663,16 @@ class PayrollPaymentWorkflowService
 
         return DB::transaction(function () use ($request, $approve, $actor, $note) {
             $request = SalaryReceiveChangeRequest::query()->whereKey($request->id)->lockForUpdate()->firstOrFail();
+            $request->loadMissing('employee');
             if ($request->status !== 'pending') {
                 throw new RuntimeException('Yêu cầu đã được xử lý.');
+            }
+            if (! RequestApprover::canReview($actor, $request->employee)) {
+                throw new RuntimeException(
+                    RequestApprover::needsDirector($request->employee)
+                        ? 'Yêu cầu đổi STK/QR của HR do Giám đốc duyệt.'
+                        : 'Chỉ HR được duyệt yêu cầu đổi STK/QR của nhân viên.'
+                );
             }
 
             if ($approve) {
@@ -670,14 +708,17 @@ class PayrollPaymentWorkflowService
                 'meta' => 'request:'.$request->id.';employee:'.$request->employee_id,
             ]);
 
-            $this->notifyEmployeeById(
-                $request->employee_id,
-                $actor,
-                $approve ? 'Yêu cầu đổi STK/QR đã được duyệt' : 'Yêu cầu đổi STK/QR bị từ chối',
-                $approve
-                    ? 'Thông tin nhận lương của bạn đã được cập nhật.'
-                    : ('Yêu cầu bị từ chối.'.($note ? ' Lý do: '.$note : ''))
-            );
+            if ($approve) {
+                HrApprovalNotifier::approved($request->employee_id, $actor, 'Yêu cầu đổi STK/QR', [
+                    'type' => 'bank_change',
+                    'change_request_id' => $request->id,
+                ]);
+            } else {
+                HrApprovalNotifier::rejected($request->employee_id, $actor, 'Yêu cầu đổi STK/QR', $note, [
+                    'type' => 'bank_change',
+                    'change_request_id' => $request->id,
+                ]);
+            }
 
             return $request->fresh(['employee']);
         });

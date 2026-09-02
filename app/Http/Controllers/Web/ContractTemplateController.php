@@ -78,7 +78,7 @@ class ContractTemplateController extends Controller
         $contractType = $request->query('contract_type');
 
         $template = ContractTemplate::query()
-            ->where('status', 'active')
+            ->active()
             ->when($contractType, function ($query, $value) {
                 $query->where('contract_type', $value);
             })

@@ -18,7 +18,7 @@ class SalaryReceiveChangeRequestController extends Controller
     protected function assertHr(): void
     {
         $user = request()->user();
-        if (! $user || ! $user->is_hr) {
+        if (! $user || (! $user->is_hr && ! $user->is_director)) {
             abort(403);
         }
     }
@@ -27,7 +27,7 @@ class SalaryReceiveChangeRequestController extends Controller
     {
         $this->assertHr();
 
-        $requests = SalaryReceiveChangeRequest::with(['employee', 'reviewer'])
+        $requests = SalaryReceiveChangeRequest::with(['employee.user', 'reviewer'])
             ->orderByRaw("FIELD(status, 'pending', 'approved', 'rejected')")
             ->orderByDesc('id')
             ->paginate(20);
@@ -38,6 +38,12 @@ class SalaryReceiveChangeRequestController extends Controller
     public function approve(Request $request, SalaryReceiveChangeRequest $changeRequest): RedirectResponse
     {
         $this->assertHr();
+        $changeRequest->loadMissing('employee');
+        if (! \App\Support\RequestApprover::canReview($request->user(), $changeRequest->employee)) {
+            abort(403, \App\Support\RequestApprover::needsDirector($changeRequest->employee)
+                ? 'Yêu cầu đổi STK/QR của HR do Giám đốc duyệt.'
+                : 'Chỉ HR được duyệt yêu cầu đổi STK/QR của nhân viên.');
+        }
 
         try {
             $this->workflow->reviewBankChangeRequest(
@@ -56,6 +62,12 @@ class SalaryReceiveChangeRequestController extends Controller
     public function reject(Request $request, SalaryReceiveChangeRequest $changeRequest): RedirectResponse
     {
         $this->assertHr();
+        $changeRequest->loadMissing('employee');
+        if (! \App\Support\RequestApprover::canReview($request->user(), $changeRequest->employee)) {
+            abort(403, \App\Support\RequestApprover::needsDirector($changeRequest->employee)
+                ? 'Yêu cầu đổi STK/QR của HR do Giám đốc duyệt.'
+                : 'Chỉ HR được từ chối yêu cầu đổi STK/QR của nhân viên.');
+        }
 
         $data = $request->validate([
             'review_note' => ['nullable', 'string', 'max:500'],

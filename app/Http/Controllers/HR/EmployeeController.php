@@ -45,7 +45,7 @@ class EmployeeController extends ApiController
             'email' => 'required|email|unique:employees,email',
             'position' => 'required|string|max:255',
             'department_id' => 'required|exists:departments,id',
-            'status' => 'nullable|in:active,inactive',
+            'status' => 'nullable|in:active,inactive,on_leave',
         ]);
 
         if ($validator->fails()) {
@@ -78,7 +78,7 @@ class EmployeeController extends ApiController
             'email' => 'sometimes|required|email|unique:employees,email,'.$employee->id,
             'position' => 'sometimes|required|string|max:255',
             'department_id' => 'sometimes|required|exists:departments,id',
-            'status' => 'nullable|in:active,inactive',
+            'status' => 'nullable|in:active,inactive,on_leave',
         ]);
 
         if ($validator->fails()) {
@@ -86,9 +86,18 @@ class EmployeeController extends ApiController
         }
 
         $data = $validator->validated();
+        if ($employee->department_id && isset($data['department_id']) && (int) $data['department_id'] !== (int) $employee->department_id) {
+            return response()->json([
+                'errors' => [
+                    'department_id' => ['Không đổi phòng ban trực tiếp trên hồ sơ. Hãy tạo yêu cầu điều chuyển để Giám đốc duyệt.'],
+                ],
+            ], 422);
+        }
+        $oldDepartmentId = $employee->department_id;
         $employee->update($data);
 
         if (isset($data['department_id'])) {
+            $this->syncDepartmentCount($oldDepartmentId);
             $this->syncDepartmentCount($data['department_id']);
         }
 

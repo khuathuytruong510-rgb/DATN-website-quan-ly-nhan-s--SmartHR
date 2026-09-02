@@ -148,6 +148,7 @@
         <div class="doc-title">Bảng tổng hợp lương nhân viên</div>
         <div class="meta">
             Kỳ lương: <strong>Tháng {{ sprintf('%02d/%d', $month, $year) }}</strong>
+            ({{ ($periodMeta['range_label'] ?? '') }})
             &nbsp;|&nbsp; Số phiếu: <strong>{{ $payrolls->count() }}</strong>
         </div>
 
