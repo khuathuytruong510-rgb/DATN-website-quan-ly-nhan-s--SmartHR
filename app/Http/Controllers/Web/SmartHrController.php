@@ -7,11 +7,14 @@ use App\Http\Requests\ContractFormRequest;
 use App\Models\ActivityLog;
 use App\Models\Attendance;
 use App\Models\Contract;
+use App\Models\ContractExpiryAction;
+use App\Models\DeletionRequest;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeBenefit;
 use App\Models\EmployeeEvaluation;
 use App\Models\Benefit;
+use App\Models\FaceProfile;
 use App\Models\LeaveRequest;
 use App\Models\Payroll;
 use App\Models\Notification;
@@ -20,7 +23,6 @@ use App\Models\User;
 use App\Models\OvertimeRequest;
 use App\Models\SalaryAdvance;
 use App\Models\SupportRequest;
-use App\Traits\HasLeaveLimit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -32,15 +34,23 @@ use Carbon\Carbon;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use App\Mail\PayrollConfirmationMail;
 use App\Services\ContractService;
+use App\Services\ContractExpiryAlertService;
+use App\Services\DeletionRequestService;
 use App\Services\EvaluationService;
+use App\Services\FaceRegistrationService;
+use App\Services\LeaveEligibilityService;
+use App\Services\LeaveRequestService;
+use App\Services\DirectorSuccessionService;
 use App\Services\PayrollPaymentWorkflowService;
-use App\Support\ContractFixedTerms;
+use App\Http\Requests\StoreAssignedOvertimeRequest;
+use App\Services\OvertimeRequestService;
+use App\Support\HrApprovalNotifier;
+use App\Support\LeaveTypes;
+use App\Support\RequestApprover;
 use Illuminate\Support\Facades\Mail;
 
 class SmartHrController extends Controller
 {
-    use HasLeaveLimit;
-
     public function showLogin(): View
     {
         return view('auth.login');
@@ -213,7 +223,7 @@ class SmartHrController extends Controller
             $contractStats = [
                 'total'        => Contract::count(),
                 'active'       => Contract::where('status', 'active')->count(),
-                'expiringSoon' => Contract::where('status', 'active')
+                'expiringSoon' => Contract::whereIn('status', ['active', 'expiring'])
                     ->where('end_date', '>=', now())
                     ->where('end_date', '<=', now()->addDays(30))->count(),
                 'expired'      => Contract::where('status', 'expired')
@@ -273,7 +283,7 @@ class SmartHrController extends Controller
 
             // 10. Hợp đồng sắp hết hạn
             $expiringContracts = Contract::with(['employee.department'])
-                ->whereNotIn('status', ['expired', 'cancelled'])
+                ->whereIn('status', ['active', 'expiring'])
                 ->whereNotNull('end_date')
                 ->whereBetween('end_date', [now()->toDateString(), now()->addDays(30)->toDateString()])
                 ->orderBy('end_date')
@@ -319,7 +329,7 @@ class SmartHrController extends Controller
         $contracts = [
             'active' => Contract::where('status', 'active')->count(),
             'waitingSign' => Contract::whereIn('status', $waitingContractStatuses)->count(),
-            'expiringSoon' => Contract::where('status', 'active')
+            'expiringSoon' => Contract::whereIn('status', ['active', 'expiring'])
                 ->whereNotNull('end_date')
                 ->whereBetween('end_date', [$now->toDateString(), $now->copy()->addDays(30)->toDateString()])
                 ->count(),
@@ -367,7 +377,7 @@ class SmartHrController extends Controller
         ];
 
         $expiringContracts = Contract::with(['employee.department'])
-            ->where('status', 'active')
+            ->whereIn('status', ['active', 'expiring'])
             ->whereNotNull('end_date')
             ->whereBetween('end_date', [now()->toDateString(), now()->addDays(30)->toDateString()])
             ->orderBy('end_date')
@@ -413,23 +423,44 @@ class SmartHrController extends Controller
 
     public function accounts(): View
     {
+        $pendingAccountIds = DeletionRequest::query()
+            ->where('status', DeletionRequest::APPROVED)
+            ->whereNotNull('account_user_id')
+            ->whereNull('account_cleared_at')
+            ->pluck('subject_label', 'account_user_id');
+
         return view('accounts.index', [
             'users' => User::latest()->paginate(10),
+            'pendingAccountIds' => $pendingAccountIds,
         ]);
     }
 
-    public function createAccount(): View
+    public function createAccount(Request $request): View
     {
+        $linkEmployee = null;
+        if ($request->filled('employee')) {
+            $linkEmployee = Employee::query()
+                ->with('department')
+                ->whereNull('user_id')
+                ->find($request->integer('employee'));
+        }
+
         return view('accounts.form', [
-            'user' => new User(),
+            'user' => new User([
+                'name' => $linkEmployee?->name,
+                'email' => $linkEmployee?->email,
+            ]),
             'departments' => Department::orderBy('name')->get(),
+            'directorExists' => User::query()->where('is_director', true)->exists(),
+            'linkEmployee' => $linkEmployee,
         ]);
     }
 
     public function storeAccount(Request $request): RedirectResponse
     {
+        $linkEmployee = $this->resolveEmployeeToLink($request);
         $emailRules = ['required', 'email', 'max:255', 'unique:users,email'];
-        if ($request->input('role') !== 'admin') {
+        if ($request->input('role') !== 'admin' && ! $linkEmployee) {
             $emailRules[] = 'unique:employees,email';
         }
 
@@ -438,8 +469,25 @@ class SmartHrController extends Controller
             'email' => $emailRules,
             'password' => ['required', 'string', 'min:6', 'confirmed'],
             'role' => ['required', 'in:employee,hr,admin,accountant,director'],
-            'department_id' => ['required_if:role,employee,hr,accountant,director', 'nullable', 'exists:departments,id'],
+            'department_id' => [
+                Rule::requiredIf(! $linkEmployee && in_array($request->input('role'), ['employee', 'hr', 'accountant', 'director'], true)),
+                'nullable',
+                'exists:departments,id',
+            ],
+            'employee_id' => ['nullable', 'integer', 'exists:employees,id'],
         ]);
+
+        if ($linkEmployee) {
+            $data['name'] = $linkEmployee->name;
+            $data['email'] = $linkEmployee->email;
+            $data['department_id'] = $linkEmployee->department_id;
+        }
+
+        if ($data['role'] === 'director' && User::query()->where('is_director', true)->exists()) {
+            return redirect()
+                ->route('director_succession.index')
+                ->with('error', 'Đã có người giữ vai trò Giám đốc. Sau quyết định của doanh nghiệp, hãy cập nhật người giữ chức tại đây — không tạo thêm tài khoản Director và không đổi tên tài khoản cũ.');
+        }
 
         $user = User::create(array_merge([
             'name' => $data['name'],
@@ -448,16 +496,30 @@ class SmartHrController extends Controller
         ], $this->roleFlags($data['role'])));
 
         if ($data['role'] !== 'admin') {
-            $department = Department::findOrFail($data['department_id']);
-            Employee::create([
-                'user_id' => $user->id,
-                'name' => $data['name'],
-                'email' => $data['email'],
-                'employee_code' => Employee::generateUniqueEmployeeCode($department),
-                'position' => $this->positionForRole($data['role']),
-                'department_id' => $data['department_id'],
-                'status' => 'active',
-            ]);
+            if ($linkEmployee) {
+                $linkEmployee->update(['user_id' => $user->id]);
+            } else {
+                $department = Department::findOrFail($data['department_id']);
+                Employee::create([
+                    'user_id' => $user->id,
+                    'name' => $data['name'],
+                    'email' => $data['email'],
+                    'employee_code' => Employee::generateUniqueEmployeeCode($department),
+                    'position' => $this->positionForRole($data['role']),
+                    'department_id' => $data['department_id'],
+                    'status' => 'active',
+                ]);
+            }
+        }
+
+        if ($data['role'] === 'director') {
+            app(DirectorSuccessionService::class)->ensureOpenTenureFor($user->fresh('employee'));
+        }
+
+        if ($linkEmployee) {
+            return redirect()
+                ->route('director_succession.index')
+                ->with('success', 'Đã kết nối tài khoản với hồ sơ '.$linkEmployee->name.'. Chọn người này trong danh sách để cập nhật người giữ chức Giám đốc — không đổi tên tài khoản cũ.');
         }
 
         return redirect()->route('accounts.index')->with('success', 'Tạo tài khoản thành công.');
@@ -468,6 +530,7 @@ class SmartHrController extends Controller
         return view('accounts.form', [
             'user' => $user,
             'departments' => Department::orderBy('name')->get(),
+            'directorExists' => User::query()->where('is_director', true)->where('id', '!=', $user->id)->exists(),
         ]);
     }
 
@@ -484,6 +547,14 @@ class SmartHrController extends Controller
             'role' => ['required', 'in:employee,hr,admin,accountant,director'],
             'department_id' => ['required_if:role,employee,hr,accountant,director', 'nullable', 'exists:departments,id'],
         ]);
+
+        $becomingDirector = $data['role'] === 'director' && ! $user->is_director;
+        $leavingDirector = $data['role'] !== 'director' && $user->is_director;
+        if ($becomingDirector || $leavingDirector) {
+            return redirect()
+                ->route('director_succession.index')
+                ->with('error', 'Không cấp hoặc thu hồi role Giám đốc bằng cách sửa tài khoản. Hãy cập nhật người giữ chức để giữ lịch sử nhiệm kỳ và phê duyệt.');
+        }
 
         $update = array_merge([
             'name' => $data['name'],
@@ -521,6 +592,13 @@ class SmartHrController extends Controller
             return redirect()->route('accounts.index')->with('error', 'Bạn không thể xoá chính mình.');
         }
 
+        try {
+            app(DirectorSuccessionService::class)->assertMayDeleteAccount($user);
+        } catch (\RuntimeException $e) {
+            return redirect()->route('accounts.index')->with('error', $e->getMessage());
+        }
+
+        app(DeletionRequestService::class)->markAccountCleared($user, $auth);
         $user->delete();
 
         return redirect()->route('accounts.index')->with('success', 'Xoá tài khoản thành công.');
@@ -588,9 +666,16 @@ class SmartHrController extends Controller
 
     public function updatePermissions(Request $request, User $user): RedirectResponse
     {
+        $wantsDirector = $request->boolean('is_director');
+        if ($wantsDirector !== (bool) $user->is_director) {
+            return redirect()
+                ->route('director_succession.index')
+                ->with('error', 'Role Giám đốc phải đi theo người đang giữ chức. Dùng trang Cập nhật người giữ chức Giám đốc, không tick phân quyền trực tiếp.');
+        }
+
         $user->update([
             'is_admin' => $request->boolean('is_admin'),
-            'is_director' => $request->boolean('is_director'),
+            'is_director' => $user->is_director,
             'is_hr' => $request->boolean('is_hr'),
             'is_accountant' => $request->boolean('is_accountant'),
         ]);
@@ -600,7 +685,9 @@ class SmartHrController extends Controller
 
     public function systemLogs(): View
     {
-        return view('system_logs.index');
+        return view('system_logs.index', [
+            'logs' => \App\Models\ActivityLog::query()->with('user')->latest()->paginate(20),
+        ]);
     }
 
     public function settings(): View
@@ -610,6 +697,11 @@ class SmartHrController extends Controller
 
     public function departments(): View
     {
+        $pendingDepartmentDeletions = DeletionRequest::query()
+            ->where('subject_type', DeletionRequest::DEPARTMENT)
+            ->where('status', DeletionRequest::PENDING)
+            ->pluck('id', 'subject_id');
+
         return view('departments.index', [
             'departments' => Department::withCount(['employees', 'positions'])->latest()->paginate(10),
         ]);
@@ -665,29 +757,51 @@ class SmartHrController extends Controller
             ]);
         }
 
+        $employees = Employee::with([
+            'department',
+            'contracts' => fn ($q) => $q->latest('id'),
+        ])->latest()->paginate(10);
+
         return view('employees.index', [
-            'employees' => Employee::with([
-                'department',
-                'contracts' => fn ($q) => $q->latest('id'),
-            ])->latest()->paginate(10),
+            'employees' => $employees,
+            'pendingEmployeeDeletions' => DeletionRequest::query()
+                ->where('subject_type', DeletionRequest::EMPLOYEE)
+                ->where('status', DeletionRequest::PENDING)
+                ->pluck('id', 'subject_id'),
+            'pendingEmployeeTransfers' => app(DeletionRequestService::class)
+                ->pendingTransferMap($employees->pluck('id')->all()),
         ]);
     }
 
-    public function createEmployee(): View
+    public function createEmployee(Request $request): View
     {
-        abort_if(auth()->user()?->is_director && ! auth()->user()?->canManageHr(), 403, 'Giám đốc chỉ được xem thông tin nhân viên phục vụ phê duyệt.');
+        abort_unless(auth()->user()?->canManageHr(), 403, 'Chỉ HR được tạo hồ sơ nhân sự. Admin tạo tài khoản sau khi hồ sơ đã có.');
 
+        $forDirector = $request->boolean('for_director');
         $employee = new Employee(['status' => 'active']);
+        if ($forDirector) {
+            $board = Department::query()->where('code', 'BGD')->orWhere('name', 'Ban Giám đốc')->first();
+            $position = Position::query()->where('name', 'Giám đốc')->first();
+            $employee->department_id = $board?->id;
+            $employee->position = 'Giám đốc';
+            $employee->position_id = $position?->id;
+        }
+
         return view('employees.form', [
             'employee' => $employee,
-            'departments' => Department::orderBy('name')->get(),
+            'departments' => $forDirector
+                ? Department::orderBy('name')->get()
+                : Department::query()->notBoard()->orderBy('name')->get(),
             'positions' => Position::orderBy('name')->get(),
-            'nextEmployeeCode' => '', // Will be auto-generated on store based on department
+            'nextEmployeeCode' => '',
+            'forDirector' => $forDirector,
         ]);
     }
 
     public function storeEmployee(Request $request)
     {
+        abort_unless(auth()->user()?->canManageHr(), 403, 'Chỉ HR được tạo hồ sơ nhân sự. Admin tạo tài khoản sau khi hồ sơ đã có.');
+
         $data = $this->validateEmployee($request);
         
         // Auto-generate employee code based on department if not already set
@@ -706,12 +820,17 @@ class SmartHrController extends Controller
             ], 201);
         }
 
-        return redirect()->route('employees.index')->with('success', 'Tạo nhân viên thành công.');
+        $message = $request->boolean('for_director')
+            ? 'Đã tạo hồ sơ nhân sự. Nhờ Admin tạo tài khoản rồi cập nhật Người giữ chức Giám đốc — chưa cấp quyền Director ở bước này.'
+            : 'Tạo nhân viên thành công.';
+
+        return redirect()->route('employees.index')->with('success', $message);
     }
 
     public function editEmployee(Employee $employee): View
     {
         abort_if(auth()->user()?->is_director && ! auth()->user()?->canManageHr(), 403, 'Giám đốc chỉ được xem thông tin nhân viên phục vụ phê duyệt.');
+        abort_unless(RequestApprover::hrMayManage(auth()->user(), $employee), 403, 'HR không quản lý hồ sơ Giám đốc.');
 
         return view('employees.form', [
             'employee' => $employee,
@@ -722,8 +841,16 @@ class SmartHrController extends Controller
 
     public function updateEmployee(Request $request, Employee $employee)
     {
+        abort_unless(RequestApprover::hrMayManage(auth()->user(), $employee), 403, 'HR không quản lý hồ sơ Giám đốc.');
+
         $oldDepartmentId = $employee->department_id;
-        $employee->update($this->validateEmployee($request, $employee->id));
+        $data = $this->validateEmployee($request, $employee->id);
+        if ($oldDepartmentId && (int) $data['department_id'] !== (int) $oldDepartmentId) {
+            return back()->withInput()->withErrors([
+                'department_id' => 'Không đổi phòng ban trực tiếp trên hồ sơ. Hãy tạo yêu cầu điều chuyển để Giám đốc duyệt.',
+            ]);
+        }
+        $employee->update($data);
 
         $this->syncDepartmentCount($oldDepartmentId);
         $this->syncDepartmentCount($employee->department_id);
@@ -753,7 +880,7 @@ class SmartHrController extends Controller
     public function contracts(): View
     {
         $user = Auth::user();
-        $query = Contract::with('employee.department');
+        $query = Contract::with(['employee.department', 'latestExpiryAction', 'renewals']);
 
         if ($user && ! $user->is_hr && ! $user->is_director) {
             $employee = Employee::where('email', $user->email)->first();
@@ -773,8 +900,14 @@ class SmartHrController extends Controller
     {
         return view('hr.attendance.index', [
             'attendances' => Attendance::with('employee')->latest()->paginate(10),
-            'adjustmentRequests' => \App\Models\AttendanceAdjustmentRequest::with(['employee', 'attendance'])
+            'adjustmentRequests' => \App\Models\AttendanceAdjustmentRequest::with(['employee.user', 'attendance'])
                 ->where('status', \App\Models\AttendanceAdjustmentRequest::PENDING)
+                ->latest()
+                ->limit(20)
+                ->get(),
+            'faceRegistrations' => FaceProfile::with('employee.user')
+                ->where('status', FaceProfile::PENDING)
+                ->whereNotNull('pending_face_embedding')
                 ->latest()
                 ->limit(20)
                 ->get(),
@@ -783,8 +916,11 @@ class SmartHrController extends Controller
 
     public function approveAttendanceAdjustment(Request $request, \App\Models\AttendanceAdjustmentRequest $adjustment): RedirectResponse
     {
-        if (! $this->isHROrAdmin()) {
-            abort(403);
+        $adjustment->loadMissing('employee');
+        if (! RequestApprover::canReview(Auth::user(), $adjustment->employee)) {
+            abort(403, RequestApprover::needsDirector($adjustment->employee)
+                ? 'Yêu cầu điều chỉnh của HR do Giám đốc duyệt.'
+                : 'Chỉ HR được duyệt điều chỉnh chấm công của nhân viên.');
         }
 
         try {
@@ -835,6 +971,12 @@ class SmartHrController extends Controller
                         : ($note !== '' ? $note : 'HR duyệt yêu cầu điều chỉnh'),
                 ]);
 
+                HrApprovalNotifier::approved($row->employee_id, Auth::user(), 'Yêu cầu điều chỉnh chấm công', [
+                    'type' => 'attendance_adjustment',
+                    'attendance_id' => $attendance->id,
+                    'adjustment_id' => $row->id,
+                ]);
+
                 \App\Models\ActivityLog::create([
                     'user_id' => Auth::id(),
                     'action' => 'attendance_adjustment_approved',
@@ -861,8 +1003,11 @@ class SmartHrController extends Controller
 
     public function rejectAttendanceAdjustment(Request $request, \App\Models\AttendanceAdjustmentRequest $adjustment): RedirectResponse
     {
-        if (! $this->isHROrAdmin()) {
-            abort(403);
+        $adjustment->loadMissing('employee');
+        if (! RequestApprover::canReview(Auth::user(), $adjustment->employee)) {
+            abort(403, RequestApprover::needsDirector($adjustment->employee)
+                ? 'Yêu cầu điều chỉnh của HR do Giám đốc duyệt.'
+                : 'Chỉ HR được từ chối điều chỉnh chấm công của nhân viên.');
         }
 
         try {
@@ -884,12 +1029,68 @@ class SmartHrController extends Controller
                     'action' => 'attendance_adjustment_rejected',
                     'meta' => 'adjustment:'.$row->id,
                 ]);
+
+                HrApprovalNotifier::rejected(
+                    $row->employee_id,
+                    Auth::user(),
+                    'Yêu cầu điều chỉnh chấm công',
+                    $row->review_note,
+                    [
+                        'type' => 'attendance_adjustment',
+                        'attendance_id' => $row->attendance_id,
+                        'adjustment_id' => $row->id,
+                    ]
+                );
             });
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }
 
         return back()->with('success', 'Đã từ chối yêu cầu điều chỉnh chấm công.');
+    }
+
+    public function approveFaceRegistration(FaceProfile $faceProfile): RedirectResponse
+    {
+        $faceProfile->loadMissing('employee');
+        if (! RequestApprover::canReview(Auth::user(), $faceProfile->employee)) {
+            abort(403, RequestApprover::needsDirector($faceProfile->employee)
+                ? 'Đăng ký khuôn mặt của HR do Giám đốc duyệt.'
+                : 'Chỉ HR được duyệt đăng ký khuôn mặt của nhân viên.');
+        }
+
+        try {
+            app(FaceRegistrationService::class)->approve($faceProfile, Auth::user());
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Đã duyệt khuôn mặt. Nhân viên có thể chấm công.');
+    }
+
+    public function rejectFaceRegistration(Request $request, FaceProfile $faceProfile): RedirectResponse
+    {
+        $faceProfile->loadMissing('employee');
+        if (! RequestApprover::canReview(Auth::user(), $faceProfile->employee)) {
+            abort(403, RequestApprover::needsDirector($faceProfile->employee)
+                ? 'Đăng ký khuôn mặt của HR do Giám đốc duyệt.'
+                : 'Chỉ HR được từ chối đăng ký khuôn mặt của nhân viên.');
+        }
+
+        $data = $request->validate([
+            'review_note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            app(FaceRegistrationService::class)->reject(
+                $faceProfile,
+                Auth::user(),
+                $data['review_note'] ?? 'Từ chối đăng ký khuôn mặt.'
+            );
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Đã từ chối đăng ký khuôn mặt.');
     }
 
     public function createAttendance(): View
@@ -1497,20 +1698,83 @@ class SmartHrController extends Controller
 
     public function leaveRequests(): View
     {
+        $query = LeaveRequest::with(['employee.user', 'approver'])->latest();
+
+        if ($status = request('status')) {
+            $query->where('status', $status);
+        }
+        if ($type = request('type')) {
+            $query->where('type', $type);
+        }
+
         return view('hr.leave.index', [
-            'leaveRequests' => LeaveRequest::with('employee', 'approver')->latest()->paginate(10),
+            'leaveRequests' => $query->paginate(10)->withQueryString(),
+            'overtimeRequests' => OvertimeRequest::with(['employee.user', 'approver'])
+                ->where('status', OvertimeRequest::STATUS_PENDING)
+                ->latest()
+                ->limit(20)
+                ->get(),
         ]);
+    }
+
+    public function overtimeRequests(): View
+    {
+        $actor = Auth::user();
+        $employees = Employee::query()
+            ->orderBy('name')
+            ->get()
+            ->filter(fn (Employee $employee) => RequestApprover::hrMayManage($actor, $employee)
+                && ! RequestApprover::needsDirector($employee))
+            ->values();
+
+        return view('hr.overtime.index', [
+            'pendingRequests' => OvertimeRequest::with(['employee.user', 'approver'])
+                ->where('status', OvertimeRequest::STATUS_PENDING)
+                ->latest()
+                ->get(),
+            'completedRequests' => OvertimeRequest::with(['employee.user', 'attendance'])
+                ->where('status', OvertimeRequest::STATUS_COMPLETED)
+                ->latest()
+                ->get(),
+            'recentRequests' => OvertimeRequest::with(['employee.user', 'approver', 'assigner', 'verifier'])
+                ->whereNotIn('status', [OvertimeRequest::STATUS_PENDING, OvertimeRequest::STATUS_COMPLETED])
+                ->latest()
+                ->limit(30)
+                ->get(),
+            'employees' => $employees,
+        ]);
+    }
+
+    public function assignOvertimeRequest(StoreAssignedOvertimeRequest $request): RedirectResponse
+    {
+        try {
+            app(OvertimeRequestService::class)->assign(Auth::user(), $request->validated());
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('overtime_requests.index')->with('success', 'Đã chỉ định tăng ca. Nhân viên không cần đăng ký lại.');
     }
 
     public function createLeaveRequest(): View
     {
+        $eligibility = app(LeaveEligibilityService::class);
+        $employees = Employee::orderBy('name')->get();
+        $employeeGuides = $employees->mapWithKeys(
+            fn (Employee $employee) => [$employee->id => $eligibility->quotaSummary($employee)['types'] ?? []]
+        );
+
         return view('hr.leave.form', [
             'leaveRequest' => new LeaveRequest([
                 'status' => 'pending',
                 'start_date' => now()->toDateString(),
                 'end_date' => now()->addDays(1)->toDateString(),
+                'type' => LeaveTypes::default(),
             ]),
-            'employees' => Employee::orderBy('name')->get(),
+            'employees' => $employees,
+            'leaveTypes' => LeaveTypes::all(),
+            'defaultType' => LeaveTypes::default(),
+            'employeeGuides' => $employeeGuides,
         ]);
     }
 
@@ -1521,96 +1785,54 @@ class SmartHrController extends Controller
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'half_day' => ['nullable', 'boolean'],
-            'type' => ['required', 'in:sick,personal,annual,unpaid'],
+            'type' => ['required', 'string'],
             'reason' => ['nullable', 'string'],
             'is_urgent' => ['nullable', 'boolean'],
             'urgent_reason' => ['required_if:is_urgent,1', 'nullable', 'string', 'max:500'],
         ]);
 
+        $employee = Employee::findOrFail($data['employee_id']);
+        $data = array_merge($data, $request->validate([
+            'type' => ['required', LeaveTypes::validationRule($employee)],
+        ]));
+
         $data['is_urgent'] = $request->boolean('is_urgent');
         $data['half_day'] = $request->boolean('half_day');
 
-        $limitCheck = $this->checkLeaveLimit(
-            $data['employee_id'],
-            $data['start_date'],
-            $data['end_date'],
-            $data['half_day']
-        );
-
-        if ($limitCheck['exceeded'] && empty($data['is_urgent'])) {
-            $msg = "Nhân viên đã sử dụng {$limitCheck['used_days']}/{$limitCheck['max_days']} ngày nghỉ phép trong tháng này. ";
-            if ($limitCheck['requests_exceeded']) {
-                $msg .= "Nhân viên đã hết {$limitCheck['max_requests']} lượt xin nghỉ trong tháng. ";
-            }
-            $msg .= "Vui lòng yêu cầu nhân viên liên hệ bộ phận hỗ trợ nếu cần nghỉ thêm với lý do thuyết phục.";
-            return back()->withInput()->with('error', $msg);
-        }
-
         try {
-            app(\App\Services\PayrollPeriodLockService::class)->assertWritableRange(
-                $data['start_date'],
-                $data['end_date'],
-                'đơn nghỉ phép'
-            );
+            app(LeaveRequestService::class)->submit($employee, Auth::user(), $data);
         } catch (\Throwable $e) {
             return back()->withInput()->with('error', $e->getMessage());
         }
 
-        $data['days'] = $this->calculateLeaveDays($data['start_date'], $data['end_date'], $data['half_day']);
-        $data['status'] = 'pending';
-
-        try {
-            app(\App\Services\PayrollPeriodLockService::class)->assertWritableRange(
-                $data['start_date'],
-                $data['end_date'],
-                'đơn nghỉ phép'
-            );
-        } catch (\Throwable $e) {
-            return back()->withInput()->with('error', $e->getMessage());
-        }
-
-        LeaveRequest::create($data);
-
-        return redirect()->route('leave_requests.index')->with('success', 'Gửi đơn xin nghỉ phép thành công.');
+        return redirect()->route('leave_requests.index')->with('success', RequestApprover::submittedMessage($employee));
     }
 
     public function approveLeaveRequest(LeaveRequest $leaveRequest): RedirectResponse
     {
-        if (!$this->isHROrAdmin()) {
-            abort(403, 'Chỉ HR được duyệt nghỉ phép.');
-        }
-
-        if ($leaveRequest->status !== 'pending') {
-            return back()->with('error', 'Chỉ duyệt đơn đang chờ duyệt.');
+        $leaveRequest->loadMissing('employee');
+        if (! RequestApprover::canReview(Auth::user(), $leaveRequest->employee)) {
+            abort(403, RequestApprover::needsDirector($leaveRequest->employee)
+                ? 'Đơn nghỉ phép của HR do Giám đốc duyệt.'
+                : 'Chỉ HR được duyệt nghỉ phép của nhân viên.');
         }
 
         try {
-            app(\App\Services\PayrollPeriodLockService::class)->assertWritableRange(
-                $leaveRequest->start_date,
-                $leaveRequest->end_date,
-                'đơn nghỉ phép'
-            );
+            app(LeaveRequestService::class)->approve($leaveRequest, Auth::user());
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
         }
 
-        $leaveRequest->update([
-            'status' => 'approved',
-            'approved_by' => Auth::id(),
-            'approved_at' => now(),
-        ]);
-
-        return redirect()->route('leave_requests.index')->with('success', 'Đã duyệt đơn nghỉ phép.');
+        return redirect()->route('leave_requests.index')->with('success', 'Đã duyệt đơn nghỉ phép. Dữ liệu sẽ được dùng khi tính lương.');
     }
 
     public function rejectLeaveRequest(Request $request, \App\Models\LeaveRequest $leaveRequest): RedirectResponse
     {
-        if (!$this->isHROrAdmin()) {
-            abort(403, 'Chỉ HR được từ chối nghỉ phép.');
-        }
-
-        if ($leaveRequest->status !== 'pending') {
-            return back()->with('error', 'Chỉ từ chối đơn đang chờ duyệt.');
+        $leaveRequest->loadMissing('employee');
+        if (! RequestApprover::canReview(Auth::user(), $leaveRequest->employee)) {
+            abort(403, RequestApprover::needsDirector($leaveRequest->employee)
+                ? 'Đơn nghỉ phép của HR do Giám đốc duyệt.'
+                : 'Chỉ HR được từ chối nghỉ phép của nhân viên.');
         }
 
         $data = $request->validate([
@@ -1618,23 +1840,82 @@ class SmartHrController extends Controller
         ]);
 
         try {
-            app(\App\Services\PayrollPeriodLockService::class)->assertWritableRange(
-                $leaveRequest->start_date,
-                $leaveRequest->end_date,
-                'đơn nghỉ phép'
+            app(LeaveRequestService::class)->reject($leaveRequest, Auth::user(), $data['rejection_reason']);
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('leave_requests.index')->with('success', 'Đã từ chối đơn nghỉ phép.');
+    }
+
+    public function approveOvertimeRequest(Request $request, OvertimeRequest $overtimeRequest): RedirectResponse
+    {
+        $overtimeRequest->loadMissing('employee');
+        if (! RequestApprover::canReview(Auth::user(), $overtimeRequest->employee)) {
+            abort(403, RequestApprover::needsDirector($overtimeRequest->employee)
+                ? 'Đăng ký tăng ca của HR do Giám đốc duyệt.'
+                : 'Chỉ HR được duyệt tăng ca của nhân viên.');
+        }
+
+        $window = $request->validate([
+            'approved_start' => ['nullable', 'date_format:H:i'],
+            'approved_end' => ['nullable', 'date_format:H:i'],
+        ]);
+        if (! empty($window['approved_start']) && ! empty($window['approved_end']) && $window['approved_end'] <= $window['approved_start']) {
+            return back()->with('error', 'Giờ kết thúc duyệt phải sau giờ bắt đầu.');
+        }
+
+        try {
+            app(OvertimeRequestService::class)->approve($overtimeRequest, Auth::user(), array_filter($window));
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Đã duyệt đăng ký tăng ca. Giờ tính lương vẫn lấy từ chấm công thực tế trong khung đã duyệt.');
+    }
+
+    public function rejectOvertimeRequest(Request $request, OvertimeRequest $overtimeRequest): RedirectResponse
+    {
+        $overtimeRequest->loadMissing('employee');
+        if (! RequestApprover::canReview(Auth::user(), $overtimeRequest->employee)) {
+            abort(403, RequestApprover::needsDirector($overtimeRequest->employee)
+                ? 'Đăng ký tăng ca của HR do Giám đốc duyệt.'
+                : 'Chỉ HR được từ chối tăng ca của nhân viên.');
+        }
+
+        $data = $request->validate([
+            'rejection_reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            app(\App\Services\OvertimeRequestService::class)->reject(
+                $overtimeRequest,
+                Auth::user(),
+                $data['rejection_reason'] ?? 'Từ chối đăng ký tăng ca.'
             );
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
         }
 
-        $leaveRequest->update([
-            'status' => 'rejected',
-            'approved_by' => Auth::id(),
-            'approved_at' => now(),
-            'rejection_reason' => $data['rejection_reason'],
-        ]);
+        return back()->with('success', 'Đã từ chối đăng ký tăng ca.');
+    }
 
-        return redirect()->route('leave_requests.index')->with('success', 'Đã từ chối đơn nghỉ phép.');
+    public function verifyOvertimeRequest(OvertimeRequest $overtimeRequest): RedirectResponse
+    {
+        $overtimeRequest->loadMissing('employee');
+        if (! RequestApprover::canReview(Auth::user(), $overtimeRequest->employee)) {
+            abort(403, RequestApprover::needsDirector($overtimeRequest->employee)
+                ? 'Tăng ca của HR do Giám đốc xác nhận giờ thực tế.'
+                : 'Chỉ HR được xác nhận giờ tăng ca thực tế.');
+        }
+
+        try {
+            app(OvertimeRequestService::class)->verify($overtimeRequest, Auth::user());
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Đã xác nhận giờ tăng ca thực tế. Số này sẽ được đưa vào tính lương.');
     }
 
     public function destroyLeaveRequest(\App\Models\LeaveRequest $leaveRequest): RedirectResponse
@@ -1717,21 +1998,27 @@ class SmartHrController extends Controller
             ]);
         }
 
-        $employee->load(['department', 'contracts' => fn ($q) => $q->latest('id')]);
+        $employee->load([
+            'department',
+            'contracts' => fn ($q) => $q->latest('id'),
+            'positionHistories' => fn ($q) => $q->orderByDesc('started_at')->orderByDesc('id'),
+        ]);
 
         return view('employees.show', compact('employee'));
     }
 
     public function createContract(): View
     {
+        $terms = app(ContractService::class)->officialTerms('fixed_term');
+
         return view('contracts.form', [
             'contract' => new Contract([
                 'contract_code' => $this->generateContractCode(),
-                'status' => 'waiting_employee',
-                'contract_status' => 'waiting_employee',
+                'status' => 'draft',
+                'contract_status' => 'draft',
                 'contract_type' => 'fixed_term',
-                'terms' => ContractFixedTerms::forType('fixed_term'),
-                'contract_content' => ContractFixedTerms::forType('fixed_term'),
+                'terms' => $terms,
+                'contract_content' => $terms,
                 'base_salary' => 0,
                 'allowance' => 0,
                 'bonus' => 0,
@@ -1773,9 +2060,9 @@ class SmartHrController extends Controller
         return redirect()->route('contracts.index')->with('success', 'Tạo hợp đồng thành công.');
     }
 
-    public function showContract(Contract $contract): View
+    public function showContract(Contract $contract, ContractService $contractService): View
     {
-        $contract->loadMissing(['employee.department', 'logs', 'renewals', 'parentContract']);
+        $contract->loadMissing(['employee.department', 'createdByUser', 'logs.user', 'renewals', 'parentContract', 'latestExpiryAction', 'signatures.signer', 'directorSignature.signer', 'employeeSignature.signer']);
 
         // Bảng lương gần nhất (theo year desc, month desc)
         $payroll = null;
@@ -1789,10 +2076,7 @@ class SmartHrController extends Controller
             $benefits = $contract->employee->employeeBenefits()->with('benefit')->get();
         }
 
-        $daysRemaining = null;
-        if ($contract->end_date) {
-            $daysRemaining = (int) now()->diffInDays($contract->end_date, false);
-        }
+        $daysRemaining = $contract->daysUntilExpiry();
 
         $statusBadge = 'badge';
         if ($contract->status === 'expired' || ($contract->end_date && $contract->end_date->isPast())) {
@@ -1801,13 +2085,29 @@ class SmartHrController extends Controller
             $statusBadge = 'badge pending';
         }
 
+        $directorSignatureValid = $contract->director_signed_at
+            ? $contractService->verifyDirectorSignature($contract)
+            : null;
+        $employeeSignatureValid = $contract->employee_signed_at
+            ? $contractService->verifyEmployeeSignature($contract)
+            : null;
+        $signatureValid = $contract->isFullySigned()
+            ? $contractService->verifyAllSignatures($contract)
+            : ($directorSignatureValid ?? false);
+
         return view('contracts.show', compact(
-            'contract', 'payroll', 'benefits', 'daysRemaining', 'statusBadge'
+            'contract', 'payroll', 'benefits', 'daysRemaining', 'statusBadge',
+            'signatureValid', 'directorSignatureValid', 'employeeSignatureValid'
         ));
     }
 
-    public function editContract(Contract $contract): View
+    public function editContract(Contract $contract): View|RedirectResponse
     {
+        if ($contract->isContentLocked()) {
+            return redirect()
+                ->route('contracts.show', $contract)
+                ->with('error', 'Hợp đồng đã khóa / đã ký số. Không sửa nội dung. Tạo hợp đồng hoặc gia hạn mới rồi ký lại.');
+        }
         return view('contracts.form', [
             'contract' => $contract,
             'employees' => Employee::orderBy('name')->get(),
@@ -1831,7 +2131,11 @@ class SmartHrController extends Controller
 
         unset($data['employee_signed_at'], $data['director_signed_at']);
 
-        $contract = $contractService->updateContract(Auth::user(), $contract, $data);
+        try {
+            $contract = $contractService->updateContract(Auth::user(), $contract, $data);
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        }
 
         if ($request->ajax() || $request->wantsJson() || $request->expectsJson()) {
             return response()->json([
@@ -1850,97 +2154,105 @@ class SmartHrController extends Controller
             abort(403);
         }
 
+        if ($contract->director_signed_at || $contract->isContentLocked()) {
+            return back()->with('error', 'Không xóa hợp đồng đã khóa hoặc đã ký số.');
+        }
+
         $contract->delete();
 
         return redirect()->route('contracts.index')->with('success', 'Xóa hợp đồng thành công.');
     }
 
-    public function renewContract(Contract $contract, ContractService $contractService): View
+    public function renewContract(Contract $contract): View
     {
         if (! $this->canManageContracts()) {
             abort(403);
         }
 
-        // Lương mới nhất từ bảng lương (ưu tiên hơn lương hợp đồng cũ)
-        $latestPayroll     = null;
-        $proposedBase      = (float) ($contract->salary ?? $contract->base_salary ?? 0);
-        $proposedAllowance = (float) ($contract->allowance ?? 0);
+        $contract->loadMissing('employee.department');
 
-        if ($contract->employee) {
-            $latestPayroll = $contract->employee->payrolls()
-                ->orderByDesc('year')->orderByDesc('month')->first();
-            if ($latestPayroll) {
-                $proposedBase      = (float) ($latestPayroll->base_salary ?: $proposedBase);
-                $proposedAllowance = (float) ($latestPayroll->allowance  ?: $proposedAllowance);
-            }
+        $newStart = $contract->end_date
+            ? $contract->end_date->copy()->addDay()->toDateString()
+            : now()->toDateString();
+
+        if ($contract->start_date && $contract->end_date) {
+            $span = (int) round($contract->start_date->copy()->startOfDay()->diffInDays($contract->end_date->copy()->startOfDay()));
+            $newEnd = Carbon::parse($newStart)->addDays(max($span, 1))->toDateString();
+        } else {
+            $newEnd = $contract->end_date ? Carbon::parse($newStart)->addYear()->toDateString() : null;
         }
 
-        // Ngày bắt đầu mới = ngày kết thúc HĐ cũ + 1 (hoặc hôm nay)
-        $newStart = $contract->end_date
-            ? $contract->end_date->addDay()->toDateString()
-            : now()->toDateString();
-        $newEnd = Carbon::parse($newStart)->addYear()->toDateString();
-
-        return view('contracts.form', [
-            'contract' => new Contract([
-                'parent_contract_id'                  => $contract->id,
-                'employee_id'                         => $contract->employee_id,
-                'contract_code'                       => $this->generateContractCode(),
-                'status'                              => 'waiting_employee',
-                'contract_status'                     => 'waiting_employee',
-                'base_salary'                         => $proposedBase,
-                'allowance'                           => $proposedAllowance,
-                'bonus'                               => $contract->bonus ?? 0,
-                'contract_type'                       => $contract->contract_type,
-                'start_date'                          => $newStart,
-                'end_date'                            => $newEnd,
-                'notes'                               => $contract->notes,
-                'workplace'                           => $contract->workplace,
-                'working_schedule'                    => $contract->working_schedule,
-                'payment_method'                      => $contract->payment_method,
-                'allowed_unpaid_leave_days_per_month' => $contract->allowed_unpaid_leave_days_per_month ?? 1,
-                'allowed_makeup_attendance_per_month' => $contract->allowed_makeup_attendance_per_month ?? 3,
-                'allowed_maternity_leave_days'        => $contract->allowed_maternity_leave_days ?? 180,
-            ]),
-            'employees'     => Employee::orderBy('name')->get(),
-            'signers'       => User::where('is_director', true)->orWhere('is_hr', true)->orderBy('name')->get(),
-            'positions'     => Position::orderBy('name')->get(),
-            'isEdit'        => false,
-            'renewingFrom'  => $contract,
-            'latestPayroll' => $latestPayroll,
+        return view('contracts.renew', [
+            'parent' => $contract,
+            'newStart' => old('start_date', $newStart),
+            'newEnd' => old('end_date', $newEnd),
         ]);
     }
 
-    public function storeRenewalContract(ContractFormRequest $request, Contract $contract, ContractService $contractService): RedirectResponse
+    public function storeRenewalContract(StoreContractRenewalRequest $request, Contract $contract, ContractService $contractService): RedirectResponse
     {
         if (! $this->canManageContracts()) {
             abort(403);
         }
 
-        $data = $this->prepareContractData($request, null);
-
-        // Gán parent_contract_id từ route nếu form không gửi lên
-        if (empty($data['parent_contract_id'])) {
-            $data['parent_contract_id'] = $contract->id;
+        try {
+            $renewed = $contractService->renewContract($request->user(), $contract, $request->validated());
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', $e->getMessage());
         }
 
-        $renewed = $contractService->renewContract(Auth::user(), $contract, $data);
-
         $successMsg = sprintf(
-            'Gia hạn hợp đồng thành công. Mã HĐ mới: %s (lương CB: %s₫).',
-            $renewed->contract_code,
-            number_format($renewed->base_salary, 0, ',', '.')
+            'Đã tạo hợp đồng gia hạn %s. Nội dung giữ nguyên hợp đồng cũ, chỉ đổi thời hạn. Nhân viên và Giám đốc ký để hợp đồng có hiệu lực.',
+            $renewed->contract_code
         );
 
         if ($request->ajax() || $request->wantsJson() || $request->expectsJson()) {
             return response()->json([
-                'success'  => true,
-                'message'  => $successMsg,
+                'success' => true,
+                'message' => $successMsg,
                 'redirect' => route('contracts.show', $renewed),
             ]);
         }
 
         return redirect()->route('contracts.show', $renewed)->with('success', $successMsg);
+    }
+
+    public function handleContractExpiry(Request $request, Contract $contract, ContractExpiryAlertService $alerts): RedirectResponse
+    {
+        if (! $this->canManageContracts()) {
+            abort(403);
+        }
+
+        $data = $request->validate([
+            'decision' => ['required', 'in:renew,not_renew,wait'],
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        if ($data['decision'] !== ContractExpiryAction::WAIT && blank($data['reason'] ?? null)) {
+            return back()->withInput()->with('error', 'Vui lòng nhập lý do khi chọn gia hạn hoặc không gia hạn.');
+        }
+
+        try {
+            $alerts->recordDecision(Auth::user(), $contract, $data['decision'], $data['reason'] ?? null);
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        }
+
+        if ($data['decision'] === ContractExpiryAction::RENEW) {
+            return redirect()
+                ->route('contracts.renew', $contract)
+                ->with('success', 'Đã ghi nhận đề xuất gia hạn. Chọn thời hạn mới — nội dung hợp đồng được giữ nguyên.');
+        }
+
+        if ($data['decision'] === ContractExpiryAction::NOT_RENEW && $contract->employee) {
+            return redirect()
+                ->route('deletion_requests.create_employee', $contract->employee)
+                ->with('success', 'Đã ghi nhận không gia hạn. Tiếp tục quy trình nghỉ việc / xóa hồ sơ nhân viên.');
+        }
+
+        return redirect()
+            ->route('contracts.show', $contract)
+            ->with('success', 'Đã lưu trạng thái chờ quyết định. Hợp đồng vẫn cần được xử lý trước ngày hết hạn.');
     }
 
     public function signContract(Contract $contract, Request $request, ContractService $contractService): RedirectResponse
@@ -1964,7 +2276,7 @@ class SmartHrController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Ký hợp đồng thành công.');
+        return back()->with('success', 'Giám đốc đã ký phía doanh nghiệp. Hợp đồng chưa có hiệu lực — đang chờ nhân viên ký.');
     }
 
     /** Đồng bộ lương hợp đồng theo bảng lương mới nhất */
@@ -2139,7 +2451,7 @@ class SmartHrController extends Controller
             'position' => ['nullable', 'string', 'max:255'],
             'position_id' => ['nullable', 'exists:positions,id'],
             'department_id' => ['required', 'exists:departments,id'],
-            'status' => ['required', 'in:active,inactive'],
+            'status' => ['required', 'in:active,inactive,on_leave'],
             'gender' => ['nullable', 'in:male,female,other'],
             'dob' => ['nullable', 'date'],
             'cccd' => ['nullable', 'string', 'max:20'],
@@ -2225,6 +2537,23 @@ class SmartHrController extends Controller
         return $query->exists();
     }
 
+    private function resolveEmployeeToLink(Request $request): ?Employee
+    {
+        if ($request->filled('employee_id')) {
+            $employee = Employee::query()->whereNull('user_id')->find($request->integer('employee_id'));
+            if ($employee) {
+                return $employee;
+            }
+        }
+
+        $email = trim((string) $request->input('email'));
+        if ($email === '') {
+            return null;
+        }
+
+        return Employee::query()->where('email', $email)->whereNull('user_id')->first();
+    }
+
     private function roleFlags(string $role): array
     {
         return [
@@ -2257,7 +2586,7 @@ class SmartHrController extends Controller
         }
 
         if ($user->is_director) {
-            return (bool) $contract->employee_signed_at && ! $contract->director_signed_at;
+            return $contract->isPendingDirectorEsign();
         }
 
         if ($employee && $contract->employee_id === $employee->id) {

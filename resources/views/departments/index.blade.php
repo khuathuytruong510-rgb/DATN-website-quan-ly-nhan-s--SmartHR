@@ -6,9 +6,14 @@
     <div class="page-head">
         <div>
             <h1>Phòng ban</h1>
-            <p class="muted">Quản lý danh sách phòng ban trong công ty.</p>
+            <p class="muted">Xóa phòng ban cần Giám đốc duyệt. Còn nhân viên thì phải chuyển sang phòng khác hoặc đề nghị xóa nhân viên trước.</p>
         </div>
-        <a class="btn primary" href="{{ route('departments.create') }}">Thêm phòng ban</a>
+        @if(auth()->user()?->canManageHr())
+        <div style="display:flex;gap:8px;">
+            <a class="btn" href="{{ route('transfers.create') }}">Điều chuyển NV</a>
+            <a class="btn primary" href="{{ route('departments.create') }}">Thêm phòng ban</a>
+        </div>
+        @endif
     </div>
 
     @if($departments->count())

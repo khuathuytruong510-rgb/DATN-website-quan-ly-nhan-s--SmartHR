@@ -8,6 +8,7 @@ use App\Models\Attendance;
 use App\Models\AttendanceAdjustmentRequest;
 use App\Models\Benefit;
 use App\Models\Contract;
+use App\Models\DeletionRequest;
 use App\Models\Employee;
 use App\Models\EmployeeEvaluation;
 use App\Models\LeaveRequest;
@@ -15,8 +16,12 @@ use App\Models\Notification;
 use App\Models\NotificationRead;
 use App\Models\Payroll;
 use App\Services\ContractService;
+use App\Services\DeletionRequestService;
+use App\Services\LeaveEligibilityService;
+use App\Services\LeaveRequestService;
 use App\Services\PayrollPaymentWorkflowService;
-use App\Traits\HasLeaveLimit;
+use App\Support\LeaveTypes;
+use App\Support\RequestApprover;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,8 +31,6 @@ use Illuminate\View\View;
 
 class EmployeeController extends Controller
 {
-    use HasLeaveLimit;
-
     public function dashboard()
     {
         $user = auth()->user();
@@ -73,11 +76,7 @@ class EmployeeController extends Controller
             ->first()
             ?? Contract::where('employee_id', $employee->id)->latest()->first();
 
-        $leaveLimit = $this->checkLeaveLimit(
-            $employee->id,
-            now()->startOfMonth()->toDateString(),
-            now()->endOfMonth()->toDateString()
-        );
+        $leaveLimit = app(LeaveEligibilityService::class)->quotaSummary($employee);
 
         $unreadNotifications = $this->employeeNotificationsQuery($user, $employee)
             ->whereDoesntHave('reads', fn ($q) => $q->where('user_id', $user->id))
@@ -104,7 +103,10 @@ class EmployeeController extends Controller
     public function attendanceIndex(Request $request)
     {
         $user = auth()->user();
-        $employee = Employee::where('email', $user->email)->firstOrFail();
+        $employee = $user?->linkedEmployee();
+        if (! $employee) {
+            return redirect()->route('me.unlinked');
+        }
 
         if ($request->expectsJson()) {
             $attendances = Attendance::where('employee_id', $employee->id)->latest()->get();
@@ -118,6 +120,8 @@ class EmployeeController extends Controller
 
         return view('employee.attendance.index', [
             'attendances' => $attendances,
+            'employee' => $employee,
+            'approverLabel' => RequestApprover::queueLabel($employee),
         ]);
     }
 
@@ -164,7 +168,9 @@ class EmployeeController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Bạn đã ký hợp đồng. Đang chờ Giám đốc ký để hợp đồng có hiệu lực.');
+        return back()->with('success', $contract->fresh()->isFullySigned()
+            ? 'Bạn đã ký hợp đồng. Hệ thống đã ghi nhận đủ chữ ký hai bên và khóa tài liệu.'
+            : 'Bạn đã ký hợp đồng phía người lao động (mô phỏng).');
     }
 
     public function payrolls()
@@ -272,45 +278,58 @@ class EmployeeController extends Controller
     public function schedule()
     {
         $user = auth()->user();
-        $employee = Employee::where('email', $user->email)->firstOrFail();
+        $employee = Employee::where('email', $user->email)->with('department')->firstOrFail();
 
         return view('employee.schedule.index', ['employee' => $employee]);
     }
 
     public function leaveIndex()
     {
-        $user = auth()->user();
-        $employee = Employee::where('email', $user->email)->firstOrFail();
+        $employee = auth()->user()?->linkedEmployee();
+        if (! $employee) {
+            return redirect()->route('me.unlinked');
+        }
 
         $leaves = $employee->leaveRequests()->with('approver')->latest()->get();
 
-        $limitCheck = $this->checkLeaveLimit(
-            $employee->id,
-            now()->startOfMonth()->toDateString(),
-            now()->endOfMonth()->toDateString()
-        );
-
         return view('employee.leave.index', [
+            'employee' => $employee,
             'leaves' => $leaves,
-            'leaveLimit' => $limitCheck,
+            'leaveLimit' => app(LeaveEligibilityService::class)->quotaSummary($employee),
         ]);
     }
 
     public function leaveCreate()
     {
-        return view('employee.leave.form');
+        $employee = auth()->user()?->linkedEmployee();
+        if (! $employee) {
+            return redirect()->route('me.unlinked');
+        }
+
+        $eligibility = app(LeaveEligibilityService::class);
+
+        return view('employee.leave.form', [
+            'employee' => $employee,
+            'contract' => $eligibility->activeContract($employee),
+            'leaveLimit' => $eligibility->quotaSummary($employee),
+            'leaveTypes' => LeaveTypes::available($employee),
+            'defaultType' => LeaveTypes::default($employee),
+        ]);
     }
 
     public function leaveStore(Request $request)
     {
         $user = auth()->user();
-        $employee = Employee::where('email', $user->email)->firstOrFail();
+        $employee = $user?->linkedEmployee();
+        if (! $employee) {
+            return redirect()->route('me.unlinked');
+        }
 
         $data = $request->validate([
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'half_day' => ['nullable', 'boolean'],
-            'type' => ['required', 'in:annual,sick,personal,unpaid'],
+            'type' => ['required', LeaveTypes::validationRule($employee)],
             'reason' => ['nullable', 'string'],
             'is_urgent' => ['nullable', 'boolean'],
             'urgent_reason' => ['required_if:is_urgent,1', 'nullable', 'string', 'max:500'],
@@ -319,58 +338,13 @@ class EmployeeController extends Controller
         $data['is_urgent'] = $request->boolean('is_urgent');
         $data['half_day'] = $request->boolean('half_day');
 
-        $limitCheck = $this->checkLeaveLimit(
-            $employee->id,
-            $data['start_date'],
-            $data['end_date'],
-            $data['half_day']
-        );
-
-        if ($limitCheck['exceeded'] && empty($data['is_urgent'])) {
-            $msg = "Bạn đã sử dụng {$limitCheck['used_days']}/{$limitCheck['max_days']} ngày nghỉ phép trong tháng này. ";
-            if ($limitCheck['requests_exceeded']) {
-                $msg .= "Bạn đã hết {$limitCheck['max_requests']} lượt xin nghỉ trong tháng. ";
-            }
-            $msg .= "Vui lòng liên hệ bộ phận hỗ trợ nếu cần nghỉ thêm với lý do thuyết phục.";
-            return back()->withInput()->with('error', $msg);
-        }
-
         try {
-            app(\App\Services\PayrollPeriodLockService::class)->assertWritableRange(
-                $data['start_date'],
-                $data['end_date'],
-                'đơn nghỉ phép'
-            );
+            app(LeaveRequestService::class)->submit($employee, $user, $data);
         } catch (\Throwable $e) {
             return back()->withInput()->with('error', $e->getMessage());
         }
 
-        DB::transaction(function () use ($user, $employee, $data) {
-            LeaveRequest::create([
-                'employee_id' => $employee->id,
-                'start_date' => $data['start_date'],
-                'end_date' => $data['end_date'],
-                'half_day' => $data['half_day'],
-                'type' => $data['type'],
-                'reason' => $data['reason'] ?? null,
-                'is_urgent' => $data['is_urgent'],
-                'urgent_reason' => $data['urgent_reason'] ?? null,
-                'days' => $this->calculateLeaveDays($data['start_date'], $data['end_date'], $data['half_day']),
-                'status' => 'pending',
-                'approved_by' => null,
-                'approved_at' => null,
-                'cancelled_by' => null,
-                'cancelled_at' => null,
-            ]);
-
-            ActivityLog::create([
-                'user_id' => $user->id,
-                'action' => 'leave_submitted',
-                'meta' => sprintf('%s → %s', $data['start_date'], $data['end_date']),
-            ]);
-        });
-
-        return redirect()->route('me.leave_requests')->with('success', 'Đã tạo đơn nghỉ phép.');
+        return redirect()->route('me.leave_requests')->with('success', RequestApprover::submittedMessage($employee));
     }
 
     public function cancelLeave(LeaveRequest $leaveRequest): RedirectResponse
@@ -411,6 +385,7 @@ class EmployeeController extends Controller
                         'cancelled_at' => now(),
                         'cancel_reason' => $data['cancel_reason'],
                     ]);
+                    app(LeaveRequestService::class)->revertApprovedAttendance($leave);
                 } else {
                     throw new \RuntimeException('Chỉ hủy được đơn đang chờ duyệt, hoặc đơn đã duyệt trước ngày nghỉ.');
                 }
@@ -550,6 +525,33 @@ class EmployeeController extends Controller
         return back()->with('success', 'Đã đánh dấu đã đọc.');
     }
 
+    public function submitTransferFeedback(Request $request, DeletionRequest $deletionRequest): RedirectResponse
+    {
+        $employee = auth()->user()?->linkedEmployee();
+        if (! $employee) {
+            abort(403);
+        }
+
+        $data = $request->validate([
+            'agree' => ['required', 'in:1,0'],
+            'message' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            app(DeletionRequestService::class)->submitTransferFeedback(
+                $deletionRequest,
+                $employee,
+                $request->user(),
+                $data['agree'] === '1',
+                $data['message'] ?? ''
+            );
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Đã gửi phản hồi đến bộ phận Nhân sự.');
+    }
+
     public function requestAttendanceAdjustment(Request $request, Attendance $attendance): RedirectResponse
     {
         $employee = auth()->user()?->linkedEmployee();
@@ -606,26 +608,26 @@ class EmployeeController extends Controller
                     'meta' => optional($locked->date)->format('d/m/Y'),
                 ]);
 
-                Notification::create([
-                    'sender_id' => auth()->id(),
-                    'target' => 'hr',
-                    'title' => 'Yêu cầu điều chỉnh chấm công',
-                    'message' => sprintf(
+                RequestApprover::notifyQueue(
+                    $employee,
+                    auth()->user(),
+                    'Yêu cầu điều chỉnh chấm công',
+                    sprintf(
                         '%s đề nghị điều chỉnh chấm công ngày %s: %s',
                         $employee->name,
                         optional($locked->date)->format('d/m/Y'),
                         $data['reason']
                     ),
-                    'data' => ['attendance_id' => $locked->id, 'type' => 'attendance_adjustment'],
-                ]);
+                    ['attendance_id' => $locked->id, 'type' => 'attendance_adjustment']
+                );
             });
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         } catch (QueryException) {
-            return back()->with('error', 'Đã có yêu cầu điều chỉnh đang chờ HR xử lý cho ngày này.');
+            return back()->with('error', 'Đã có yêu cầu điều chỉnh đang chờ '.RequestApprover::queueLabel($employee).' xử lý cho ngày này.');
         }
 
-        return back()->with('success', 'Đã gửi yêu cầu điều chỉnh chấm công. HR sẽ xử lý, bạn không tự sửa giờ.');
+        return back()->with('success', 'Đã gửi yêu cầu điều chỉnh chấm công. '.RequestApprover::queueLabel($employee).' sẽ xử lý, bạn không tự sửa giờ.');
     }
 
     protected function employeeNotificationsQuery($user, ?Employee $employee)

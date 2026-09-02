@@ -14,7 +14,7 @@
         <p class="muted">Cập nhật mật khẩu tài khoản</p>
     </div>
     <div class="actions">
-        <a class="btn" href="{{ route('accountant.profile') }}">Quay lại</a>
+        <a class="btn" href="{{ route('accountant.dashboard') }}">Quay lại</a>
     </div>
 </div>
 

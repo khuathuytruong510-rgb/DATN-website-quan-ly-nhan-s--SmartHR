@@ -252,16 +252,14 @@
         </div>
         <div class="field">
             <label>Nội dung điều khoản</label>
+            <p class="muted" style="margin:0 0 8px;">Điều khoản lấy sẵn theo loại hợp đồng (mẫu hệ thống). Không nhập hoặc chỉnh sửa tại đây.</p>
             <div id="templateLoader" style="display:none;margin-bottom:8px;">
                 <span style="display:inline-block;width:14px;height:14px;border:2px solid #e2e8f0;border-top-color:#2563eb;border-radius:50%;animation:spin .6s linear infinite;margin-right:6px;vertical-align:middle;"></span>
                 <span class="muted">Đang tải mẫu điều khoản...</span>
             </div>
-            <textarea name="contract_content" id="contractContentField" rows="12"
-                style="font-family:inherit;line-height:1.7;"
-                data-original-content="{{ e(old('contract_content', $contract->contract_content ?? $contract->terms ?? '')) }}">{{ old('contract_content', $contract->contract_content ?? $contract->terms ?? '') }}</textarea>
-            <div id="contentModifiedHint" style="display:none;color:#dc2626;font-size:13px;margin-top:4px;">
-                ⚠️ Bạn đã chỉnh sửa nội dung điều khoản.
-            </div>
+            @php $officialTerms = old('contract_content', $contract->contract_content ?? $contract->terms ?? ''); @endphp
+            <pre id="contractContentPreview" style="white-space:pre-wrap;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:14px 16px;max-height:420px;overflow:auto;font-family:inherit;line-height:1.7;margin:0;">{{ $officialTerms !== '' ? $officialTerms : 'Chọn loại hợp đồng để hiển thị điều khoản mẫu.' }}</pre>
+            <input type="hidden" name="contract_content" id="contractContentField" value="{{ $officialTerms }}">
         </div>
     </div>
 
@@ -405,12 +403,12 @@
     const contractTypeSelect  = $('contractTypeSelect');
     const contractTitleInput  = $('contractTitleInput');
     const contractContentField= $('contractContentField');
+    const contractContentPreview = $('contractContentPreview');
     const templateLoader      = $('templateLoader');
     const templateAlert       = $('templateAlert');
     const templateAlertText   = $('templateAlertText');
     const salaryAlert         = $('salaryAlert');
     const salaryAlertText     = $('salaryAlertText');
-    const contentModifiedHint = $('contentModifiedHint');
     const noEndDate           = $('noEndDate');
     const endDateInput        = $('endDateInput');
     const exportBtn           = $('exportContractButton');
@@ -420,9 +418,15 @@
     const typeTitles  = {internship:'Hợp đồng thực tập',probation:'Hợp đồng thử việc',fixed_term:'Hợp đồng LĐ xác định thời hạn',indefinite:'Hợp đồng LĐ không xác định thời hạn',official:'Hợp đồng LĐ chính thức',seasonal:'Hợp đồng thời vụ'};
     const statusMap   = s => ({'waiting_employee_signature':['warning','Chờ NV ký'],'waiting_director_signature':['warning','Chờ GĐ ký'],'active':['success','Có hiệu lực'],'expiring':['info','Sắp hết hạn'],'expired':['danger','Hết hạn'],'cancelled':['secondary','Đã hủy']}[s]||['secondary','Chờ xử lý']);
 
-    let userModified = false;
-    let autoFilledContent = contractContentField?.dataset.originalContent || '';
     let previousContractType = contractTypeSelect?.value || '';
+
+    function setOfficialTerms(content) {
+        const text = (content || '').trim();
+        if (contractContentField) contractContentField.value = text;
+        if (contractContentPreview) {
+            contractContentPreview.textContent = text || 'Chưa có mẫu điều khoản cho loại hợp đồng này.';
+        }
+    }
 
     // Payroll data injected from PHP (for renew page)
     const payrollBase      = {{ isset($latestPayroll) && $latestPayroll ? (float)($latestPayroll->base_salary ?? 0) : 'null' }};
@@ -560,11 +564,6 @@
         populateTemplateContent(ct);
     });
 
-    contractContentField?.addEventListener('input', () => {
-        userModified = true;
-        if (contentModifiedHint) contentModifiedHint.style.display = 'block';
-    });
-
     // Export
     exportBtn?.addEventListener('click', () => {
         const content = contractContentField?.value.trim();
@@ -602,7 +601,9 @@
     updateTotals();
     if (contractTypeSelect?.value) {
         if (qiContractType) qiContractType.textContent = typeLabels[contractTypeSelect.value] || contractTypeSelect.value.replace(/_/g,' ');
-        autoFilledContent = contractContentField?.dataset.originalContent || '';
+        if (!(contractContentField?.value || '').trim()) {
+            populateTemplateContent(contractTypeSelect.value);
+        }
     }
     if (statusSelect) updateStatusBadge(statusSelect.value || '{{ $contract->status ?? "" }}');
 })();

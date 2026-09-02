@@ -18,17 +18,18 @@
     $contractTone = 'muted';
     if ($currentContract) {
         $contractLabel = match ($currentContract->status) {
-            'waiting_employee_signature', 'waiting_employee' => 'Chờ bạn ký',
-            'waiting_director_signature', 'waiting_director' => 'Bạn đã ký — chờ Giám đốc',
+            'draft', 'pending_signature', 'waiting_director_signature', 'waiting_director' => 'Chờ Giám đốc ký',
+            'director_signed', 'waiting_employee_signature', 'waiting_employee' => 'Chờ bạn ký',
+            'signed' => 'Đã ký — chờ hiệu lực',
             'active' => 'Có hiệu lực',
             'expired' => 'Hết hạn',
             'cancelled' => 'Đã hủy',
-            default => (string) $currentContract->status,
+            default => $currentContract->statusLabel(),
         };
         $contractTone = match ($currentContract->status) {
-            'waiting_employee_signature', 'waiting_employee' => 'warn',
-            'waiting_director_signature', 'waiting_director' => 'info',
-            'active' => 'ok',
+            'director_signed', 'waiting_employee_signature', 'waiting_employee' => 'warn',
+            'draft', 'pending_signature', 'waiting_director_signature', 'waiting_director' => 'info',
+            'signed', 'active' => 'ok',
             'expired', 'cancelled' => 'warn',
             default => 'muted',
         };
@@ -79,7 +80,7 @@
                 <span class="emp-kpi-ico ico-violet"><i class="bi bi-calendar-check"></i></span>
             </div>
             <div class="emp-kpi-value">{{ $leaveLimit['remaining_days'] ?? 0 }} ngày</div>
-            <p class="emp-kpi-sub">Đã dùng {{ $usedDays }}/{{ $maxDays }} ngày trong tháng</p>
+            <p class="emp-kpi-sub">Đã dùng {{ $usedDays }}/{{ $maxDays }} ngày phép năm</p>
             <div class="emp-progress" aria-hidden="true"><span style="width: {{ $leavePct }}%"></span></div>
         </article>
 

@@ -10,20 +10,22 @@
     <div class="page-head">
         <div>
             <h1>Đơn nghỉ phép của tôi</h1>
-            <p class="muted">Tạo đơn và theo dõi trạng thái. HR duyệt/từ chối; đơn đã duyệt được dùng khi kế toán tính lương.</p>
+            <p class="muted">Tạo đơn và theo dõi trạng thái. {{ \App\Support\RequestApprover::queueLabel($employee) }} duyệt/từ chối; đơn đã duyệt được dùng khi kế toán tính lương.</p>
         </div>
         <a class="btn primary" href="{{ route('me.leave_requests.create') }}">Tạo đơn mới</a>
     </div>
 
     @if(isset($leaveLimit))
         <div class="alert" style="margin-bottom: 1rem; padding: 0.75rem 1rem; border-radius: 4px; {{ $leaveLimit['remaining_days'] > 0 ? 'background: #e8f5e9; border-left: 4px solid #4CAF50;' : 'background: #ffebee; border-left: 4px solid #f44336;' }}">
-            <strong>Quy định nghỉ phép tháng này:</strong>
-            Đã sử dụng <strong>{{ $leaveLimit['used_days'] }}/{{ $leaveLimit['max_days'] }}</strong> ngày
-            (<strong>{{ $leaveLimit['used_requests'] }}/{{ $leaveLimit['max_requests'] }}</strong> lượt).
-            @if($leaveLimit['remaining_days'] > 0)
-                Còn lại <strong>{{ $leaveLimit['remaining_days'] }}</strong> ngày phép.
-            @else
-                <span style="color: #d32f2f;">Bạn đã hết ngày phép trong tháng. Nếu cần nghỉ thêm, vui lòng chọn mục "Khẩn cấp" và cung cấp lý do thuyết phục.</span>
+            <strong>Hạn mức theo hợp đồng:</strong>
+            Phép năm <strong>{{ $leaveLimit['annual_used'] ?? $leaveLimit['used_days'] }}/{{ $leaveLimit['annual_max'] ?? $leaveLimit['max_days'] }}</strong> ngày
+            (còn {{ $leaveLimit['annual_remaining'] ?? $leaveLimit['remaining_days'] }}).
+            Không lương/việc riêng: {{ $leaveLimit['unpaid_used'] ?? 0 }}/{{ $leaveLimit['unpaid_max'] ?? 1 }} ngày tháng này.
+            @if(isset($employee) && $employee->isFemale())
+                Thai sản: {{ $leaveLimit['maternity_used'] ?? 0 }}/{{ $leaveLimit['maternity_max'] ?? 180 }} ngày.
+            @endif
+            @if(($leaveLimit['remaining_days'] ?? 0) <= 0)
+                <span style="color: #d32f2f;">Đã hết phép năm. Chọn loại nghỉ khác nếu hợp đồng còn hạn mức.</span>
             @endif
         </div>
     @endif
@@ -60,7 +62,7 @@
                                 {{ $leave->days }}
                             @endif
                         </td>
-                        <td>{{ match($leave->type) { 'annual' => 'Nghỉ hàng năm', 'sick' => 'Nghỉ ốm', 'personal' => 'Việc riêng', 'unpaid' => 'Không lương', default => $leave->type } }}</td>
+                        <td>{{ $leave->type_label }}</td>
                         <td>{{ $leave->reason ?? '-' }}@if($leave->is_urgent) <span style="color:#d32f2f;">(Khẩn cấp)</span>@endif</td>
                         <td>
                             <span class="badge {{ $leave->status }}">

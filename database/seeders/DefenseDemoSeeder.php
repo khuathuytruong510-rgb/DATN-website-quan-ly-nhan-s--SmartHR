@@ -13,6 +13,7 @@ use App\Models\Payroll;
 use App\Models\PayrollPeriodLock;
 use App\Models\User;
 use App\Services\PayrollPaymentWorkflowService as W;
+use Carbon\Carbon;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -56,7 +57,19 @@ class DefenseDemoSeeder extends Seeder
         $gd = $this->user('giamdoc@smarthr.com', 'Phạm Thị Dung', ['is_director' => true]);
         $nv = $this->user('nv@smarthr.com', 'Nguyễn Văn Nam', []);
 
+        $this->employee($hr, $hcns, 'HCNS-HR-01', 'Trưởng phòng nhân sự', [
+            'gender' => 'female',
+            'leave_balance' => 12,
+        ]);
+        $this->employee($kt, $kttc, 'KTTC-KT-01', 'Trưởng phòng Kế toán', [
+            'gender' => 'female',
+            'leave_balance' => 12,
+            'bank_name' => 'Vietcombank',
+            'account_number' => '555566667777',
+            'account_holder' => 'LE THI MAI',
+        ]);
         $this->employee($gd, $bgd, 'BGD0001', 'Giám đốc', []);
+        app(\App\Services\DirectorSuccessionService::class)->ensureOpenTenureFor($gd->fresh('employee'));
         $nam = $this->employee($nv, $cntt, 'CNTT-DEMO-01', 'Lập trình viên', [
             'bank_name' => 'MB Bank',
             'account_number' => '111122223333',
@@ -91,12 +104,18 @@ class DefenseDemoSeeder extends Seeder
 
         $this->contractWaitingEmployee($nam, $hr);
         $this->contractWaitingDirector($hoa, $hr);
+        $nva = $this->user('nva@smarthr.com', 'Nguyễn Văn A', []);
+        $employeeA = $this->employee($nva, $cntt, 'CNTT-DEMO-A', 'Nhân viên', [
+            'start_date' => '2025-10-01',
+        ]);
+        $this->contractExpiringSoon($employeeA, $hr, $gd);
 
         $this->command?->info('Defense demo ready. Password for all demo accounts: '.self::PASSWORD);
         $this->command?->info('HR  hr@smarthr.com');
         $this->command?->info('KT  accountant@smarthr.com');
         $this->command?->info('GĐ  giamdoc@smarthr.com');
         $this->command?->info('NV  nv@smarthr.com');
+        $this->command?->info('NVA nva@smarthr.com  (HĐ hết hạn 30/09/2026 — demo cảnh báo)');
     }
 
     private function user(string $email, string $name, array $roles): User
@@ -342,6 +361,30 @@ class DefenseDemoSeeder extends Seeder
                 'employee_signed_at' => now()->subDays(3),
                 'director_signed_at' => null,
                 'notes' => 'Demo: GĐ ký phía công ty sau khi NV đã ký.',
+            ]
+        );
+    }
+
+    private function contractExpiringSoon(Employee $employee, User $hr, User $gd): void
+    {
+        $signed = Carbon::parse('2025-10-01')->setTime(9, 0);
+
+        Contract::updateOrCreate(
+            ['employee_id' => $employee->id, 'contract_code' => 'HD-DEMO-HH-2026'],
+            [
+                'title' => 'Hợp đồng lao động xác định thời hạn',
+                'contract_type' => 'fixed_term',
+                'start_date' => '2025-10-01',
+                'end_date' => '2026-09-30',
+                'salary' => 15000000,
+                'base_salary' => 15000000,
+                'allowance' => 1500000,
+                'status' => Contract::STATUS_ACTIVE,
+                'created_by' => $hr->id,
+                'signer_id' => $gd->id,
+                'employee_signed_at' => $signed,
+                'director_signed_at' => $signed->copy()->addHours(2),
+                'notes' => 'Demo bảo vệ: còn ~28 ngày (tính tại 02/09/2026). HR nhận cảnh báo 30 ngày, bấm Xử lý — hệ thống không tự tạo HĐ mới.',
             ]
         );
     }

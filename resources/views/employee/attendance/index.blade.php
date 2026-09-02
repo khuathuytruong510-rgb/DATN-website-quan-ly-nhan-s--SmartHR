@@ -8,15 +8,15 @@
 @endsection
 
 @section('content')
-<div class="container mx-auto px-4 py-8">
-    <div class="max-w-4xl mx-auto">
-        <!-- CSRF Token Meta -->
-        <meta name="csrf-token" content="{{ csrf_token() }}">
-        
-        <!-- Header -->
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
+
+@php $approverLabel = $approverLabel ?? \App\Support\RequestApprover::queueLabel($employee ?? auth()->user()?->linkedEmployee()); @endphp
+<div id="employee-attendance" class="container mx-auto px-4 py-8" data-approver-label="{{ $approverLabel }}">
+    <div class="max-w-5xl mx-auto">
         <div class="mb-8">
-            <h1 class="text-3xl font-bold text-gray-800 mb-2">Chấm Công</h1>
-            <p class="text-gray-600">Hôm nay: <strong>{{ date('d/m/Y H:i:s') }}</strong></p>
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Chấm công khuôn mặt</h1>
+            <p class="text-gray-600">Hôm nay: <strong id="attendance-now">{{ date('d/m/Y H:i:s') }}</strong></p>
+            <p class="text-sm text-gray-500 mt-1">Đăng ký khuôn mặt một lần — {{ $approverLabel }} duyệt kèm ảnh xong bạn mới chấm công được. Khi chấm vào/ra phải trong phạm vi <strong>60m</strong> quanh văn phòng.</p>
             @if(session('success'))
                 <div class="mt-3 rounded-lg bg-green-50 text-green-800 px-4 py-2">{{ session('success') }}</div>
             @endif
@@ -25,174 +25,80 @@
             @endif
         </div>
 
-        <!-- Map Section -->
         <div class="bg-white rounded-lg shadow-md mb-6 overflow-hidden">
-            <div id="map" class="w-full h-96"></div>
+            <div id="map" style="width:100%;height:320px;"></div>
         </div>
 
-        <!-- Status & Information Cards -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <!-- Check-in Status -->
             <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="text-sm text-gray-600 mb-2">Chấm Công Vào</div>
+                <div class="text-sm text-gray-600 mb-2">Chấm công vào</div>
                 <div id="check-in-time" class="text-2xl font-bold text-gray-800">--:--:--</div>
                 <div id="check-in-status" class="text-sm text-gray-500 mt-2">Chưa chấm công</div>
             </div>
-
-            <!-- Current Location -->
             <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="text-sm text-gray-600 mb-2">Vị Trí Hiện Tại</div>
-                <div id="current-distance" class="text-2xl font-bold text-gray-800">--/100m</div>
-                <div id="current-location" class="text-sm text-gray-500 mt-2">Đang xác định...</div>
+                <div class="text-sm text-gray-600 mb-2">Khoảng cách văn phòng</div>
+                <div id="current-distance" class="text-2xl font-bold text-gray-800">--/60m</div>
+                <div id="current-location" class="text-sm text-gray-500 mt-2">Đang xác định GPS...</div>
             </div>
-
-            <!-- Check-out Status -->
             <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="text-sm text-gray-600 mb-2">Chấm Công Ra</div>
+                <div class="text-sm text-gray-600 mb-2">Chấm công ra</div>
                 <div id="check-out-time" class="text-2xl font-bold text-gray-800">--:--:--</div>
                 <div id="check-out-status" class="text-sm text-gray-500 mt-2">Chưa chấm công</div>
             </div>
         </div>
 
-        <!-- Check-in/Check-out Buttons -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- Check-in Section -->
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Chấm Công Vào</h3>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Ghi Chú (Tùy Chọn)</label>
-                        <textarea id="check-in-notes" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500" rows="3" placeholder="Nhập ghi chú nếu cần..."></textarea>
-                    </div>
-                    <button id="check-in-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200" onclick="handleCheckIn()">
-                        <span class="inline-block mr-2">📍</span> Chấm Công Vào
-                    </button>
-                    <div id="check-in-message" class="mt-3 text-sm"></div>
-                </div>
-
-                <!-- Check-out Section -->
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Chấm Công Ra</h3>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Ghi Chú (Tùy Chọn)</label>
-                        <textarea id="check-out-notes" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500" rows="3" placeholder="Nhập ghi chú nếu cần..."></textarea>
-                    </div>
-                    <button id="check-out-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed" onclick="handleCheckOut()" disabled>
-                        <span class="inline-block mr-2">📍</span> Chấm Công Ra
-                    </button>
-                    <div id="check-out-message" class="mt-3 text-sm"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Face Attendance Section -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-            <div class="flex flex-col gap-4">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h3 class="text-lg font-semibold text-gray-800 mb-2">📸 Chấm Công Bằng Khuôn Mặt</h3>
-                        <p class="text-sm text-gray-600">Sử dụng camera để xác thực khuôn mặt và chấm công.</p>
-                    </div>
-                    <span id="face-registration-status" class="text-sm font-semibold text-blue-600">Đang kiểm tra đăng ký...</span>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div>
-                        <button id="open-face-camera-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200" onclick="initializeFaceCamera()">
-                            📷 Mở Camera
-                        </button>
-                    </div>
-                    <div>
-                        <button id="capture-face-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed" onclick="captureFaceImage()" disabled>
-                            🖼️ Chụp Ảnh
-                        </button>
-                    </div>
-                    <div>
-                        <button id="register-face-btn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed" onclick="registerFace()" disabled>
-                            ✅ Đăng Ký Khuôn Mặt
-                        </button>
-                    </div>
-                    <div>
-                        <button id="face-attendance-btn" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed" onclick="submitFaceAttendance()" disabled>
-                            📸 Chấm Công Bằng Face
-                        </button>
-                    </div>
-                </div>
-
-                <div id="face-preview-panel" class="grid grid-cols-1 lg:grid-cols-2 gap-4 hidden">
-                    <div class="rounded-lg border border-gray-200 overflow-hidden">
-                        <div class="bg-gray-50 p-3 text-sm font-semibold text-gray-700">Camera Preview</div>
-                        <video id="face-video" class="w-full h-72 bg-black" autoplay muted playsinline></video>
-                    </div>
-                    <div class="rounded-lg border border-gray-200 overflow-hidden">
-                        <div class="bg-gray-50 p-3 text-sm font-semibold text-gray-700">Ảnh Chụp</div>
-                        <div class="flex items-center justify-center p-4">
-                            <img id="face-preview" class="max-h-72 rounded-md" src="" alt="Ảnh khuôn mặt" />
-                        </div>
-                    </div>
-                </div>
-
-                <div id="face-status-message" class="text-sm text-gray-700"></div>
-                <canvas id="face-canvas" class="hidden"></canvas>
-            </div>
-        </div>
-
-        <!-- Distance Alert -->
         <div id="distance-alert" class="mb-6 hidden">
             <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
-                <div class="flex">
-                    <div class="flex-shrink-0">
-                        <span class="text-2xl">⚠️</span>
-                    </div>
-                    <div class="ml-3">
-                        <p class="text-sm text-yellow-700">
-                            <strong>Thông báo:</strong> <span id="distance-alert-message">Bạn đang cách văn phòng quá xa</span>
-                        </p>
-                    </div>
+                <p class="text-sm text-yellow-800" id="distance-alert-message">Bạn đang ngoài phạm vi 60m.</p>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-800">Xác thực khuôn mặt</h2>
+                    <p class="text-sm text-gray-600 mt-1">Nhìn thẳng camera, đủ sáng, chỉ một người trong khung hình. Ảnh sẽ gửi {{ $approverLabel }} duyệt trước khi dùng để chấm công.</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <img id="registered-face" class="w-14 h-14 rounded-full object-cover border hidden" alt="Khuôn mặt đã đăng ký">
+                    <span id="face-registration-status" class="text-sm font-semibold text-blue-600">Đang kiểm tra đăng ký...</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                <div class="rounded-lg border border-gray-200 overflow-hidden bg-black relative">
+                    <video id="face-video" class="w-full h-72 object-cover" autoplay muted playsinline></video>
+                    <canvas id="face-overlay" class="absolute inset-0 w-full h-72"></canvas>
+                    <div id="face-guide" class="absolute inset-x-0 bottom-0 bg-black/50 text-white text-sm px-3 py-2">Đang mở camera...</div>
+                </div>
+                <div class="flex flex-col gap-3">
+                    <label class="block text-sm font-medium text-gray-700">Ghi chú (tùy chọn)</label>
+                    <textarea id="attendance-notes" class="w-full px-3 py-2 border border-gray-300 rounded-md" rows="3" placeholder="Ví dụ: Làm việc tại văn phòng"></textarea>
+                    <button id="retry-camera-btn" type="button" class="w-full bg-slate-700 hover:bg-slate-800 text-white font-semibold py-3 px-4 rounded-lg">
+                        Mở lại camera
+                    </button>
+                    <button id="register-face-btn" type="button" class="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg">
+                        Gửi khuôn mặt cho {{ $approverLabel }} duyệt
+                    </button>
+                    <button id="punch-face-btn" type="button" class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg">
+                        Chấm công
+                    </button>
+                    <div id="face-status-message" class="text-sm text-gray-700"></div>
                 </div>
             </div>
         </div>
 
-        <!-- Manual Location / Fallback Controls -->
-        <div id="location-fallback" class="mb-6 hidden">
-            <div class="bg-gray-50 border-l-4 border-gray-300 p-4 rounded">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <p class="text-sm text-gray-700">Không thể truy cập vị trí của bạn.</p>
-                        <p class="text-sm text-gray-600">Bạn có thể bật vị trí trong trình duyệt hoặc nhập tọa độ thủ công / chấm công không cần vị trí.</p>
-                    </div>
-                    <div class="flex gap-2">
-                        <button id="manual-loc-btn" class="btn" onclick="showManualLocationForm()">Nhập tọa độ</button>
-                        <button id="skip-loc-btn" class="btn" onclick="allowWithoutLocation()">Chấm công không cần vị trí</button>
-                    </div>
-                </div>
-            </div>
-
-            <div id="manual-loc-form" class="mt-3 hidden">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <input id="manual-lat" type="text" placeholder="Latitude" class="px-3 py-2 border rounded" />
-                    <input id="manual-lon" type="text" placeholder="Longitude" class="px-3 py-2 border rounded" />
-                    <div class="flex gap-2">
-                        <button class="btn primary" onclick="submitManualCheckIn()">Chấm Vào (Tọa độ)</button>
-                        <button class="btn" onclick="submitManualCheckOut()">Chấm Ra (Tọa độ)</button>
-                    </div>
-                </div>
-                <p class="text-xs text-gray-500 mt-2">Lưu ý: tọa độ sai có thể gây từ chối chấm công.</p>
-            </div>
-        </div>
-
-        <!-- Attendance History -->
         <div class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-xl font-bold text-gray-800 mb-4">Lịch Sử Chấm Công</h2>
-            <div id="attendance-history" class="overflow-x-auto">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Lịch sử chấm công</h2>
+            <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead class="bg-gray-100">
                         <tr>
                             <th class="px-4 py-2 text-left">Ngày</th>
-                            <th class="px-4 py-2 text-left">Chấm Vào</th>
-                            <th class="px-4 py-2 text-left">Chấm Ra</th>
-                            <th class="px-4 py-2 text-left">Trạng Thái</th>
-                            <th class="px-4 py-2 text-left">Vị Trí Vào</th>
+                            <th class="px-4 py-2 text-left">Chấm vào</th>
+                            <th class="px-4 py-2 text-left">Chấm ra</th>
+                            <th class="px-4 py-2 text-left">Trạng thái</th>
+                            <th class="px-4 py-2 text-left">Vị trí vào</th>
                             <th class="px-4 py-2 text-left"></th>
                         </tr>
                     </thead>
@@ -230,9 +136,9 @@
         </div>
     </form>
 </dialog>
+@endsection
 
-<!-- Leaflet Map Library (local copy) -->
-<link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
+@push('scripts')
 <script src="/vendor/leaflet/leaflet.js"></script>
 
 <script>

@@ -8,15 +8,39 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         :root {
-            --bg: #f4f7fb;
+            --bg: #f1f4f9;
             --sidebar: #0f172a;
-            --sidebar-soft: rgba(255,255,255,.12);
+            --sidebar-soft: rgba(255,255,255,.14);
             --panel: #fff;
-            --line: #e8eef7;
+            --line: #e2e8f0;
             --text: #0f172a;
             --muted: #64748b;
             --primary: #2563eb;
-            --danger: #dc2626;
+            --primary-hover: #1d4ed8;
+            --primary-soft: #eff6ff;
+            --accent: #4f46e5;
+            --danger: #b91c1c;
+            --danger-bg: #fef2f2;
+            --danger-line: #fecaca;
+            --warn: #9a3412;
+            --warn-bg: #fffbeb;
+            --warn-line: #fde68a;
+            --ok: #047857;
+            --ok-bg: #ecfdf5;
+            --ok-line: #a7f3d0;
+            --info: #1d4ed8;
+            --info-bg: #eff6ff;
+            --info-line: #bfdbfe;
+            --radius: 14px;
+            --radius-sm: 10px;
+            --shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 10px 28px rgba(15, 23, 42, .06);
+            --focus: 0 0 0 3px rgba(37, 99, 235, .18);
+            --space-1: 8px;
+            --space-2: 12px;
+            --space-3: 16px;
+            --space-4: 20px;
+            --space-5: 24px;
+            --space-6: 32px;
         }
         * { box-sizing: border-box; }
         body { margin: 0; font-family: "Segoe UI", Inter, system-ui, sans-serif; background: var(--bg); color: var(--text); }
@@ -30,33 +54,37 @@
         ::-webkit-scrollbar-thumb:hover { background: #8b97a8; background-clip: content-box; }
         ::-webkit-scrollbar-corner { background: transparent; }
         a { color: inherit; }
+        a:where(.content a, .card a):not(.btn):not(.emp-kpi):not(.emp-action):not(.emp-chip) {
+            color: var(--primary); font-weight: 650; text-decoration: none;
+        }
+        a:where(.content a, .card a):not(.btn):not(.emp-kpi):not(.emp-action):not(.emp-chip):hover { text-decoration: underline; }
         .auth-page {
-            min-height: 100vh; display: grid; place-items: center; padding: 24px;
+            min-height: 100vh; display: grid; place-items: center; padding: var(--space-5);
             background: linear-gradient(160deg, #0f172a 0%, #1e1b4b 48%, #312e81 100%);
         }
-        .auth-card { width: min(440px, 100%); background: var(--panel); border-radius: 20px; padding: 32px; box-shadow: 0 24px 60px rgba(15, 23, 42, .35); }
-        .auth-card h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: -.03em; }
+        .auth-card { width: min(440px, 100%); background: var(--panel); border-radius: 20px; padding: var(--space-6); box-shadow: 0 24px 60px rgba(15, 23, 42, .35); }
+        .auth-card h1 { margin: 0 0 8px; font-size: 26px; letter-spacing: -.03em; }
         .auth-brand { font-size: 22px; font-weight: 800; letter-spacing: -.03em; color: #312e81; margin: 0 0 4px; }
         .shell { height: 100vh; overflow: hidden; display: grid; grid-template-columns: 248px 1fr; background: var(--bg); }
         .sidebar {
             background: linear-gradient(180deg, #0f172a 0%, #1e1b4b 55%, #312e81 100%);
-            color: #e5e7eb; padding: 22px 16px 28px; max-height: 100vh; overflow-y: auto;
+            color: #e5e7eb; padding: 24px 16px 36px; height: 100%; max-height: 100%; overflow-y: auto;
         }
-        .brand { font-size: 26px; font-weight: 800; margin-bottom: 6px; letter-spacing: -.03em; }
+        .brand { font-size: 24px; font-weight: 800; margin: 0 0 8px; letter-spacing: -.03em; }
         .brand-subtitle {
-            display: inline-block; margin: 0 0 22px; padding: 4px 10px; border-radius: 999px;
+            display: inline-block; margin: 0 0 24px; padding: 5px 12px; border-radius: 999px;
             background: rgba(99,102,241,.22); color: #c7d2fe; font-size: 12px; font-weight: 700;
         }
-        .nav { display: grid; gap: 4px; }
+        .nav { display: grid; gap: 6px; padding-bottom: 12px; }
         .nav a, .nav-summary {
-            display: flex; align-items: center; gap: 10px; text-decoration: none;
-            padding: 10px 12px; border-radius: 10px; font-size: 14px; font-weight: 600; color: #cbd5e1;
+            display: flex; align-items: center; gap: 12px; text-decoration: none;
+            padding: 11px 14px; border-radius: 10px; font-size: 14px; font-weight: 600; color: #cbd5e1;
         }
         .nav a i, .nav-summary i { font-size: 16px; opacity: .9; width: 1.1em; text-align: center; }
         .nav-group { display: block; }
         .nav-group summary { list-style: none; cursor: pointer; margin: 0; }
         .nav-group summary::-webkit-details-marker { display:none; }
-        .nav-group a { display: flex; padding: 8px 12px; margin-left: 12px; border-radius: 10px; font-weight: 500; }
+        .nav-group a { display: flex; padding: 9px 12px; margin: 4px 0 0 12px; border-radius: 10px; font-weight: 500; }
         .nav-group[open] .nav-summary, .nav-summary.active,
         .nav a.active, .nav a:hover { background: var(--sidebar-soft); color: #fff; }
         .main { min-width: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
@@ -64,10 +92,11 @@
             flex: none; position: sticky; top: 0; z-index: 20;
             background: rgba(255,255,255,.92); backdrop-filter: blur(10px);
             border-bottom: 1px solid var(--line); padding: 14px 28px;
-            display: flex; justify-content: space-between; align-items: center; gap: 16px;
+            display: flex; justify-content: space-between; align-items: center; gap: var(--space-3);
             box-shadow: 0 1px 0 rgba(15,23,42,.06);
         }
-        .topbar-title { font-weight: 800; font-size: 16px; letter-spacing: -.02em; }
+        .topbar-title { font-weight: 800; font-size: 15px; letter-spacing: -.02em; }
+        .topbar .muted { margin-top: 4px; font-size: 13px; }
         .userbox { display: flex; align-items: center; gap: 12px; }
         .emp-avatar {
             width: 36px; height: 36px; border-radius: 999px; display: grid; place-items: center;
@@ -79,10 +108,34 @@
         .page-head h1 { font-size: 26px; letter-spacing: -.03em; }
         h1 { margin: 0 0 8px; font-size: 32px; }
         .muted { color: var(--muted); margin: 0; }
-        .grid { display: grid; gap: 20px; }
+        .grid {
+            display: grid; gap: var(--space-4);
+            grid-template-rows: none;
+            align-items: start;
+            --bs-rows: none;
+            --bs-columns: none;
+        }
         .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        .two-cols { grid-template-columns: 1fr 1fr; }
-        .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 24px; box-shadow: 0 8px 24px rgba(15, 23, 42, .04); }
+        .two-cols, .split-2 { grid-template-columns: 1fr 1fr; align-items: start; }
+        .split-2 { display: grid; gap: var(--space-4); grid-template-rows: none; }
+        .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 24px; box-shadow: var(--shadow); }
+        .card + .card { margin-top: 0; }
+        .filter-card { padding: 20px 24px; }
+        .filter-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px 18px;
+            align-items: end;
+        }
+        .filter-form .field-group, .field-group {
+            display: grid; gap: 8px; min-width: 0; margin: 0;
+        }
+        .filter-form .actions-row, .field-group.actions-row {
+            display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+            grid-column: 1 / -1;
+        }
+        .row { --bs-gutter-x: 1.25rem; --bs-gutter-y: 1.1rem; }
+        .row.g-3 { --bs-gutter-y: 1.15rem; }
         .contract-page { display: flex; flex-direction: column; gap: 14px; }
         .contract-page .page-head { margin-bottom: 16px; }
         .contract-page .card { padding: 16px 18px; box-shadow: 0 8px 24px rgba(15, 23, 42, .05); }
@@ -90,28 +143,125 @@
         .contract-page .card-body { padding: 0.75rem 0 0; }
         .contract-page .container-fluid { padding: 0; }
         .stat-value { font-size: 40px; font-weight: 800; margin: 18px 0 10px; }
-        .btn { display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 700; text-decoration: none; cursor: pointer; background: #f8fafc; color: var(--text); }
-        .btn.primary { background: var(--primary); color: #fff; }
-        .btn.danger { background: #fee2e2; color: var(--danger); }
-        .btn.link { background: transparent; color: var(--primary); padding-left: 0; }
-        .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-        table { width: 100%; border-collapse: collapse; }
-        .content > table { background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 24px rgba(15, 23, 42, .04); }
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            min-height: 40px; border: 1px solid #cbd5e1; border-radius: var(--radius-sm);
+            padding: 8px 16px; font-size: 14px; font-weight: 700; line-height: 1.2;
+            text-decoration: none; cursor: pointer; background: #fff; color: var(--text);
+            white-space: nowrap;
+            transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, color .15s ease;
+        }
+        .btn:hover { background: #f8fafc; border-color: #94a3b8; color: var(--text); text-decoration: none; }
+        .btn.primary, .btn.btn-primary {
+            background: var(--primary); color: #fff; border-color: transparent;
+            box-shadow: 0 1px 2px rgba(37, 99, 235, .22);
+        }
+        .btn.primary:hover, .btn.btn-primary:hover { background: var(--primary-hover); color: #fff; border-color: transparent; }
+        .btn.success, .btn.btn-success { background: var(--ok); color: #fff; border-color: transparent; }
+        .btn.success:hover, .btn.btn-success:hover { background: #065f46; color: #fff; }
+        .btn.danger, .btn.btn-danger { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-line); }
+        .btn.danger:hover, .btn.btn-danger:hover { background: #fecaca; color: #7f1d1d; }
+        .btn.warning { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-line); }
+        .btn.warning:hover { background: #fde68a; color: var(--warn); }
+        .btn.info { background: var(--info-bg); color: var(--info); border-color: var(--info-line); }
+        .btn.link { background: transparent; color: var(--primary); border-color: transparent; padding-left: 4px; padding-right: 4px; min-height: 0; }
+        .btn.link:hover { background: var(--primary-soft); text-decoration: none; }
+        .actions, .table-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .table-actions { gap: 8px; }
+        .table-actions .btn, .table-actions .btn-sm, td .actions .btn {
+            min-height: 34px; padding: 6px 12px; font-size: 13px;
+        }
+        .table-actions form, td .actions form { display: inline-flex; margin: 0; }
+        table { width: 100%; border-collapse: separate; border-spacing: 0; }
+        .content > table { background: #fff; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
         .card table { box-shadow: none; }
-        th, td { text-align: left; padding: 14px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-        th { color: var(--muted); font-size: 13px; text-transform: uppercase; background: #f8fafc; }
-        .field { display: grid; gap: 7px; margin-bottom: 16px; }
-        label { font-weight: 700; }
-        input, select, textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 11px 12px; font: inherit; background: #fff; }
-        textarea { min-height: 110px; resize: vertical; }
+        .card table:last-child tr:last-child td { border-bottom: 0; }
+        th, td { text-align: left; padding: 14px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+        th { color: var(--muted); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; background: #f8fafc; font-weight: 750; }
+        tbody tr:hover td { background: #f8fafc; }
+        td .actions { gap: 8px; }
+        .field { display: grid; gap: 8px; margin-bottom: 18px; align-content: start; align-items: stretch; }
+        .form-stack { display: grid; gap: 18px; align-items: start; }
+        .form-stack > .row,
+        .card > form > .row { --bs-gutter-x: 1.25rem; }
+        .form-stack .field { margin-bottom: 0; }
+        .form-stack .grid { gap: 16px; align-items: start; grid-template-rows: none; }
+        .form-hint { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+        .check-row, .remember-row {
+            display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px;
+        }
+        .check-row input, .remember-row input, input[type="checkbox"], input[type="radio"] {
+            width: auto; height: auto; min-height: 0; max-height: none; padding: 0;
+        }
+        label, .form-label { font-weight: 700; font-size: 13.5px; letter-spacing: -.01em; }
+        .form-label { display: block; margin-bottom: 8px; }
+        .alert { border-radius: 12px; padding: 14px 16px; margin-bottom: 0; background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok-line); }
+        .alert.error { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-line); }
+        .alert h3 { margin: 0 0 8px; font-size: 15px; }
+        .alert ul { margin: 0; padding-left: 1.15rem; }
+        .alert li + li { margin-top: 4px; }
+        .badge, .emp-badge {
+            display: inline-flex; align-items: center; justify-content: center;
+            border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 750;
+            line-height: 1.2; white-space: nowrap; max-width: 100%;
+            background: var(--info-bg); color: var(--info); border: 1px solid transparent;
+        }
+        .badge.ok, .badge.active, .badge.approved, .badge.success,
+        .badge.bg-success, .badge.bg-success-subtle, .emp-badge.ok {
+            background: var(--ok-bg); color: var(--ok); border-color: var(--ok-line);
+        }
+        .badge.pending, .badge.warn, .badge.waiting, .badge.bg-warning, .badge.bg-warning-subtle, .emp-badge.warn {
+            background: var(--warn-bg); color: var(--warn); border-color: var(--warn-line);
+        }
+        .badge.inactive, .badge.expired, .badge.rejected, .badge.danger, .badge.bg-danger, .badge.bg-danger-subtle {
+            background: var(--danger-bg); color: var(--danger); border-color: var(--danger-line);
+        }
+        .badge.info, .badge.processing, .badge.bg-info, .emp-badge.info {
+            background: var(--info-bg); color: var(--info); border-color: var(--info-line);
+        }
+        .badge.muted, .badge.director, .badge.bg-secondary, .badge.bg-secondary-subtle, .emp-badge.muted {
+            background: #f1f5f9; color: #334155; border-color: #e2e8f0;
+        }
+        .badge.director { background: #eef2ff; color: #3730a3; border-color: #c7d2fe; }
+        .empty { background: #f8fafc; padding: 20px 18px; border-radius: var(--radius-sm); color: var(--muted); border: 1px dashed #dbe3ee; }
+        .pagination { margin-top: 20px; }
+        .detail-value {
+            padding: 12px 14px; border-radius: var(--radius-sm);
+            background: #f8fafc; border: 1px solid var(--line); line-height: 1.5;
+        }
+        code {
+            background: #f1f5f9; color: #334155; padding: 3px 7px; border-radius: 6px; font-size: 12.5px;
+        }
+        form .actions { margin-top: 8px; }
+        .bg-success-subtle { background: var(--ok-bg) !important; }
+        .text-success-emphasis { color: var(--ok) !important; }
+        .bg-danger-subtle { background: var(--danger-bg) !important; }
+        .text-danger-emphasis { color: var(--danger) !important; }
+        .bg-warning-subtle { background: var(--warn-bg) !important; }
+        .text-warning-emphasis { color: var(--warn) !important; }
+        .bg-secondary-subtle { background: #f1f5f9 !important; }
+        .text-secondary-emphasis { color: #334155 !important; }
+        input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="submit"]):not([type="button"]):not([type="image"]),
+        select,
+        textarea,
+        .form-control,
+        .form-select {
+            display: block; width: 100%; max-width: 100%;
+            height: 42px; min-height: 42px;
+            border: 1px solid #cbd5e1; border-radius: var(--radius-sm);
+            padding: 8px 12px; font: inherit; line-height: 1.4; background: #fff; color: var(--text);
+            transition: border-color .15s ease, box-shadow .15s ease;
+            align-self: start;
+        }
+        input:hover, select:hover, textarea:hover, .form-control:hover, .form-select:hover { border-color: #94a3b8; }
+        input:focus, select:focus, textarea:focus, .form-control:focus, .form-select:focus {
+            outline: none; border-color: #93c5fd; box-shadow: var(--focus);
+        }
+        textarea, textarea.form-control { height: auto; min-height: 96px; max-height: none; resize: vertical; }
+        select, .form-select { padding-right: 32px; }
+        .hint { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
         .error { color: var(--danger); font-size: 13px; }
-        .alert { border-radius: 12px; padding: 13px 14px; margin-bottom: 16px; background: #ecfdf5; color: #166534; border: 1px solid #bbf7d0; }
-        .badge { display: inline-flex; border-radius: 999px; padding: 5px 9px; font-size: 12px; font-weight: 700; background: #e0f2fe; color: #0369a1; }
-        .badge.inactive, .badge.expired { background: #fee2e2; color: var(--danger); }
-        .badge.pending { background: #fef3c7; color: #92400e; }
-        .empty { background: #f8fafc; padding: 18px; border-radius: 8px; color: var(--muted); }
-        .pagination { margin-top: 18px; }
-        .max-w-4xl { max-width: 56rem; }
+        .max-w-4xl { max-width: 56rem; display: grid; gap: var(--space-5); }
         .mx-auto { margin-left: auto; margin-right: auto; }
         .container { width: 100%; }
         .hidden { display: none !important; }
@@ -119,7 +269,7 @@
         .inline-flex { display: inline-flex; }
         .inline { display: inline; }
         .inline-block { display: inline-block; }
-        .grid { display: grid; }
+        .grid { display: grid; grid-template-rows: none; align-items: start; }
         .flex-col { flex-direction: column; }
         .flex-wrap { flex-wrap: wrap; }
         .items-center { align-items: center; }
@@ -221,26 +371,28 @@
         .text-success { color: #16a34a; }
         .fw-bold { font-weight: 800; }
         .fs-5 { font-size: 1.15rem; }
-        .btn-primary, .btn-success { background: var(--primary); color: #fff; border: 0; border-radius: 8px; padding: 10px 14px; font-weight: 700; cursor: pointer; }
-        .btn-success { background: #16a34a; }
-        .btn-sm { padding: 6px 10px; font-size: 13px; }
-        .btn-outline-primary, .btn-outline-secondary, .btn-outline-danger {
-            background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; font-weight: 700; cursor: pointer; text-decoration: none; color: var(--text);
+        .btn-primary, .btn-success {
+            background: var(--primary); color: #fff; border: 1px solid transparent; border-radius: var(--radius-sm);
+            padding: 8px 16px; font-weight: 700; cursor: pointer; min-height: 40px;
         }
-        .btn-outline-danger { color: var(--danger); border-color: #fecaca; }
-        .btn-danger { background: var(--danger); color: #fff; border: 0; border-radius: 8px; padding: 8px 12px; font-weight: 700; }
-        .form-select, .form-control { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 11px 12px; font: inherit; background: #fff; }
-        .form-label { font-weight: 700; display: block; margin-bottom: 6px; }
-        .row { display: flex; flex-wrap: wrap; gap: 8px; }
-        .col-md-3, .col-md-6 { flex: 1; min-width: 140px; }
-        .col-md-6 { min-width: 220px; }
-        .g-2 { gap: 8px; }
-        .text-bg-secondary, .text-bg-info, .text-bg-warning, .text-bg-danger, .text-bg-success { border-radius: 999px; padding: 5px 9px; font-size: 12px; font-weight: 700; }
-        .text-bg-secondary { background: #e2e8f0; color: #334155; }
-        .text-bg-info { background: #e0f2fe; color: #0369a1; }
-        .text-bg-warning { background: #fef3c7; color: #92400e; }
-        .text-bg-danger { background: #fee2e2; color: var(--danger); }
-        .text-bg-success { background: #dcfce7; color: #166534; }
+        .btn-success { background: var(--ok); }
+        .btn-sm { min-height: 34px; padding: 6px 12px; font-size: 13px; }
+        .btn-outline-primary, .btn-outline-secondary, .btn-outline-danger, .btn-outline-warning {
+            background: #fff; border: 1px solid var(--line); border-radius: var(--radius-sm);
+            padding: 8px 12px; font-weight: 700; cursor: pointer; text-decoration: none; color: var(--text);
+            min-height: 40px; display: inline-flex; align-items: center;
+        }
+        .btn-outline-primary { color: var(--primary); border-color: #bfdbfe; background: var(--primary-soft); }
+        .btn-outline-danger { color: var(--danger); border-color: var(--danger-line); background: var(--danger-bg); }
+        .btn-outline-warning { color: var(--warn); border-color: var(--warn-line); background: var(--warn-bg); }
+        .btn-danger { background: var(--danger); color: #fff; border: 1px solid transparent; border-radius: var(--radius-sm); padding: 8px 12px; font-weight: 700; }
+        .form-label { font-weight: 700; display: block; margin-bottom: 8px; }
+        .text-bg-secondary, .text-bg-info, .text-bg-warning, .text-bg-danger, .text-bg-success { border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 750; }
+        .text-bg-secondary { background: #f1f5f9; color: #334155; }
+        .text-bg-info { background: var(--info-bg); color: var(--info); }
+        .text-bg-warning { background: var(--warn-bg); color: var(--warn); }
+        .text-bg-danger { background: var(--danger-bg); color: var(--danger); }
+        .text-bg-success { background: var(--ok-bg); color: var(--ok); }
         .text-wrap { white-space: normal; }
         button.w-full, .w-full.rounded-lg, .w-full.rounded-xl { cursor: pointer; }
 
@@ -316,29 +468,82 @@
             .content { overflow: visible; flex: none; }
             .stats, .two-cols { grid-template-columns: 1fr; }
             .topbar, .page-head { flex-direction: column; align-items: stretch; }
-            .sidebar { max-height: none; }
+            html, body { height: auto; overflow: auto; }
+            .sidebar { max-height: none; height: auto; }
+            .main { height: auto; overflow: visible; }
+            .content { overflow: auto; max-height: none; }
+        }
+
+        .card > .case-grid,
+        .card > .callout { margin-bottom: 16px; }
+        .card-head { margin: 0 0 16px; padding: 0 0 12px; border-bottom: 1px solid var(--line); }
+        .card-title { margin: 0 0 6px; font-size: 17px; font-weight: 800; letter-spacing: -.02em; line-height: 1.3; }
+        .card-lead { margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.55; max-width: 72ch; }
+        .callout {
+            border-radius: var(--radius); padding: 16px 18px; border: 1px solid var(--line);
+            background: #f8fafc; color: var(--text);
+        }
+        .callout.info { background: var(--primary-soft); border-color: #bfdbfe; }
+        .callout.warn { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn); }
+        .callout-title { margin: 0 0 8px; font-size: 14px; font-weight: 800; color: var(--text); }
+        .callout.warn .callout-title { color: var(--warn); }
+        .callout ul, .callout ol { margin: 0; padding-left: 18px; color: var(--muted); }
+        .callout li + li { margin-top: 4px; }
+        .callout p:last-child { margin-bottom: 0; }
+        .meta-list { display: grid; gap: 0; }
+        .meta-list > div {
+            display: grid; grid-template-columns: 158px 1fr; gap: 12px; align-items: start;
+            padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-size: 14px;
+        }
+        .meta-list > div:last-child { border-bottom: 0; }
+        .meta-list label { margin: 0; color: var(--muted); font-weight: 650; font-size: 13px; }
+        .org-tree {
+            margin-top: 4px; padding: 12px 14px; border-radius: var(--radius-sm);
+            background: #f8fafc; border: 1px solid var(--line);
+        }
+        .org-tree-label { margin: 0 0 6px; font-size: 12px; font-weight: 750; color: var(--muted); letter-spacing: .02em; }
+        .org-tree-unit { font-weight: 800; margin-bottom: 8px; }
+        .org-tree-person { padding: 2px 0 2px 12px; border-left: 3px solid var(--primary); line-height: 1.4; }
+        .case-grid { display: grid; gap: 10px; }
+        .case-item {
+            padding: 12px 14px; border-radius: var(--radius-sm); background: #f8fafc;
+            border: 1px solid var(--line); font-size: 13.5px; line-height: 1.6;
+        }
+        .case-item strong { color: var(--text); }
+        .crumb { margin: 0; padding: 0; list-style: none; display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+        .code-box {
+            margin: 14px 0; padding: 10px 12px; background: #f8fafc; border: 1px solid var(--line);
+            border-radius: var(--radius-sm); word-break: break-all; font-size: 13px;
+        }
+        @media (max-width: 720px) {
+            .meta-list > div { grid-template-columns: 1fr; gap: 4px; padding: 10px 0; }
         }
 
         /* Thành phần dashboard dùng chung */
         .emp-hero {
             display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;
             background: linear-gradient(135deg, #312e81 0%, #4338ca 48%, #2563eb 100%);
-            color: #fff; border-radius: 20px; padding: 26px 28px; margin-bottom: 22px;
-            box-shadow: 0 18px 40px rgba(49, 46, 129, .28);
+            color: #fff; border-radius: 18px; padding: 22px 26px; margin-bottom: 0;
+            box-shadow: 0 16px 36px rgba(49, 46, 129, .24);
         }
-        .emp-hero h1 { color: #fff; margin: 0 0 6px; font-size: 28px; }
-        .emp-hero p { margin: 0; color: #c7d2fe; }
+        .emp-hero h1 { color: #fff; margin: 0 0 6px; font-size: 26px; }
+        .emp-hero p { margin: 0; color: #c7d2fe; font-size: 14px; }
         .emp-hero-meta { display: flex; gap: 10px; flex-wrap: wrap; }
         .emp-chip {
             background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.18);
-            border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600;
+            border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 600;
+            color: #fff; text-decoration: none;
         }
-        .emp-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+        .emp-chip:hover { background: rgba(255,255,255,.22); color: #fff; text-decoration: none; }
+        .emp-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+        .emp-kpis.cols-2 { grid-template-columns: 1fr 1fr; }
+        .dash-section { display: grid; gap: 12px; }
         .emp-kpi {
-            background: #fff; border: 1px solid #e8eef7; border-radius: 16px; padding: 18px 18px 16px;
-            box-shadow: 0 8px 24px rgba(15, 23, 42, .04); display: flex; flex-direction: column; min-height: 148px;
+            background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px 14px;
+            box-shadow: var(--shadow); display: flex; flex-direction: column; min-height: 132px;
             transition: transform .15s ease, box-shadow .15s ease; text-decoration: none; color: inherit;
         }
+        .emp-kpi-value.is-money { font-size: 1.2rem; }
         a.emp-kpi:hover, .emp-kpi:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(15, 23, 42, .08); }
         .emp-kpi-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
         .emp-kpi-label { margin: 0; font-size: 13px; font-weight: 700; color: #64748b; letter-spacing: .01em; }
@@ -373,15 +578,26 @@
         .emp-action:hover { background: #eef2ff; border-color: #c7d2fe; }
         .emp-action i { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; font-size: 18px; }
         .emp-dl { display: grid; gap: 0; }
-        .emp-dl > div { display: grid; grid-template-columns: 140px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+        .emp-dl > div { display: grid; grid-template-columns: 160px 1fr; gap: 16px; padding: 12px 0; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
         .emp-dl > div:last-child { border-bottom: 0; }
         .emp-dl label { color: #64748b; font-weight: 600; margin: 0; }
-        .section-title { font-size: 15px; font-weight: 800; margin: 22px 0 12px; letter-spacing: -.02em; }
+        .section-title { font-size: 15px; font-weight: 800; margin: 0 0 10px; letter-spacing: -.02em; }
+        .dash-note { margin: 4px 0 0; font-size: 12.5px; }
+        .shell[data-role="director"] .sidebar {
+            background: linear-gradient(180deg, #0c1222 0%, #1e1b4b 52%, #3730a3 100%);
+        }
+        .shell[data-role="director"] .brand-subtitle {
+            background: rgba(251, 191, 36, .2); color: #fde68a;
+        }
+        .shell[data-role="director"] .emp-hero {
+            background: linear-gradient(135deg, #1e1b4b 0%, #3730a3 48%, #2563eb 100%);
+        }
+        .shell[data-role="director"] .eyebrow { color: #4338ca; }
         @media (max-width: 1180px) {
             .emp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 900px) {
-            .emp-kpis, .emp-actions { grid-template-columns: 1fr; }
+            .emp-kpis, .emp-kpis.cols-2, .emp-actions { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -411,19 +627,36 @@
                     @php $user = $authUser; @endphp
                     @if ($user->is_admin)
                         <a class="{{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}"><i class="bi bi-house"></i>Dashboard</a>
+                        <a class="{{ request()->routeIs('admin.notifications.*') ? 'active' : '' }}" href="{{ route('admin.notifications.index') }}"><i class="bi bi-bell"></i>Thông báo</a>
                         <a class="{{ request()->routeIs('accounts.*') ? 'active' : '' }}" href="{{ route('accounts.index') }}"><i class="bi bi-people"></i>Quản lý tài khoản</a>
                         <a class="{{ request()->routeIs('permissions.*') ? 'active' : '' }}" href="{{ route('permissions.index') }}"><i class="bi bi-shield-lock"></i>Phân quyền</a>
+                        <a class="{{ request()->routeIs('director_succession.*') ? 'active' : '' }}" href="{{ route('director_succession.index') }}"><i class="bi bi-person-badge"></i>Người giữ chức GĐ</a>
                         <a class="{{ request()->routeIs('system_logs.*') ? 'active' : '' }}" href="{{ route('system_logs.index') }}"><i class="bi bi-journal-text"></i>Nhật ký hệ thống</a>
                         <a class="{{ request()->routeIs('settings.*') ? 'active' : '' }}" href="{{ route('settings.index') }}"><i class="bi bi-gear"></i>Cấu hình hệ thống</a>
                     @elseif ($user->is_hr)
                         <a class="{{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}"><i class="bi bi-house"></i>Dashboard</a>
                         <a class="{{ request()->routeIs('employees.*') ? 'active' : '' }}" href="{{ route('employees.index') }}"><i class="bi bi-people"></i>Nhân viên</a>
+                        <a class="{{ request()->routeIs('transfers.*') ? 'active' : '' }}" href="{{ route('transfers.create') }}"><i class="bi bi-arrow-left-right"></i>Điều chuyển</a>
                         <a class="{{ request()->routeIs('departments.*') ? 'active' : '' }}" href="{{ route('departments.index') }}"><i class="bi bi-building"></i>Phòng ban</a>
+                        <a class="{{ request()->routeIs('deletion_requests.*') ? 'active' : '' }}" href="{{ route('deletion_requests.index') }}"><i class="bi bi-trash"></i>Lịch sử xóa / chuyển</a>
                         <a class="{{ request()->routeIs('positions.*') ? 'active' : '' }}" href="{{ route('positions.index') }}"><i class="bi bi-briefcase"></i>Chức vụ</a>
                         <a class="{{ request()->routeIs('contracts.*') ? 'active' : '' }}" href="{{ route('contracts.index') }}"><i class="bi bi-file-earmark-text"></i>Hợp đồng</a>
                         <a class="{{ request()->routeIs('attendance.*') ? 'active' : '' }}" href="{{ route('attendance.index') }}"><i class="bi bi-geo-alt"></i>Chấm công</a>
                         <a class="{{ request()->routeIs('evaluations.*') ? 'active' : '' }}" href="{{ route('evaluations.index') }}"><i class="bi bi-star"></i>Đánh giá</a>
                         <a class="{{ request()->routeIs('leave_requests.*') ? 'active' : '' }}" href="{{ route('leave_requests.index') }}"><i class="bi bi-journal-text"></i>Nghỉ phép</a>
+                        <a class="{{ request()->routeIs('overtime_requests.*') ? 'active' : '' }}" href="{{ route('overtime_requests.index') }}"><i class="bi bi-clock-history"></i>Tăng ca</a>
+                        <a class="{{ request()->routeIs('support_requests.*') ? 'active' : '' }}" href="{{ route('support_requests.index') }}"><i class="bi bi-ticket-detailed"></i>Yêu cầu hỗ trợ</a>
+                        @if($user->linkedEmployee())
+                        <details class="nav-group" {{ request()->routeIs('me.leave_requests*') || request()->routeIs('me.overtime_requests*') || request()->routeIs('me.attendance*') || request()->routeIs('me.notifications*') || request()->routeIs('me.payrolls') || request()->routeIs('me.payroll.*') || request()->routeIs('me.support_requests*') ? 'open' : '' }}>
+                            <summary class="nav-summary"><i class="bi bi-person-badge"></i> Yêu cầu của tôi</summary>
+                            <a class="{{ request()->routeIs('me.attendance*') ? 'active' : '' }}" href="{{ route('me.attendance') }}">Chấm công / khuôn mặt</a>
+                            <a class="{{ request()->routeIs('me.leave_requests*') ? 'active' : '' }}" href="{{ route('me.leave_requests') }}">Nghỉ phép</a>
+                            <a class="{{ request()->routeIs('me.overtime_requests*') ? 'active' : '' }}" href="{{ route('me.overtime_requests') }}">Tăng ca</a>
+                            <a class="{{ request()->routeIs('me.payrolls') || request()->routeIs('me.payroll.*') ? 'active' : '' }}" href="{{ route('me.payrolls') }}">Phiếu lương / STK</a>
+                            <a class="{{ request()->routeIs('me.support_requests*') ? 'active' : '' }}" href="{{ route('me.support_requests') }}">Yêu cầu hỗ trợ</a>
+                            <a class="{{ request()->routeIs('me.notifications*') ? 'active' : '' }}" href="{{ route('me.notifications') }}">Thông báo của tôi</a>
+                        </details>
+                        @endif
                         @php
                             $payrollActive = request()->routeIs('payroll.*')
                                 || request()->routeIs('salary_histories.*')
@@ -453,8 +686,14 @@
                                 || request()->routeIs('statistics.*')
                                 || request()->routeIs('hr-dashboard.*');
                         @endphp
-                        <details class="nav-group" {{ $dirPayrollActive ? 'open' : '' }}>
-                            <summary class="nav-summary {{ $dirPayrollActive ? 'active' : '' }}"><i class="bi bi-check2-square"></i> Phê duyệt</summary>
+                        <details class="nav-group" {{ $dirPayrollActive || request()->routeIs('leave_requests.*') || request()->routeIs('overtime_requests.*') || request()->routeIs('attendance.*') || request()->routeIs('payroll.bank_requests.*') || request()->routeIs('deletion_requests.*') || request()->routeIs('support_requests.*') ? 'open' : '' }}>
+                            <summary class="nav-summary {{ $dirPayrollActive || request()->routeIs('leave_requests.*') || request()->routeIs('overtime_requests.*') || request()->routeIs('attendance.*') || request()->routeIs('payroll.bank_requests.*') || request()->routeIs('deletion_requests.*') || request()->routeIs('support_requests.*') ? 'active' : '' }}"><i class="bi bi-check2-square"></i> Phê duyệt</summary>
+                            <a class="{{ request()->routeIs('leave_requests.*') ? 'active' : '' }}" href="{{ route('leave_requests.index') }}">Nghỉ phép (HR)</a>
+                            <a class="{{ request()->routeIs('overtime_requests.*') ? 'active' : '' }}" href="{{ route('overtime_requests.index') }}">Tăng ca (HR)</a>
+                            <a class="{{ request()->routeIs('support_requests.*') ? 'active' : '' }}" href="{{ route('support_requests.index') }}">Yêu cầu hỗ trợ (HR)</a>
+                            <a class="{{ request()->routeIs('attendance.*') ? 'active' : '' }}" href="{{ route('attendance.index') }}">Chấm công / khuôn mặt (HR)</a>
+                            <a class="{{ request()->routeIs('payroll.bank_requests.*') ? 'active' : '' }}" href="{{ route('payroll.bank_requests.index') }}">Đổi STK/QR (HR)</a>
+                            <a class="{{ request()->routeIs('deletion_requests.*') ? 'active' : '' }}" href="{{ route('deletion_requests.index', ['status' => 'pending']) }}">Xóa / chuyển nhân viên</a>
                             <a class="{{ request()->routeIs('payroll.index') || request()->routeIs('payroll.show') ? 'active' : '' }}" href="{{ route('payroll.index') }}">Bảng lương</a>
                             <a class="{{ request()->routeIs('salary_histories.index') ? 'active' : '' }}" href="{{ route('salary_histories.index') }}">Lịch sử lương</a>
                             <a class="{{ request()->routeIs('statistics.*') ? 'active' : '' }}" href="{{ route('statistics.index') }}">Thống kê & Báo cáo</a>
@@ -468,9 +707,24 @@
                         <a class="{{ request()->routeIs('payroll.index') || request()->routeIs('payroll.payment.*') || request()->routeIs('payroll.show') ? 'active' : '' }}" href="{{ route('payroll.index') }}"><i class="bi bi-wallet2"></i>Thanh toán lương</a>
                         <a class="{{ request()->routeIs('accountant.payroll.feedback') || request()->routeIs('payroll.issues.*') ? 'active' : '' }}" href="{{ route('accountant.payroll.feedback') }}"><i class="bi bi-exclamation-triangle"></i>Sự cố lương</a>
                         <a class="{{ request()->routeIs('accountant.leave_requests') ? 'active' : '' }}" href="{{ route('accountant.leave_requests') }}"><i class="bi bi-calendar-check"></i>Xem nghỉ phép</a>
-                        <a class="{{ request()->routeIs('salary_histories.*') ? 'active' : '' }}" href="{{ route('salary_histories.index') }}"><i class="bi bi-clock-history"></i>Lịch sử lương</a>
+                        <a class="{{ request()->routeIs('salary_histories.*') && ! request()->routeIs('me.salary_histories*') ? 'active' : '' }}" href="{{ route('salary_histories.index') }}"><i class="bi bi-clock-history"></i>Lịch sử lương</a>
+                        @if($user->linkedEmployee())
+                        <details class="nav-group" {{ request()->routeIs('me.leave_requests*') || request()->routeIs('me.overtime_requests*') || request()->routeIs('me.attendance*') || request()->routeIs('me.notifications*') || request()->routeIs('me.payrolls') || request()->routeIs('me.payroll.*') || request()->routeIs('me.contracts*') || request()->routeIs('me.evaluations') || request()->routeIs('me.benefits') || request()->routeIs('me.schedule*') || request()->routeIs('me.support_requests*') || request()->routeIs('me.profile*') ? 'open' : '' }}>
+                            <summary class="nav-summary"><i class="bi bi-person-badge"></i> Cá nhân</summary>
+                            <a class="{{ request()->routeIs('me.profile*') ? 'active' : '' }}" href="{{ route('me.profile') }}">Hồ sơ nhân viên</a>
+                            <a class="{{ request()->routeIs('me.attendance*') ? 'active' : '' }}" href="{{ route('me.attendance') }}">Chấm công / khuôn mặt</a>
+                            <a class="{{ request()->routeIs('me.leave_requests*') ? 'active' : '' }}" href="{{ route('me.leave_requests') }}">Nghỉ phép</a>
+                            <a class="{{ request()->routeIs('me.overtime_requests*') ? 'active' : '' }}" href="{{ route('me.overtime_requests') }}">Tăng ca</a>
+                            <a class="{{ request()->routeIs('me.payrolls') || request()->routeIs('me.payroll.*') ? 'active' : '' }}" href="{{ route('me.payrolls') }}">Phiếu lương / STK</a>
+                            <a class="{{ request()->routeIs('me.contracts*') ? 'active' : '' }}" href="{{ route('me.contracts') }}">Hợp đồng</a>
+                            <a class="{{ request()->routeIs('me.evaluations') ? 'active' : '' }}" href="{{ route('me.evaluations') }}">Đánh giá</a>
+                            <a class="{{ request()->routeIs('me.benefits') ? 'active' : '' }}" href="{{ route('me.benefits') }}">Phúc lợi</a>
+                            <a class="{{ request()->routeIs('me.schedule*') ? 'active' : '' }}" href="{{ route('me.schedule') }}">Lịch làm việc</a>
+                            <a class="{{ request()->routeIs('me.support_requests*') ? 'active' : '' }}" href="{{ route('me.support_requests') }}">Yêu cầu hỗ trợ</a>
+                            <a class="{{ request()->routeIs('me.notifications*') ? 'active' : '' }}" href="{{ route('me.notifications') }}">Thông báo của tôi</a>
+                        </details>
+                        @endif
                         <a class="{{ request()->routeIs('accountant.activity_logs') ? 'active' : '' }}" href="{{ route('accountant.activity_logs') }}"><i class="bi bi-journal-text"></i>Nhật ký</a>
-                        <a class="{{ request()->routeIs('accountant.profile') ? 'active' : '' }}" href="{{ route('accountant.profile') }}"><i class="bi bi-person"></i>Hồ sơ</a>
                         <a class="{{ request()->routeIs('accountant.password.*') ? 'active' : '' }}" href="{{ route('accountant.password.change') }}"><i class="bi bi-lock"></i>Đổi mật khẩu</a>
                     @else
                         <a class="{{ request()->routeIs('me.dashboard') ? 'active' : '' }}" href="{{ route('me.dashboard') }}"><i class="bi bi-house"></i>Dashboard</a>
@@ -518,8 +772,8 @@
                 </header>
                 <section class="content">
                     @hasSection('breadcrumb')
-                        <nav aria-label="breadcrumb" style="margin-bottom:12px;">
-                            <ol style="list-style:none; padding:0; margin:0; display:flex; gap:8px; align-items:center; font-size:14px; color:var(--muted);">
+                        <nav aria-label="breadcrumb">
+                            <ol class="crumb">
                                 @yield('breadcrumb')
                             </ol>
                         </nav>
@@ -528,7 +782,7 @@
                         <div class="alert">{{ session('success') }}</div>
                     @endif
                     @if (session('error'))
-                        <div class="alert" style="background:#fee2e2;color:#991b1b;">{{ session('error') }}</div>
+                        <div class="alert error">{{ session('error') }}</div>
                     @endif
                     @yield('content')
                 </section>

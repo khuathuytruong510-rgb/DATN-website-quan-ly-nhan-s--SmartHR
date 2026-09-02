@@ -15,7 +15,7 @@ class SupportRequest extends Model
     public const RESOLVED = 'resolved';
 
     protected $fillable = [
-        'employee_id', 'subject', 'message', 'type', 'status', 'attachment', 'hr_reply', 'follow_up',
+        'employee_id', 'subject', 'message', 'type', 'status', 'attachment', 'hr_reply', 'follow_up', 'employee_feedback',
     ];
 
     public function employee(): BelongsTo
@@ -26,10 +26,25 @@ class SupportRequest extends Model
     public function statusLabel(): string
     {
         return match ($this->status) {
-            self::PROCESSING => 'Đang xử lý',
-            self::RESOLVED => 'Đã giải quyết',
-            default => 'Chờ xử lý',
+            self::PROCESSING => 'Đã duyệt',
+            self::RESOLVED => 'Đã xử lý',
+            default => 'Chờ duyệt',
         };
+    }
+
+    public function isPending(): bool
+    {
+        return $this->status === self::PENDING;
+    }
+
+    public function isProcessing(): bool
+    {
+        return $this->status === self::PROCESSING;
+    }
+
+    public function isResolved(): bool
+    {
+        return $this->status === self::RESOLVED;
     }
 
     public function typeLabel(): string

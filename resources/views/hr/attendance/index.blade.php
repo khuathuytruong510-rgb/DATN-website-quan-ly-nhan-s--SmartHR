@@ -10,7 +10,7 @@
     'buttonRoute' => auth()->user()?->canManageHr() ? route('attendance.create') : null,
 ])
 
-@if(!empty($adjustmentRequests) && $adjustmentRequests->isNotEmpty() && (auth()->user()?->is_hr || auth()->user()?->is_admin))
+@if(!empty($adjustmentRequests) && $adjustmentRequests->isNotEmpty() && (auth()->user()?->is_hr || auth()->user()?->is_director || auth()->user()?->is_admin))
 <div class="card" style="margin-bottom:16px;">
     <h2>Yêu cầu điều chỉnh chấm công</h2>
     <table>
@@ -33,9 +33,10 @@
                     <td>{{ $req->requested_check_in ?: '—' }} / {{ $req->requested_check_out ?: '—' }}</td>
                     <td>{{ $req->reason }}</td>
                     <td>
+                        @if(\App\Support\RequestApprover::canReview(auth()->user(), $req->employee))
                         <form method="POST" action="{{ route('attendance.adjustments.approve', $req) }}" style="display:inline">
                             @csrf
-                            <input type="hidden" name="review_note" value="HR duyệt yêu cầu điều chỉnh">
+                            <input type="hidden" name="review_note" value="Duyệt yêu cầu điều chỉnh">
                             <button class="btn" type="submit">Duyệt</button>
                         </form>
                         <form method="POST" action="{{ route('attendance.adjustments.reject', $req) }}" style="display:inline">
@@ -43,6 +44,55 @@
                             <input type="text" name="review_note" placeholder="Lý do từ chối" style="max-width:140px;">
                             <button class="btn" type="submit">Từ chối</button>
                         </form>
+                        @elseif(\App\Support\RequestApprover::needsDirector($req->employee))
+                            <span class="muted">Chờ Giám đốc duyệt</span>
+                        @endif
+                    </td>
+                </tr>
+            @endforeach
+        </tbody>
+    </table>
+</div>
+@endif
+
+@if(!empty($faceRegistrations) && $faceRegistrations->isNotEmpty() && (auth()->user()?->is_hr || auth()->user()?->is_director || auth()->user()?->is_admin))
+<div class="card" style="margin-bottom:16px;">
+    <h2>Đăng ký khuôn mặt chờ duyệt</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Nhân viên</th>
+                <th>Ảnh gửi duyệt</th>
+                <th>Gửi lúc</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($faceRegistrations as $profile)
+                <tr>
+                    <td>{{ optional($profile->employee)->name }}</td>
+                    <td>
+                        @if($profile->pending_face_image)
+                            <img src="{{ $profile->pending_face_image }}" alt="Khuôn mặt chờ duyệt" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #ddd;">
+                        @else
+                            —
+                        @endif
+                    </td>
+                    <td>{{ optional($profile->updated_at)->format('d/m/Y H:i') }}</td>
+                    <td>
+                        @if(\App\Support\RequestApprover::canReview(auth()->user(), $profile->employee))
+                        <form method="POST" action="{{ route('face_profiles.approve', $profile) }}" style="display:inline">
+                            @csrf
+                            <button class="btn" type="submit">Duyệt</button>
+                        </form>
+                        <form method="POST" action="{{ route('face_profiles.reject', $profile) }}" style="display:inline">
+                            @csrf
+                            <input type="text" name="review_note" placeholder="Lý do từ chối" style="max-width:140px;">
+                            <button class="btn" type="submit">Từ chối</button>
+                        </form>
+                        @elseif(\App\Support\RequestApprover::needsDirector($profile->employee))
+                            <span class="muted">Chờ Giám đốc duyệt</span>
+                        @endif
                     </td>
                 </tr>
             @endforeach
@@ -62,6 +112,7 @@
                         <th>Check-in</th>
                         <th>Check-out</th>
                         <th>Trạng thái</th>
+                        <th>Hình thức</th>
                         <th>Ghi chú</th>
                         <th>Thao tác</th>
                     </tr>
@@ -88,6 +139,7 @@
                                 @endphp
                                 <span class="badge bg-{{ $badge }}">{{ $attendance->status_label }}</span>
                             </td>
+                            <td>{{ $attendance->method_label }}</td>
                             <td>{{ $attendance->notes ?: '-' }}</td>
                             <td>
                                 <div class="d-flex gap-2">

@@ -130,14 +130,6 @@
 
 <style>
     .content { max-width: 600px; }
-    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
-    .field { margin-bottom: 20px; }
-    label { display: block; font-weight: 700; margin-bottom: 8px; }
-    input, select { width: 100%; padding: 11px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; }
-    .error { color: #dc2626; font-size: 13px; display: block; margin-top: 5px; }
-    .actions { display: flex; gap: 12px; }
-    .btn { padding: 10px 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: 700; text-decoration: none; }
-    .btn.primary { background: #2563eb; color: white; }
-    .btn { background: #f8fafc; color: inherit; }
+    .error { color: var(--danger); font-size: 13px; display: block; margin-top: 6px; }
 </style>
 @endsection

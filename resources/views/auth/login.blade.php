@@ -8,22 +8,22 @@
         <h1>Đăng nhập</h1>
         <p class="muted">Truy cập hệ thống quản lý nhân sự SmartHR.</p>
 
-        <form method="POST" action="{{ route('login.store') }}" style="margin-top: 22px;">
+        <form method="POST" action="{{ route('login.store') }}" class="auth-form form-stack">
             @csrf
             <div class="field">
                 <label for="email">Email</label>
-                <input id="email" name="email" type="email" value="{{ old('email') }}" required autofocus>
+                <input id="email" class="form-control" name="email" type="email" value="{{ old('email') }}" required autofocus>
                 @error('email') <div class="error">{{ $message }}</div> @enderror
             </div>
 
             <div class="field">
                 <label for="password">Mật khẩu</label>
-                <input id="password" name="password" type="password" required>
+                <input id="password" class="form-control" name="password" type="password" required>
                 @error('password') <div class="error">{{ $message }}</div> @enderror
             </div>
 
-            <label style="display: flex; gap: 8px; align-items: center; margin-bottom: 18px;">
-                <input type="checkbox" name="remember" value="1" style="width: auto;">
+            <label class="remember-row">
+                <input type="checkbox" name="remember" value="1">
                 Ghi nhớ đăng nhập
             </label>
 

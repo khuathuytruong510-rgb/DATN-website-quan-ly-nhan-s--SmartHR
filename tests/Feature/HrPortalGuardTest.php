@@ -53,9 +53,39 @@ class HrPortalGuardTest extends TestCase
         ['hr' => $hr] = $this->seedPeople();
 
         $this->actingAs($hr)->get(route('dashboard'))->assertOk();
-        $this->actingAs($hr)->get(route('payroll.index'))->assertOk()->assertSee('Bảng lương nhân viên');
+        $this->actingAs($hr)->get(route('payroll.index'))->assertOk()->assertSee('Kiểm tra dữ liệu công');
         $this->actingAs($hr)->get(route('accountant.dashboard'))->assertForbidden();
         $this->actingAs($hr)->get(route('me.dashboard'))->assertRedirect(route('dashboard'));
+    }
+
+    public function test_hr_sees_source_payroll_preview_before_accountant_calculates(): void
+    {
+        ['hr' => $hr, 'employee' => $employee] = $this->seedPeople();
+
+        $this->actingAs($hr)
+            ->get(route('payroll.index', ['month' => 8, 'year' => 2026]))
+            ->assertOk()
+            ->assertSee('Nguyen Van HR')
+            ->assertSee('Ngày công')
+            ->assertSee('Giờ làm')
+            ->assertSee('Nghỉ phép')
+            ->assertSee('Hợp đồng')
+            ->assertSee('Lương CB (HĐ)')
+            ->assertSee('Phụ cấp (HĐ)')
+            ->assertSee('Đã kiểm tra — chốt và gửi kế toán tính lương')
+            ->assertSee('HR đang kiểm tra nguồn')
+            ->assertDontSee('Thực nhận')
+            ->assertDontSee('Chưa có dữ liệu bảng lương');
+
+        $this->actingAs($hr)->post(route('payroll.period.lock'), ['month' => 8, 'year' => 2026])->assertRedirect();
+
+        $this->actingAs($hr)
+            ->get(route('payroll.index', ['month' => 8, 'year' => 2026]))
+            ->assertOk()
+            ->assertSee('Nguyen Van HR')
+            ->assertSee('Đã chốt — chờ kế toán tính')
+            ->assertDontSee('Thực nhận')
+            ->assertDontSee('Chưa có dữ liệu bảng lương');
     }
 
     public function test_hr_cannot_generate_approve_or_pay(): void

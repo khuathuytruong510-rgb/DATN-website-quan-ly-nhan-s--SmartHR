@@ -2,18 +2,26 @@
 
 @section('content')
 <div class="page-head">
-    <div>
-        <h1>{{ $employee->exists ? 'Chỉnh sửa nhân viên' : 'Tạo nhân viên mới' }}</h1>
-        <p class="muted">Điền đầy đủ thông tin hồ sơ nhân viên.</p>
-    </div>
+        <div>
+            <h1>{{ $employee->exists ? 'Chỉnh sửa nhân viên' : 'Tạo nhân viên mới' }}</h1>
+            <p class="muted">{{ !empty($forDirector) ? 'Bổ nhiệm Giám đốc từ bên ngoài: tạo hồ sơ trước. Quyền Director do Admin cấp khi cập nhật người giữ chức.' : 'Điền đầy đủ thông tin hồ sơ nhân viên.' }}</p>
+        </div>
     <a class="btn link" href="{{ route('employees.index') }}">Quay lại</a>
 </div>
 
 <div class="card">
+    @if(!empty($forDirector))
+        <div style="margin-bottom:16px;padding:12px;border-radius:10px;background:#f8fafc;border:1px solid var(--line);">
+            <p style="margin:0;font-size:13px;line-height:1.6;">Quyết định bổ nhiệm đã có ngoài SmartHR. HR chỉ tạo hồ sơ (Ban Giám đốc / Giám đốc / đang làm việc). Chưa cấp tài khoản Giám đốc. Sau khi lưu, Admin kết nối tài khoản rồi cập nhật người giữ chức — không đổi tên Giám đốc cũ.</p>
+        </div>
+    @endif
     <form method="POST" action="{{ $employee->exists ? route('employees.update', $employee) : route('employees.store') }}">
         @csrf
         @if($employee->exists)
             @method('PUT')
+        @endif
+        @if(!empty($forDirector))
+            <input type="hidden" name="for_director" value="1">
         @endif
 
         <div class="grid two-cols">
@@ -73,12 +81,19 @@
             <div>
                 <div class="field">
                     <label>Phòng ban <span class="text-danger">*</span></label>
-                    <select name="department_id" id="departmentSelect" required>
-                        <option value="">-- Chọn phòng ban --</option>
-                        @foreach($departments as $dept)
-                            <option value="{{ $dept->id }}" {{ old('department_id', $employee->department_id) == $dept->id ? 'selected' : '' }}>[{{ $dept->code }}] {{ $dept->name }}</option>
-                        @endforeach
-                    </select>
+                    @if($employee->exists && $employee->department_id)
+                        @php $currentDept = $departments->firstWhere('id', $employee->department_id); @endphp
+                        <input type="hidden" name="department_id" value="{{ $employee->department_id }}">
+                        <input class="form-control" type="text" value="{{ $currentDept?->name ?: '—' }}" readonly>
+                        <small class="muted" style="display:block;margin-top:6px;">Không đổi phòng ban trực tiếp trên hồ sơ. Dùng <a href="{{ route('transfers.create', ['employee' => $employee->id]) }}">điều chuyển nhân viên</a> để Giám đốc duyệt.</small>
+                    @else
+                        <select name="department_id" id="departmentSelect" required>
+                            <option value="">-- Chọn phòng ban --</option>
+                            @foreach($departments as $dept)
+                                <option value="{{ $dept->id }}" {{ old('department_id', $employee->department_id) == $dept->id ? 'selected' : '' }}>[{{ $dept->code }}] {{ $dept->name }}</option>
+                            @endforeach
+                        </select>
+                    @endif
                     @error('department_id')<span class="error">{{ $message }}</span>@enderror
                 </div>
 
@@ -116,8 +131,9 @@
                 <div class="field">
                     <label>Trạng thái <span class="text-danger">*</span></label>
                     <select name="status" required>
-                        <option value="active" {{ old('status', $employee->status) == 'active' ? 'selected' : '' }}>Đang hoạt động</option>
-                        <option value="inactive" {{ old('status', $employee->status) == 'inactive' ? 'selected' : '' }}>Ngừng hoạt động</option>
+                        <option value="active" {{ old('status', $employee->status) == 'active' ? 'selected' : '' }}>Còn làm việc</option>
+                        <option value="on_leave" {{ old('status', $employee->status) == 'on_leave' ? 'selected' : '' }}>Tạm nghỉ</option>
+                        <option value="inactive" {{ old('status', $employee->status) == 'inactive' ? 'selected' : '' }}>Nghỉ việc</option>
                     </select>
                 </div>
             </div>

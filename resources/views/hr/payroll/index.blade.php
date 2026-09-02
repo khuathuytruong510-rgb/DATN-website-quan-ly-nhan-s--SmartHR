@@ -10,13 +10,23 @@
             <div class="d-flex justify-content-between align-items-center flex-wrap">
                 <div>
                     <h3 class="fw-bold mb-1">
-                        {{ !empty($paymentFocus) ? 'Thanh toán lương' : 'Bảng lương nhân viên' }}
+                        @if(!empty($paymentFocus))
+                            Thanh toán lương
+                        @elseif(!empty($hrWorkOnly))
+                            Kiểm tra dữ liệu công
+                        @else
+                            Bảng lương nhân viên
+                        @endif
                     </h3>
                     <p class="text-muted mb-0">
                         @if(!empty($paymentFocus))
                             Chỉ phiếu nhân viên đã xác nhận. Kế toán thanh toán → salary_payment → Đã trả. Không thanh toán phiếu chưa xác nhận hoặc đã trả.
+                        @elseif(!empty($hrWorkOnly))
+                            HR đối chiếu hợp đồng (lương CB, phụ cấp), ngày công, giờ làm, tăng ca và nghỉ phép. Kế toán mới tính các khoản phát sinh và thực nhận sau khi HR chốt.
+                            Kỳ lương từ {{ $periodMeta['start_label'] ?? '01/'.sprintf('%02d/%d', $month, $year) }} đến {{ $periodMeta['end_label'] ?? '' }}.
+                            {{ $periodMeta['formula_label'] ?? '' }}
                         @else
-                            HR chốt dữ liệu kỳ → Kế toán tính → HR kiểm tra → Giám đốc phê duyệt cuối → Nhân viên xác nhận → Kế toán thanh toán.
+                            HR kiểm tra ngày công / nghỉ phép → Chốt gửi kế toán tính → Kế toán tính lương → HR xác nhận phiếu đã tính → Giám đốc phê duyệt cuối → Nhân viên xác nhận → Kế toán thanh toán.
                         @endif
                     </p>
                 </div>
@@ -29,6 +39,19 @@
                     $canBulkHrReview = $user->is_hr;
                     $canBulkFinalApprove = $user->is_director;
                     $periodLocked = (bool) optional($periodLock ?? null)->is_locked;
+                    $periodMeta = $periodMeta ?? app(\App\Services\PayrollCalculationService::class)->periodMeta((int) $month, (int) $year);
+                    $hrWorkOnly = !empty($hrWorkOnly);
+                    $contractTypeLabel = function (?string $type): string {
+                        return match ($type) {
+                            'internship' => 'Thực tập',
+                            'probation' => 'Thử việc',
+                            'fixed_term' => 'Xác định thời hạn',
+                            'indefinite' => 'Không xác định thời hạn',
+                            'official' => 'Chính thức',
+                            'seasonal' => 'Thời vụ',
+                            default => $type ? ucfirst(str_replace('_', ' ', $type)) : '—',
+                        };
+                    };
                 @endphp
 
                 <div class="d-flex flex-column gap-2 align-items-stretch" style="min-width:min(520px,100%);">
@@ -62,15 +85,21 @@
                                     Sang tính lương
                                 </a>
                                 @endif
+                                @unless($hrWorkOnly)
                                 <a class="btn btn-outline-secondary"
                                    href="{{ route('payroll.print', ['month' => $month, 'year' => $year]) }}"
                                    target="_blank">
                                     <i class="bi bi-printer"></i>
                                     In bảng lương
                                 </a>
+                                @endunless
                             </div>
                         </div>
                     </form>
+                    <p class="text-muted small mb-3 mt-2">
+                        Kỳ lương từ <strong>{{ $periodMeta['start_label'] }}</strong> đến <strong>{{ $periodMeta['end_label'] }}</strong>.
+                        {{ $periodMeta['formula_label'] }}.
+                    </p>
 
                     @if($user->is_hr)
                         @if($periodLocked)
@@ -81,7 +110,7 @@
                                 <input type="hidden" name="year" value="{{ $year }}">
                                 <div class="d-flex gap-2 flex-wrap align-items-end">
                                     <div style="flex:1;min-width:220px;">
-                                        <label class="form-label mb-1">Kỳ {{ sprintf('%02d/%d', $month, $year) }} đang khóa</label>
+                                        <label class="form-label mb-1">Kỳ {{ sprintf('%02d/%d', $month, $year) }} đã chốt — đã gửi kế toán</label>
                                         <input type="text" name="unlock_reason" class="form-control" required minlength="10" maxlength="500"
                                                placeholder="Lý do mở khóa (bắt buộc ≥ 10 ký tự, ghi nhật ký)">
                                     </div>
@@ -92,6 +121,9 @@
                                     @if($periodLock->locker)
                                         · {{ $periodLock->locker->name }}
                                     @endif
+                                    @if($payrolls->isEmpty())
+                                        · Chờ kế toán tính lương
+                                    @endif
                                 </p>
                             </form>
                         @else
@@ -100,9 +132,10 @@
                                 @csrf
                                 <input type="hidden" name="month" value="{{ $month }}">
                                 <input type="hidden" name="year" value="{{ $year }}">
-                                <button type="submit" class="btn btn-outline-primary">
-                                    Chốt dữ liệu kỳ {{ sprintf('%02d/%d', $month, $year) }}
+                                <button type="submit" class="btn btn-primary">
+                                    Đã kiểm tra — chốt và gửi kế toán tính lương
                                 </button>
+                                <p class="text-muted mb-0 mt-1" style="font-size:12px;">Đối chiếu bảng số liệu bên dưới trước khi chốt.</p>
                                 @if(optional($periodLock ?? null)->unlock_reason)
                                     <p class="text-muted mb-0 mt-1" style="font-size:12px;">
                                         Lần mở khóa trước: {{ $periodLock->unlock_reason }}
@@ -114,23 +147,20 @@
                             </form>
                         @endif
                     @elseif($canGenerate && ! $periodLocked)
-                        <p class="text-muted mb-0" style="font-size:13px;">HR chưa chốt kỳ {{ sprintf('%02d/%d', $month, $year) }}. Kế toán chưa được tính lương.</p>
+                        <p class="text-muted mb-0" style="font-size:13px;">HR chưa kiểm tra và chốt kỳ {{ sprintf('%02d/%d', $month, $year) }}. Kế toán chưa được tính lương.</p>
                     @endif
 
-                    @if($canBulkHrReview)
+                    @if($canBulkHrReview && $pendingHrCount > 0)
                         <form method="POST" action="{{ route('payroll.review_all') }}"
                               data-confirm="Xác nhận đã kiểm tra dữ liệu nhân sự trên {{ $pendingHrCount }} bảng lương tháng {{ sprintf('%02d/%d', $month, $year) }}? Sau bước này Giám đốc sẽ phê duyệt cuối.">
                             @csrf
                             <input type="hidden" name="month" value="{{ $month }}">
                             <input type="hidden" name="year" value="{{ $year }}">
                             <button type="submit" class="btn btn-success"
-                                    @disabled($pendingHrCount < 1)
-                                    title="{{ $pendingHrCount < 1 ? 'Không có phiếu chờ HR kiểm tra' : 'HR kiểm tra dữ liệu tất cả phiếu kế toán đã tính' }}">
+                                    title="HR kiểm tra dữ liệu tất cả phiếu kế toán đã tính">
                                 <i class="bi bi-check2-all"></i>
-                                Kiểm tra bảng lương
-                                @if($pendingHrCount > 0)
-                                    ({{ $pendingHrCount }})
-                                @endif
+                                Kiểm tra phiếu đã tính
+                                ({{ $pendingHrCount }})
                             </button>
                         </form>
                     @endif
@@ -167,14 +197,30 @@
                         <tr>
                             <th>Nhân viên</th>
                             <th>Chức vụ</th>
+                            @if($hrWorkOnly)
+                            <th>Hợp đồng</th>
+                            @endif
                             <th class="text-center">Tháng</th>
-                            <th class="text-end">Lương CB</th>
+                            <th class="text-end">{{ $hrWorkOnly ? 'Lương CB (HĐ)' : 'Lương CB' }}</th>
+                            @if($hrWorkOnly)
+                            <th class="text-end">Phụ cấp (HĐ)</th>
+                            @endif
                             <th class="text-center">Ngày công</th>
-                            <th class="text-center">TC Ngày</th>
+                            @if($hrWorkOnly)
+                            <th class="text-center">Giờ làm</th>
+                            @endif
+                            <th class="text-center">TC ngày</th>
                             <th class="text-center">Nghỉ phép (Có/Không)</th>
-                            <th class="text-center">TC Giờ</th>
+                            <th class="text-center">Lễ hưởng lương</th>
+                            <th class="text-center">TC giờ</th>
+                            @if($hrWorkOnly)
+                            <th class="text-center">Đi muộn</th>
+                            <th class="text-center">Vắng</th>
+                            @endif
+                            @unless($hrWorkOnly)
                             <th class="text-end">Lương đi làm</th>
                             <th class="text-end">Lương nghỉ phép</th>
+                            <th class="text-end">Lương lễ</th>
                             <th class="text-end">TC Ngày</th>
                             <th class="text-end">TC Giờ</th>
                             <th class="text-end">Tổng TC</th>
@@ -184,30 +230,40 @@
                             <th class="text-end">Thuế</th>
                             <th class="text-end">Phạt đi muộn</th>
                             <th class="text-end">Thực nhận</th>
+                            @endunless
                             <th class="text-center">Hành động</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($payrolls as $payroll)
+                        @forelse($tableRows as $row)
                         @php
-                            // Tính toán lương công thực tế & lương ngày nghỉ có lương
-                            $dailySalary = $payroll->daily_salary ?? ($payroll->base_salary / ($payroll->required_working_days ?? 26));
-                            
-                            $actualDays = min($payroll->working_days, $payroll->required_working_days);
-                            $actualWorkingSalary = $actualDays * $dailySalary;
-                            
-                            $paidLeaveDays = $payroll->paid_leave_days ?? 0;
-                            $paidLeaveSalary = $paidLeaveDays * $dailySalary;
+                            $payroll = $row instanceof \App\Models\Payroll ? $row : $row->payroll;
+                            $employee = $row->employee ?? $payroll?->employee;
+                            $requiredDays = $row->required_working_days ?? 26;
+                            $calendarDays = $row->calendar_working_days ?? $requiredDays;
+                            $dailySalary = $hrWorkOnly ? 0 : ($row->daily_salary ?? ($row->base_salary / 26));
+                            $actualDays = $row->working_days ?? 0;
+                            $actualWorkingSalary = $hrWorkOnly ? 0 : ($actualDays * $dailySalary);
+                            $paidLeaveDays = $row->paid_leave_days ?? 0;
+                            $paidLeaveSalary = $hrWorkOnly ? 0 : ($paidLeaveDays * $dailySalary);
+                            $paidHolidayDays = $row->paid_holiday_days ?? 0;
+                            $paidHolidaySalary = $hrWorkOnly ? 0 : ($row->paid_holiday_salary ?? ($paidHolidayDays * $dailySalary));
+                            $rowMonth = $row instanceof \App\Models\Payroll
+                                ? (int) ($row->getAttributes()['month'] ?? $row->month)
+                                : (int) $row->month;
+                            $rowYear = $row instanceof \App\Models\Payroll
+                                ? (int) ($row->getAttributes()['year'] ?? $row->year)
+                                : (int) $row->year;
                         @endphp
                         <tr>
                             <td>
                                 <div class="fw-semibold">
-                                    {{ $payroll->employee->name }}
+                                    {{ $employee->name ?? '—' }}
                                 </div>
                             </td>
 
                             <td>
-                               @switch($payroll->employee->position)
+                               @switch($employee->position ?? '')
                                     @case('Giám Đốc')
                                         <span class="badge text-bg-dark">Giám đốc</span>
                                         @break
@@ -215,62 +271,99 @@
                                         <span class="badge text-bg-primary">Trưởng phòng</span>
                                         @break
                                     @default
-                                        <span class="badge text-bg-light border text-dark">Nhân viên</span>
+                                        <span class="badge text-bg-light border text-dark">{{ $employee->position ?? 'Nhân viên' }}</span>
                                 @endswitch
                             </td>
 
+                            @if($hrWorkOnly)
+                            <td>
+                                <div>{{ $contractTypeLabel($row->contract_type ?? null) }}</div>
+                                @if(!empty($row->contract_code))
+                                    <small class="text-muted">{{ $row->contract_code }}</small>
+                                @endif
+                                @if(!empty($row->working_schedule))
+                                    <small class="text-muted d-block">{{ $row->working_schedule }}</small>
+                                @endif
+                            </td>
+                            @endif
+
                             <td class="text-center">
-                                {{ sprintf('%02d', $payroll->month) }}/{{ $payroll->year }}
+                                {{ sprintf('%02d/%d', $rowMonth, $rowYear) }}
                             </td>
 
                             <td class="text-end">
-                                {{ number_format($payroll->base_salary) }}
+                                {{ number_format($row->base_salary ?? 0) }}
                             </td>
+                            @if($hrWorkOnly)
+                            <td class="text-end">
+                                {{ number_format($row->allowance ?? 0) }}
+                            </td>
+                            @endif
 
                             {{-- Cột Ngày công đi làm --}}
                             <td class="text-center">
-                                @if(($payroll->working_days + $paidLeaveDays) >= $payroll->required_working_days)
+                                @if((($row->working_days ?? 0) + $paidLeaveDays) >= $calendarDays)
                                     <span class="text-success fw-semibold">
-                                        {{ $actualDays }}/{{ $payroll->required_working_days }}
+                                        {{ $actualDays }}/{{ $calendarDays }}
                                     </span>
                                 @else
                                     <span class="text-danger fw-semibold">
-                                        {{ $actualDays }}/{{ $payroll->required_working_days }}
+                                        {{ $actualDays }}/{{ $calendarDays }}
                                     </span>
                                 @endif
                             </td>
+                            @if($hrWorkOnly)
+                            <td class="text-center">{{ number_format($row->work_hours ?? 0, 2) }}</td>
+                            @endif
                             <td class="text-center">
-                                @if($payroll->overtime_days > 0)
-                                    <span class="text-primary fw-semibold">
-                                        +{{ $payroll->overtime_days }}
-                                    </span>
+                                @if(($row->overtime_days ?? 0) > 0)
+                                    <span class="text-primary fw-semibold">+{{ $row->overtime_days }}</span>
                                 @else
-                                    -
+                                    0
                                 @endif
                             </td>
 
                             {{-- Cột Nghỉ phép + Số tiền bên dưới --}}
                             <td class="text-center">
-                                @if(($paidLeaveDays > 0) || ($payroll->unpaid_leave_days > 0))
-                                    <div>
-                                        <span class="badge text-bg-info text-dark" title="Phép năm / Không lương">
-                                            {{ $paidLeaveDays }} / {{ $payroll->unpaid_leave_days ?? 0 }} ngày
-                                        </span>
-                                    </div>
-                                    @if($paidLeaveSalary > 0)
-                                        <small class="text-success fw-semibold d-block mt-1">
-                                            +{{ number_format($paidLeaveSalary) }}
-                                        </small>
-                                    @endif
-                                @else
-                                    -
+                                <span class="badge text-bg-info text-dark" title="Phép năm / Không lương">
+                                    {{ $paidLeaveDays }} / {{ $row->unpaid_leave_days ?? 0 }} ngày
+                                </span>
+                                @if($paidLeaveSalary > 0)
+                                    <small class="text-success fw-semibold d-block mt-1">
+                                        +{{ number_format($paidLeaveSalary) }}
+                                    </small>
                                 @endif
                             </td>
 
                             <td class="text-center">
-                                {{ number_format($payroll->overtime_hours, 2) }}
+                                @if($paidHolidayDays > 0)
+                                    <span class="text-success fw-semibold">{{ $paidHolidayDays }} ngày</span>
+                                    @if($paidHolidaySalary > 0)
+                                        <small class="text-success fw-semibold d-block mt-1">
+                                            +{{ number_format($paidHolidaySalary) }}
+                                        </small>
+                                    @endif
+                                @else
+                                    0
+                                @endif
                             </td>
 
+                            <td class="text-center">
+                                {{ number_format($row->overtime_hours ?? 0, 2) }}
+                            </td>
+
+                            @if($hrWorkOnly)
+                            <td class="text-center">
+                                @if(($row->late_days ?? 0) > 0)
+                                    {{ $row->late_days }} ngày / {{ $row->late_minutes }} phút
+                                @else
+                                    0
+                                @endif
+                            </td>
+                            <td class="text-center">{{ $row->absent_days ?? 0 }}</td>
+                            @endif
+
+                            @unless($hrWorkOnly)
                             {{-- TÁCH RIÊNG: Lương ngày công đi làm thực tế --}}
                             <td class="text-end fw-semibold">
                                 {{ number_format($actualWorkingSalary) }}
@@ -278,67 +371,45 @@
 
                             {{-- TÁCH RIÊNG: Lương ngày nghỉ phép có hưởng lương --}}
                             <td class="text-end">
-                                @if($paidLeaveSalary > 0)
-                                    <span class="text-success fw-semibold">
-                                        {{ number_format($paidLeaveSalary) }}
-                                    </span>
+                                {{ number_format($paidLeaveSalary) }}
+                            </td>
+
+                            <td class="text-end">
+                                @if($paidHolidaySalary > 0)
+                                    <span class="text-success fw-semibold">{{ number_format($paidHolidaySalary) }}</span>
                                 @else
-                                    -
+                                    0
                                 @endif
                             </td>
 
                             <td class="text-end">
-                                @if($payroll->overtime_day_salary > 0)
-                                    <span class="text-primary fw-semibold">
-                                        {{ number_format($payroll->overtime_day_salary) }}
-                                    </span>
-                                @else
-                                    -
-                                @endif
+                                {{ number_format($row->overtime_day_salary ?? 0) }}
                             </td>
 
                             <td class="text-end">
-                                @if($payroll->overtime_hour_salary > 0)
-                                    <span class="text-primary fw-semibold">
-                                        {{ number_format($payroll->overtime_hour_salary) }}
-                                    </span>
-                                @else
-                                    -
-                                @endif
+                                {{ number_format($row->overtime_hour_salary ?? 0) }}
                             </td>
 
                             <td class="text-end">
-                                @if($payroll->overtime_salary > 0)
-                                    <span class="text-primary fw-semibold">
-                                        {{ number_format($payroll->overtime_salary) }}
-                                    </span>
-                                @else
-                                    -
-                                @endif
+                                {{ number_format($row->overtime_salary ?? 0) }}
                             </td>
 
                             <td class="text-end">
-                                {{ number_format($payroll->allowance) }}
+                                {{ number_format($row->allowance ?? 0) }}
                             </td>
 
                             <td class="text-end">
-                                @if($payroll->bonus > 0)
-                                    <span class="text-success fw-semibold">
-                                        {{ number_format($payroll->bonus) }}
-                                    </span>
-                                @else
-                                    -
-                                @endif
+                                {{ number_format($row->bonus ?? 0) }}
                             </td>
 
                             <td class="text-end text-danger">
-                                {{ number_format($payroll->insurance) }}
+                                {{ number_format($row->insurance ?? 0) }}
                             </td>
 
                             <td class="text-end">
-                                @if($payroll->tax > 0)
+                                @if(($row->tax ?? 0) > 0)
                                     <span class="text-danger">
-                                        {{ number_format($payroll->tax) }}
+                                        {{ number_format($row->tax) }}
                                     </span>
                                 @else
                                     0
@@ -346,26 +417,29 @@
                             </td>
 
                             <td class="text-end">
-                                @if(($payroll->late_penalty_fee ?? 0) > 0)
-                                    <span class="text-danger fw-semibold">
-                                        − {{ number_format($payroll->late_penalty_fee) }}
-                                    </span>
+                                @if(($row->late_penalty_fee ?? 0) > 0)
+                                    <span class="text-danger fw-semibold">− {{ number_format($row->late_penalty_fee) }}</span>
                                 @else
-                                    -
+                                    0
                                 @endif
                             </td>
 
                             <td class="text-end">
-                                <span class="fw-bold text-success fs-5">
-                                    {{ number_format($payroll->total_salary) }} VNĐ
+                                <span class="fw-bold fs-5 {{ ($row->total_salary ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
+                                    {{ number_format($row->total_salary ?? 0) }} VNĐ
                                 </span>
                             </td>
+                            @endunless
 
                             <td class="text-center">
                                 <div class="d-inline-flex align-items-center gap-2 flex-wrap justify-content-center">
+                                    @if($payroll && ! $hrWorkOnly)
                                     <a href="{{ route('payroll.show', $payroll) }}" class="btn btn-sm btn-outline-primary" title="Xem chi tiết">
                                         <i class="bi bi-eye"></i>
                                     </a>
+                                    @endif
+
+                                    @if($payroll)
 
                                     @php
                                         $user = auth()->user();
@@ -389,7 +463,7 @@
                                             </button>
                                         </form>
                                     @elseif($workflow->isCalculated($payroll->status))
-                                        <span class="badge text-bg-secondary text-wrap" style="max-width:160px;">Chờ HR kiểm tra</span>
+                                        <span class="badge text-bg-secondary text-wrap" style="max-width:160px;">Chờ HR kiểm tra phiếu</span>
                                     @elseif($workflow->isHrChecked($payroll->status))
                                         <span class="badge text-bg-info text-wrap" style="max-width:160px;">Chờ phê duyệt cuối</span>
                                     @elseif($payroll->status === 'payroll_issue' || $payroll->confirmation_status === 'issue_reported')
@@ -404,6 +478,13 @@
                                     @elseif($payroll->status === 'paid')
                                         <span class="badge text-bg-success">Đã thanh toán</span>
                                     @endif
+                                    @else
+                                        @if($periodLocked)
+                                            <span class="badge text-bg-primary text-wrap" style="max-width:180px;">Đã chốt — chờ kế toán tính</span>
+                                        @else
+                                            <span class="badge text-bg-warning text-wrap" style="max-width:180px;">HR đang kiểm tra nguồn</span>
+                                        @endif
+                                    @endif
                                 </div>
                             </td>
                         </tr>
@@ -412,6 +493,8 @@
                             <td colspan="20" class="text-center py-5 text-muted">
                                 @if(!empty($paymentFocus))
                                     Không có phiếu nhân viên đã xác nhận chờ thanh toán trong kỳ này.
+                                @elseif(auth()->user()?->is_hr)
+                                    Không có nhân viên đang làm để kiểm tra số liệu kỳ này.
                                 @else
                                     Chưa có dữ liệu bảng lương.
                                 @endif
