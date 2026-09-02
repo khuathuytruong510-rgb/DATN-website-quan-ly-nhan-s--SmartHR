@@ -97,7 +97,6 @@
                             </td>
                             <td>
                                 <div class="fw-semibold">{{ $p->employee->name ?? '-' }}</div>
-                                <small class="text-muted">ID: {{ $p->employee->employee_code ?? '-' }}</small>
                             </td>
                             <td>{{ $p->employee->department->name ?? '-' }}</td>
                             <td class="text-center">

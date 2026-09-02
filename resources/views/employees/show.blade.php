@@ -21,7 +21,6 @@
 <div class="page-head">
     <div>
         <h1>Thông tin nhân viên</h1>
-        <p class="muted">{{ $directorView ? 'Thông tin phục vụ quản lý và phê duyệt. Không gồm dữ liệu cá nhân nhạy cảm.' : 'Xem chi tiết hồ sơ nhân viên.' }}</p>
     </div>
     <div>
         @if(auth()->user()?->canManageHr() && \App\Support\RequestApprover::hrMayManage(auth()->user(), $employee))
@@ -55,7 +54,7 @@
                 <div class="field"><label>Kinh nghiệm</label><div>{{ $employee->experience ?? '—' }}</div></div>
                 <div class="field"><label>Số ngày phép còn lại</label><div>{{ $employee->leave_balance ?? 0 }} ngày</div></div>
             @endunless
-            <div class="field"><label>Trạng thái</label><div>{{ $employee->statusLabel() }}</div></div>
+            <div class="field"><label>Trạng thái</label><div>{{ $employee->statusLabel() }}@if($employee->terminated_at) · ngày nghỉ {{ $employee->terminated_at->format('d/m/Y') }}@endif</div></div>
             @unless($directorView)
                 <div class="field"><label>Ngày tạo</label><div>{{ $employee->created_at->format('d/m/Y H:i') }}</div></div>
             @endunless
@@ -66,7 +65,6 @@
 @if($employee->positionHistories->isNotEmpty())
 <div class="card" style="margin-top:16px;">
     <h3 style="margin-top:0;">Lịch sử chức vụ / điều chuyển</h3>
-    <p class="muted" style="margin:0 0 12px;">Giữ nguyên nhiệm kỳ cũ khi thay người giữ chức. Điều chuyển phòng ban chỉ ghi nhận sau khi Giám đốc duyệt.</p>
     <table>
         <thead>
             <tr>
@@ -96,7 +94,6 @@
 <div class="card" style="margin-top:16px;">
     <h3 style="margin-top:0;">Hợp đồng</h3>
     @if($employee->contracts->isEmpty())
-        <p class="muted" style="margin:0;">Chưa có hợp đồng.</p>
     @else
         <table>
             <thead>

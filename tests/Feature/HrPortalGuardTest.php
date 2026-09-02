@@ -72,8 +72,8 @@ class HrPortalGuardTest extends TestCase
             ->assertSee('Hợp đồng')
             ->assertSee('Lương CB (HĐ)')
             ->assertSee('Phụ cấp (HĐ)')
-            ->assertSee('Đã kiểm tra — chốt và gửi kế toán tính lương')
-            ->assertSee('HR đang kiểm tra nguồn')
+            ->assertSee('Khóa lại kỳ')
+            ->assertSee('Kỳ đang mở')
             ->assertDontSee('Thực nhận')
             ->assertDontSee('Chưa có dữ liệu bảng lương');
 
@@ -83,7 +83,8 @@ class HrPortalGuardTest extends TestCase
             ->get(route('payroll.index', ['month' => 8, 'year' => 2026]))
             ->assertOk()
             ->assertSee('Nguyen Van HR')
-            ->assertSee('Đã chốt — chờ kế toán tính')
+            ->assertSee('Đã chốt — HR đang kiểm tra')
+            ->assertSee('Đã kiểm tra nguồn — gửi kế toán tính')
             ->assertDontSee('Thực nhận')
             ->assertDontSee('Chưa có dữ liệu bảng lương');
     }
@@ -245,7 +246,7 @@ class HrPortalGuardTest extends TestCase
 
         $this->actingAs($hr);
         $this->get(route('employees.index'))->assertOk();
-        $this->get(route('leave_requests.index'))->assertOk()->assertSee('Quản Lý Đơn Nghỉ Phép');
+        $this->get(route('leave_requests.index'))->assertOk()->assertSee('Nghỉ phép');
         $this->get(route('attendance.index'))->assertOk();
         $this->get(route('contracts.index'))->assertOk();
         $this->get(route('payroll.issues.index'))->assertOk();
@@ -293,8 +294,24 @@ class HrPortalGuardTest extends TestCase
         ])->assertRedirect()->assertSessionHas('success');
 
         $this->assertDatabaseHas('activity_logs', [
-            'action' => 'payroll_period_unlocked',
+            'action' => 'payroll_period_unlock_requested',
             'user_id' => $hr->id,
+        ]);
+        $this->assertDatabaseHas('payroll_period_locks', [
+            'month' => 8,
+            'year' => 2026,
+            'is_locked' => true,
+            'unlock_request_status' => 'pending',
+        ]);
+
+        $this->actingAs($gd)->post(route('payroll.period.unlock.approve'), [
+            'month' => 8,
+            'year' => 2026,
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $this->assertDatabaseHas('activity_logs', [
+            'action' => 'payroll_period_unlocked',
+            'user_id' => $gd->id,
         ]);
         $this->assertDatabaseHas('payroll_period_locks', [
             'month' => 8,

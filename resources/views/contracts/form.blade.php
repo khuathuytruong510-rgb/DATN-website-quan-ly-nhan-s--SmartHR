@@ -6,13 +6,10 @@
     <div>
         @if(isset($renewingFrom))
             <h1>Gia hạn hợp đồng</h1>
-            <p class="muted">Tạo hợp đồng mới kế tiếp từ hợp đồng <strong>{{ $renewingFrom->contract_code }}</strong>.</p>
         @elseif($isEdit)
             <h1>Chỉnh sửa hợp đồng</h1>
-            <p class="muted">Cập nhật thông tin hợp đồng.</p>
         @else
             <h1>Tạo hợp đồng mới</h1>
-            <p class="muted">Vui lòng nhập đầy đủ thông tin để tạo hợp đồng cho nhân viên.</p>
         @endif
     </div>
     <a class="btn link" href="{{ route('contracts.index') }}">Quay lại</a>
@@ -69,39 +66,55 @@
             <strong>1. Thông tin nhân viên</strong>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-            <div class="field">
-                <label>Nhân viên <span class="text-danger">*</span></label>
-                @if(isset($renewingFrom))
-                    <input type="hidden" name="employee_id" value="{{ $contract->employee_id }}">
-                    <input type="text" readonly value="{{ optional($contract->employee)->name ?? '' }}" style="background:#f8fafc;color:#475569;">
-                @else
-                    <select name="employee_id" id="employeeSelect" {{ $isEdit ? 'disabled' : 'required' }}>
-                        <option value="">-- Chọn nhân viên --</option>
-                        @foreach($employees as $emp)
-                            <option value="{{ $emp->id }}" {{ old('employee_id', $contract->employee_id) == $emp->id ? 'selected' : '' }}>{{ $emp->name }}</option>
-                        @endforeach
-                    </select>
-                    @if($isEdit)
-                        <input type="hidden" name="employee_id" value="{{ $contract->employee_id }}">
-                    @endif
+            @if(isset($renewingFrom))
+                <input type="hidden" name="employee_id" value="{{ $contract->employee_id }}">
+                <div class="field">
+                    <label>Mã nhân viên</label>
+                    <input type="text" readonly style="background:#f8fafc;color:#64748b;" value="{{ optional($contract->employee)->employee_code ?? '' }}">
+                </div>
+                <div class="field">
+                    <label>Họ tên</label>
+                    <input type="text" readonly value="{{ optional($contract->employee)->name ?? '' }}">
+                </div>
+            @elseif($isEdit)
+                <input type="hidden" name="employee_id" value="{{ $contract->employee_id }}">
+                <div class="field">
+                    <label>Mã nhân viên</label>
+                    <input type="text" id="employeeCode" readonly style="background:#f8fafc;color:#64748b;" value="{{ optional($contract->employee)->employee_code ?? '' }}">
+                </div>
+                <div class="field">
+                    <label>Họ tên</label>
+                    <input type="text" id="employeeName" readonly value="{{ optional($contract->employee)->name ?? '' }}">
+                </div>
+            @else
+                <div class="field">
+                    <label>Mã nhân viên <span class="text-danger">*</span></label>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" id="employeeCode" value="{{ old('employee_code', optional($contract->employee)->employee_code ?? '') }}" placeholder="VD: NS-0001" autocomplete="off" required style="flex:1;">
+                        <button type="button" class="btn" id="lookupEmployeeBtn">Tìm</button>
+                    </div>
+                    <input type="hidden" name="employee_id" id="employeeId" value="{{ old('employee_id', $contract->employee_id) }}" required>
                     @error('employee_id')<span class="error">{{ $message }}</span>@enderror
-                @endif
-            </div>
-            <div class="field">
-                <label>Mã nhân viên</label>
-                <input type="text" id="employeeCode" readonly style="background:#f8fafc;color:#64748b;" value="{{ optional($contract->employee)->employee_code ?? '' }}">
-            </div>
-            <div class="field">
-                <label>Họ tên</label>
-                <input type="text" id="employeeName" readonly value="{{ optional($contract->employee)->name ?? '' }}">
-            </div>
+                </div>
+                <div class="field">
+                    <label>Họ tên</label>
+                    <input type="text" id="employeeName" readonly value="{{ optional($contract->employee)->name ?? '' }}" style="background:#f8fafc;color:#475569;">
+                </div>
+            @endif
             <div class="field">
                 <label>Phòng ban</label>
-                <input type="text" id="employeeDepartment" readonly value="{{ optional(optional($contract->employee)->department)->name ?? '' }}">
+                <input type="text" id="employeeDepartment" readonly style="background:#f8fafc;color:#475569;" value="{{ optional(optional($contract->employee)->department)->name ?? '' }}">
             </div>
             <div class="field">
                 <label>Chức vụ</label>
-                <input type="text" id="employeePosition" readonly value="{{ optional($contract->employee)->position ?? '' }}">
+                <input type="text" id="employeePosition" readonly style="background:#f8fafc;color:#475569;" value="{{ optional($contract->employee)->position ?? '' }}">
+            </div>
+            <div class="field" style="grid-column:1 / -1;">
+                <label>Email nhân viên <span class="text-danger">*</span></label>
+                <input type="email" name="employee_email" id="employeeEmail" required
+                       value="{{ old('employee_email', optional($contract->employee)->email ?? '') }}"
+                       placeholder="email@congty.com">
+                @error('employee_email')<span class="error">{{ $message }}</span>@enderror
             </div>
         </div>
     </div>
@@ -114,19 +127,25 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
             <div class="field">
                 <label>Mã hợp đồng</label>
-                <input type="text" name="contract_code" value="{{ old('contract_code', $contract->contract_code ?? '') }}" placeholder="Tự động tạo nếu bỏ trống">
+                @if($isEdit)
+                    <input type="text" name="contract_code" value="{{ old('contract_code', $contract->contract_code ?? '') }}" readonly style="background:#f8fafc;color:#475569;">
+                @else
+                    <input type="text" value="{{ old('contract_code', $contract->contract_code ?? '') }}" readonly style="background:#f8fafc;color:#475569;" placeholder="Hệ thống tự sinh khi lưu">
+                @endif
                 @error('contract_code')<span class="error">{{ $message }}</span>@enderror
             </div>
             <div class="field">
                 <label>Loại hợp đồng <span class="text-danger">*</span></label>
                 <select name="contract_type" id="contractTypeSelect" required>
                     <option value="">-- Chọn loại hợp đồng --</option>
-                    <option value="internship"  {{ old('contract_type', $contract->contract_type) == 'internship'  ? 'selected' : '' }}>Thực tập</option>
-                    <option value="probation"   {{ old('contract_type', $contract->contract_type) == 'probation'   ? 'selected' : '' }}>Thử việc</option>
-                    <option value="fixed_term"  {{ old('contract_type', $contract->contract_type) == 'fixed_term'  ? 'selected' : '' }}>Lao động xác định thời hạn</option>
-                    <option value="indefinite"  {{ old('contract_type', $contract->contract_type) == 'indefinite'  ? 'selected' : '' }}>Lao động không xác định thời hạn</option>
-                    <option value="official"    {{ old('contract_type', $contract->contract_type) == 'official'    ? 'selected' : '' }}>Lao động chính thức</option>
+                    <option value="probation"   {{ old('contract_type', $contract->contract_type) == 'probation'   ? 'selected' : '' }}>Hợp đồng thử việc</option>
+                    <option value="fixed_term"  {{ old('contract_type', $contract->contract_type) == 'fixed_term'  ? 'selected' : '' }}>Hợp đồng lao động xác định thời hạn</option>
+                    <option value="indefinite"  {{ old('contract_type', $contract->contract_type) == 'indefinite'  ? 'selected' : '' }}>Hợp đồng lao động không xác định thời hạn</option>
+                    <option value="internship"  {{ old('contract_type', $contract->contract_type) == 'internship'  ? 'selected' : '' }}>Hợp đồng thực tập</option>
                     <option value="seasonal"    {{ old('contract_type', $contract->contract_type) == 'seasonal'    ? 'selected' : '' }}>Hợp đồng thời vụ</option>
+                    @if(old('contract_type', $contract->contract_type ?? '') === 'official')
+                        <option value="official" selected>Hợp đồng lao động chính thức (dữ liệu cũ — chọn loại mới khi sửa)</option>
+                    @endif
                 </select>
                 @error('contract_type')<span class="error">{{ $message }}</span>@enderror
             </div>
@@ -146,14 +165,14 @@
             </div>
             <div class="field">
                 <label>Trạng thái</label>
-                <select name="status" id="statusSelect">
-                    <option value="waiting_employee_signature" {{ old('status', $contract->status) == 'waiting_employee_signature' ? 'selected' : '' }}>Chờ nhân viên ký</option>
-                    <option value="waiting_director_signature" {{ old('status', $contract->status) == 'waiting_director_signature' ? 'selected' : '' }}>Chờ giám đốc ký</option>
-                    <option value="active"    {{ old('status', $contract->status) == 'active'    ? 'selected' : '' }}>Có hiệu lực</option>
-                    <option value="expiring"  {{ old('status', $contract->status) == 'expiring'  ? 'selected' : '' }}>Sắp hết hạn</option>
-                    <option value="expired"   {{ old('status', $contract->status) == 'expired'   ? 'selected' : '' }}>Hết hạn</option>
-                    <option value="cancelled" {{ old('status', $contract->status) == 'cancelled' ? 'selected' : '' }}>Đã hủy</option>
-                </select>
+                @php
+                    $previewStatus = $isEdit ? ($contract->status ?? 'draft') : 'draft';
+                    $previewLabel = $isEdit && $contract->statusLabel ? $contract->statusLabel() : 'Nháp — HR đang soạn';
+                    $previewBadge = in_array($previewStatus, ['active', 'signed'], true) ? 'success' : 'secondary';
+                @endphp
+                <div style="padding:10px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:8px;">
+                    <span class="badge {{ $previewBadge }}" style="font-size:11px;">{{ $previewLabel }}</span>
+                </div>
             </div>
             <input type="hidden" name="title" id="contractTitleInput" value="{{ old('title', $contract->title ?? '') }}">
         </div>
@@ -191,24 +210,13 @@
             </div>
             <div class="field">
                 <label>Hình thức thanh toán</label>
-                <select name="payment_method">
-                    <option value="">-- Chọn hình thức --</option>
-                    <option value="bank_transfer" {{ old('payment_method', $contract->payment_method) == 'bank_transfer' ? 'selected' : '' }}>Chuyển khoản</option>
-                    <option value="cash"          {{ old('payment_method', $contract->payment_method) == 'cash'          ? 'selected' : '' }}>Tiền mặt</option>
-                </select>
+                <div style="padding:10px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:8px;">
+                    Tiền mặt và chuyển khoản
+                </div>
             </div>
             <div class="field">
                 <label>Nơi làm việc</label>
                 <input type="text" name="workplace" value="{{ old('workplace', $contract->workplace) }}">
-            </div>
-            <div class="field">
-                <label>Ca làm việc</label>
-                <select name="working_schedule">
-                    <option value="">-- Chọn ca --</option>
-                    <option value="morning"         {{ old('working_schedule', $contract->working_schedule) == 'morning'         ? 'selected' : '' }}>Sáng</option>
-                    <option value="evening"         {{ old('working_schedule', $contract->working_schedule) == 'evening'         ? 'selected' : '' }}>Tối</option>
-                    <option value="morning_evening" {{ old('working_schedule', $contract->working_schedule) == 'morning_evening' ? 'selected' : '' }}>Sáng và tối</option>
-                </select>
             </div>
             <div class="field">
                 <label>Phúc lợi</label>
@@ -216,43 +224,21 @@
             </div>
             <div class="field">
                 <label>Tổng thu nhập</label>
-                <input type="text" id="totalIncomeDisplay" readonly style="font-weight:700;background:#f0fdf4;color:#16a34a;" value="">
+                <input type="text" id="totalIncomeDisplay" readonly style="font-weight:700;background:#f0fdf4;color:#16a34a;" value="" aria-readonly="true">
             </div>
         </div>
     </div>
 
-    {{-- 4. Điều khoản cố định --}}
+    {{-- 4. Điều khoản hợp đồng (mẫu hệ thống) --}}
     <div class="card" style="margin-bottom:20px;">
         <div style="padding:6px 0 16px 0;border-bottom:1px solid var(--line);margin-bottom:16px;">
-            <strong>4. Điều khoản cố định</strong>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
-            <div class="field">
-                <label>Nghỉ phép không lương (ngày/tháng)</label>
-                <input type="number" name="allowed_unpaid_leave_days_per_month" min="0" max="31" value="{{ old('allowed_unpaid_leave_days_per_month', $contract->allowed_unpaid_leave_days_per_month ?? 1) }}">
-            </div>
-            <div class="field">
-                <label>Điểm danh bù (lần/tháng)</label>
-                <input type="number" name="allowed_makeup_attendance_per_month" min="0" max="31" value="{{ old('allowed_makeup_attendance_per_month', $contract->allowed_makeup_attendance_per_month ?? 3) }}">
-            </div>
-            <div class="field">
-                <label>Nghỉ thai sản (ngày)</label>
-                <input type="number" name="allowed_maternity_leave_days" min="0" max="365" value="{{ old('allowed_maternity_leave_days', $contract->allowed_maternity_leave_days ?? 180) }}">
-            </div>
-        </div>
-    </div>
-
-    {{-- 5. Điều khoản hợp đồng --}}
-    <div class="card" style="margin-bottom:20px;">
-        <div style="padding:6px 0 16px 0;border-bottom:1px solid var(--line);margin-bottom:16px;">
-            <strong>5. Điều khoản hợp đồng</strong>
+            <strong>4. Điều khoản hợp đồng</strong>
         </div>
         <div id="templateAlert" style="display:none;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:14px;background:#fffbeb;color:#92400e;border:1px solid #fde68a;">
             <span id="templateAlertText"></span>
         </div>
         <div class="field">
             <label>Nội dung điều khoản</label>
-            <p class="muted" style="margin:0 0 8px;">Điều khoản lấy sẵn theo loại hợp đồng (mẫu hệ thống). Không nhập hoặc chỉnh sửa tại đây.</p>
             <div id="templateLoader" style="display:none;margin-bottom:8px;">
                 <span style="display:inline-block;width:14px;height:14px;border:2px solid #e2e8f0;border-top-color:#2563eb;border-radius:50%;animation:spin .6s linear infinite;margin-right:6px;vertical-align:middle;"></span>
                 <span class="muted">Đang tải mẫu điều khoản...</span>
@@ -263,14 +249,13 @@
         </div>
     </div>
 
-    {{-- 6. File hợp đồng --}}
+    {{-- 5. File hợp đồng --}}
     <div class="card" style="margin-bottom:20px;">
         <div style="padding:6px 0 16px 0;border-bottom:1px solid var(--line);margin-bottom:16px;">
-            <strong>6. File hợp đồng</strong>
+            <strong>5. File hợp đồng</strong>
         </div>
         <div class="field">
             <input type="file" name="document" accept=".pdf,.doc,.docx">
-            <span class="muted" style="font-size:13px;">Có thể để trống để lưu online và xuất file sau.</span>
         </div>
         @error('document')<span class="error">{{ $message }}</span>@enderror
         @if($contract->document_name)
@@ -283,25 +268,23 @@
         @endif
     </div>
 
-    {{-- 7. Ghi chú --}}
+    {{-- 6. Ghi chú nội bộ --}}
     <div class="card" style="margin-bottom:20px;">
         <div style="padding:6px 0 16px 0;border-bottom:1px solid var(--line);margin-bottom:16px;">
-            <strong>7. Ghi chú</strong>
+            <strong>6. Ghi chú nội bộ</strong>
         </div>
         <div class="field">
-            <textarea name="notes" rows="4">{{ old('notes', $contract->notes) }}</textarea>
+            <textarea name="notes" rows="4" placeholder="Ghi chú HR nội bộ — không đưa vào văn bản hợp đồng nhân viên ký.">{{ old('notes', $contract->notes) }}</textarea>
         </div>
     </div>
 
     <div class="actions" style="margin-top:0;margin-bottom:0;">
-        <button class="btn primary" type="submit">{{ isset($renewingFrom) ? '🔄 Tạo hợp đồng gia hạn' : 'Lưu' }}</button>
+        <button class="btn primary" type="submit">{{ isset($renewingFrom) ? '🔄 Tạo hợp đồng gia hạn' : 'Lưu nháp' }}</button>
         @if(!isset($renewingFrom))
-            <button class="btn" type="button" id="exportContractButton">Xuất file hợp đồng</button>
-            <button class="btn" type="submit" name="send_email" value="1">Lưu &amp; Gửi Email</button>
+            <button class="btn" type="button" id="exportContractButton" title="Chỉ tải bản xem trước trên máy — không lưu DB, không phải hợp đồng đã ký">Xuất file xem trước</button>
         @endif
         <a class="btn" href="{{ route('contracts.index') }}">Hủy</a>
     </div>
-    <p class="muted" style="margin:10px 0 0;font-size:13px;">Sau khi lưu, hợp đồng ở trạng thái chờ nhân viên ký. Nhân viên đăng nhập và ký, rồi Giám đốc ký thì hợp đồng mới có hiệu lực. HR không ký thay nhân viên.</p>
 
     </div>{{-- end scroll wrapper --}}
     </div>{{-- end flex --}}
@@ -330,22 +313,22 @@
             <div style="font-weight:600;margin-top:4px;" id="qiAllowance">0 VNĐ</div>
         </div>
         <div>
-            <div class="muted" style="font-size:11px;">Trạng thái</div>
+            <div class="muted" style="font-size:11px;">Trạng thái (preview)</div>
             <div style="margin-top:4px;">
                 @php
-                    $b = match($contract->status ?? '') {
-                        'waiting_employee_signature','waiting_director_signature' => 'warning',
-                        'active' => 'success', 'expiring' => 'info', 'expired' => 'danger',
-                        'cancelled' => 'secondary', default => 'secondary'
+                    $b = match($contract->status ?? 'draft') {
+                        'waiting_employee_signature','waiting_director_signature','pending_signature','director_signed','employee_signed','draft' => 'warning',
+                        'signed', 'active' => 'success',
+                        'expiring'  => 'info',
+                        'expired'   => 'danger',
+                        'cancelled' => 'secondary',
+                        default     => 'secondary',
                     };
-                    $lbl = match($contract->status ?? '') {
-                        'waiting_employee_signature' => 'Chờ NV ký',
-                        'waiting_director_signature' => 'Chờ GĐ ký',
-                        'active' => 'Có hiệu lực', 'expiring' => 'Sắp hết hạn',
-                        'expired' => 'Hết hạn', 'cancelled' => 'Đã hủy', default => 'Chờ xử lý'
-                    };
+                    $lbl = $isEdit && method_exists($contract, 'statusLabel')
+                        ? $contract->statusLabel()
+                        : 'Nháp — HR đang soạn';
                 @endphp
-                <span id="qiStatus" class="badge {{ $b }}" style="font-size:10px;">{{ $lbl }}</span>
+                <span class="badge {{ $b }}" style="font-size:10px;">{{ $lbl }}</span>
             </div>
         </div>
     </div>
@@ -354,17 +337,12 @@
 {{-- Người ký --}}
 <div class="card" style="margin-top:16px;">
     <div style="padding:6px 0 14px 0;border-bottom:1px solid var(--line);margin-bottom:14px;">
-        <strong>Người ký kết</strong>
+        <strong>Người ký kết (theo quy trình)</strong>
     </div>
-    <div class="field" style="margin-bottom:0;">
-        <label>Người ký</label>
-        <select name="signer_id">
-            <option value="">-- Chọn người ký --</option>
-            @foreach($signers as $signer)
-                <option value="{{ $signer->id }}" {{ old('signer_id', $contract->signer_id) == $signer->id ? 'selected' : '' }}>{{ $signer->name }}</option>
-            @endforeach
-        </select>
-    </div>
+    <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.8;">
+        <li><strong>Giám đốc</strong> — ký phía doanh nghiệp (sau HR gửi ký)</li>
+        <li><strong>Nhân viên</strong> — ký phía người lao động (sau Giám đốc)</li>
+    </ul>
 </div>
 </div>{{-- end contract-page --}}
 
@@ -386,7 +364,10 @@
     const parseFormatted = s => parseInt((s||'').replace(/\./g,'').replace(/,/g,'')) || 0;
 
     const $  = id => document.getElementById(id);
-    const employeeSelect      = document.getElementById('employeeSelect');
+    const employeeCodeInput   = document.getElementById('employeeCode');
+    const employeeIdInput     = document.getElementById('employeeId');
+    const lookupEmployeeBtn   = document.getElementById('lookupEmployeeBtn');
+    const employeeLookupHint  = document.getElementById('employeeLookupHint');
     const baseSalaryDisplay   = $('baseSalaryDisplay');
     const baseSalaryInput     = $('baseSalaryInput');
     const allowanceDisplay    = $('allowanceDisplay');
@@ -398,8 +379,6 @@
     const qiAllowance         = $('qiAllowance');
     const qiHighlightTotalIncome = $('qiHighlightTotalIncome');
     const qiContractType      = $('qiContractType');
-    const qiStatus            = $('qiStatus');
-    const statusSelect        = $('statusSelect');
     const contractTypeSelect  = $('contractTypeSelect');
     const contractTitleInput  = $('contractTitleInput');
     const contractContentField= $('contractContentField');
@@ -413,10 +392,17 @@
     const endDateInput        = $('endDateInput');
     const exportBtn           = $('exportContractButton');
     const btnFillFromPayroll  = $('btnFillFromPayroll');
+    const companyName         = @json('Công ty TNHH SmartHR');
+    @php
+        $exportDirector = \App\Models\User::query()->where('is_director', true)->with('employee')->orderBy('id')->first();
+        $exportDirectorName = optional(optional($exportDirector)->employee)->name
+            ?? optional($exportDirector)->name
+            ?? 'Giám đốc';
+    @endphp
+    const directorName        = @json($exportDirectorName);
 
-    const typeLabels  = {internship:'Thực tập',probation:'Thử việc',fixed_term:'Xác định TH',indefinite:'Không XĐ TH',official:'LĐ chính thức',seasonal:'Thời vụ'};
-    const typeTitles  = {internship:'Hợp đồng thực tập',probation:'Hợp đồng thử việc',fixed_term:'Hợp đồng LĐ xác định thời hạn',indefinite:'Hợp đồng LĐ không xác định thời hạn',official:'Hợp đồng LĐ chính thức',seasonal:'Hợp đồng thời vụ'};
-    const statusMap   = s => ({'waiting_employee_signature':['warning','Chờ NV ký'],'waiting_director_signature':['warning','Chờ GĐ ký'],'active':['success','Có hiệu lực'],'expiring':['info','Sắp hết hạn'],'expired':['danger','Hết hạn'],'cancelled':['secondary','Đã hủy']}[s]||['secondary','Chờ xử lý']);
+    const typeLabels  = {internship:'Thực tập',probation:'Thử việc',fixed_term:'XĐ thời hạn',indefinite:'Không XĐ TH',official:'LĐ chính thức (cũ)',seasonal:'Thời vụ'};
+    const typeTitles  = {internship:'Hợp đồng thực tập',probation:'Hợp đồng thử việc',fixed_term:'Hợp đồng lao động xác định thời hạn',indefinite:'Hợp đồng lao động không xác định thời hạn',official:'Hợp đồng lao động chính thức',seasonal:'Hợp đồng thời vụ'};
 
     let previousContractType = contractTypeSelect?.value || '';
 
@@ -449,14 +435,6 @@
         textEl.textContent = msg || '';
     }
 
-    function updateStatusBadge(s) {
-        if (!qiStatus) return;
-        const [cls, label] = statusMap(s);
-        qiStatus.className = `badge ${cls}`;
-        qiStatus.textContent = label;
-    }
-
-    // Attach formatted-number editing to salary fields
     function attachNumberField(displayEl, hiddenEl) {
         if (!displayEl || !hiddenEl) return;
         displayEl.addEventListener('focus', () => { displayEl.value = hiddenEl.value || ''; });
@@ -485,31 +463,85 @@
         });
     }
 
-    // Employee select
-    if (employeeSelect) {
-        const populateEmployee = (id) => {
-            if (!id) { updateTotals(); return; }
-            fetch(`/employees/${id}`, { headers: { 'Accept':'application/json','X-Requested-With':'XMLHttpRequest' } })
-                .then(r => r.json())
-                .then(data => {
-                    if (document.getElementById('employeeCode')) document.getElementById('employeeCode').value = data.employee_code || '';
-                    if (document.getElementById('employeeName')) document.getElementById('employeeName').value = data.name || '';
-                    if (document.getElementById('employeeDepartment')) document.getElementById('employeeDepartment').value = data.department?.name || '';
-                    if (document.getElementById('employeePosition')) document.getElementById('employeePosition').value = data.position || '';
-                    const base = data.position_base_salary || 0;
-                    const allow = data.position_allowance || 0;
-                    if (base > 0 && baseSalaryInput) {
-                        baseSalaryInput.value = base; baseSalaryDisplay.value = fmt(base);
-                        allowanceInput.value = allow; allowanceDisplay.value = fmt(allow);
-                        updateTotals(); showAlert(salaryAlert, salaryAlertText, '');
-                    } else {
-                        showAlert(salaryAlert, salaryAlertText, 'Chưa cấu hình mức lương cho chức vụ này.');
-                        updateTotals();
-                    }
-                }).catch(() => updateTotals());
-        };
-        employeeSelect.addEventListener('change', function () { populateEmployee(this.value); });
-        if (employeeSelect.value) populateEmployee(employeeSelect.value);
+    // Employee lookup by code
+    const applyEmployeeData = (data) => {
+        if (employeeIdInput) employeeIdInput.value = data.id || '';
+        if (employeeCodeInput && data.employee_code) employeeCodeInput.value = data.employee_code;
+        if (document.getElementById('employeeName')) document.getElementById('employeeName').value = data.name || '';
+        if (document.getElementById('employeeDepartment')) document.getElementById('employeeDepartment').value = data.department?.name || '';
+        if (document.getElementById('employeePosition')) document.getElementById('employeePosition').value = data.position || '';
+        if (document.getElementById('employeeEmail')) document.getElementById('employeeEmail').value = data.email || '';
+        const base = data.position_base_salary || 0;
+        const allow = data.position_allowance || 0;
+        if (base > 0 && baseSalaryInput) {
+            baseSalaryInput.value = base; baseSalaryDisplay.value = fmt(base);
+            allowanceInput.value = allow; allowanceDisplay.value = fmt(allow);
+            updateTotals(); showAlert(salaryAlert, salaryAlertText, '');
+        } else {
+            showAlert(salaryAlert, salaryAlertText, 'Chưa cấu hình mức lương cho chức vụ này.');
+            updateTotals();
+        }
+        if (employeeLookupHint) {
+            employeeLookupHint.textContent = data.status_label
+                ? `Đã tìm thấy: ${data.name} (${data.status_label}).`
+                : `Đã tìm thấy: ${data.name}.`;
+            employeeLookupHint.style.color = '';
+        }
+    };
+
+    const clearEmployeeData = (message) => {
+        if (employeeIdInput) employeeIdInput.value = '';
+        if (document.getElementById('employeeName')) document.getElementById('employeeName').value = '';
+        if (document.getElementById('employeeDepartment')) document.getElementById('employeeDepartment').value = '';
+        if (document.getElementById('employeePosition')) document.getElementById('employeePosition').value = '';
+        if (document.getElementById('employeeEmail') && !@json($isEdit)) document.getElementById('employeeEmail').value = '';
+        if (employeeLookupHint) {
+            employeeLookupHint.textContent = message || 'Nhập mã nhân viên rồi Enter hoặc bấm Tìm để điền thông tin.';
+            employeeLookupHint.style.color = message ? '#b91c1c' : '';
+        }
+        updateTotals();
+    };
+
+    const lookupEmployeeByCode = () => {
+        if (!employeeCodeInput || employeeCodeInput.readOnly) return;
+        const code = (employeeCodeInput.value || '').trim();
+        if (!code) {
+            clearEmployeeData('Vui lòng nhập mã nhân viên.');
+            return;
+        }
+        if (employeeLookupHint) {
+            employeeLookupHint.textContent = 'Đang tìm...';
+            employeeLookupHint.style.color = '';
+        }
+        fetch(@json(route('employees.by_code')) + '?code=' + encodeURIComponent(code), {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(async (r) => {
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error(data.message || 'Không tìm thấy nhân viên.');
+                return data;
+            })
+            .then(applyEmployeeData)
+            .catch((err) => clearEmployeeData(err.message || 'Không tìm thấy nhân viên.'));
+    };
+
+    lookupEmployeeBtn?.addEventListener('click', lookupEmployeeByCode);
+    employeeCodeInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            lookupEmployeeByCode();
+        }
+    });
+    employeeCodeInput?.addEventListener('input', () => {
+        if (employeeIdInput) employeeIdInput.value = '';
+    });
+    employeeCodeInput?.addEventListener('blur', () => {
+        if ((employeeCodeInput.value || '').trim() && !employeeIdInput?.value) {
+            lookupEmployeeByCode();
+        }
+    });
+    if (employeeIdInput?.value && employeeCodeInput && !employeeCodeInput.readOnly) {
+        lookupEmployeeByCode();
     }
 
     // No end date checkbox
@@ -517,9 +549,6 @@
         if (endDateInput) { endDateInput.disabled = this.checked; if (this.checked) endDateInput.value = ''; }
     });
     if (noEndDate?.checked && endDateInput) endDateInput.disabled = true;
-
-    // Status badge
-    statusSelect?.addEventListener('change', function () { updateStatusBadge(this.value); });
 
     // Contract type → title + template content
     const populateTemplateContent = (ct) => {
@@ -547,37 +576,178 @@
         populateTemplateContent(ct);
     });
 
-    // Export
+    // Export — Word HTML (bản xem trước, chưa ký)
+    const escapeHtml = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const formatDateVi = iso => {
+        if (!iso) return '…/…/……';
+        const p = iso.split('-');
+        return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso;
+    };
+    const todayVi = () => {
+        const d = new Date();
+        return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+    };
+    const formatTermsHtml = text => {
+        const blocks = String(text || '').trim().split(/\n{2,}/);
+        return blocks.map(block => {
+            const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+            if (!lines.length) return '';
+            const head = lines[0];
+            if (/^ĐIỀU KHOẢN/i.test(head)) {
+                return `<p class="section-title">${escapeHtml(head)}</p>` +
+                    lines.slice(1).map(l => `<p class="clause">${escapeHtml(l)}</p>`).join('');
+            }
+            return lines.map(l => `<p class="clause">${escapeHtml(l)}</p>`).join('');
+        }).join('');
+    };
+    const buildContractDocumentHtml = () => {
+        const ct = contractTypeSelect?.value || '';
+        const title = typeTitles[ct] || contractTitleInput?.value || 'HỢP ĐỒNG LAO ĐỘNG';
+        const codeEl = document.querySelector('[name="contract_code"]');
+        const code = (codeEl?.value || '').trim() || '(tự sinh khi lưu nháp)';
+        const empName = document.getElementById('employeeName')?.value || '…………………………';
+        const empCode = document.getElementById('employeeCode')?.value || '—';
+        const dept = document.getElementById('employeeDepartment')?.value || '—';
+        const position = document.getElementById('employeePosition')?.value || '—';
+        const startDate = document.querySelector('[name="start_date"]')?.value || '';
+        const endDate = noEndDate?.checked ? '' : (document.querySelector('[name="end_date"]')?.value || '');
+        const workplace = document.querySelector('[name="workplace"]')?.value || 'Theo quy định công ty';
+        const base = Number(baseSalaryInput?.value) || 0;
+        const allowance = Number(allowanceInput?.value) || 0;
+        const bonus = Number(bonusInput?.value) || 0;
+        const total = base + allowance + bonus;
+        const terms = contractContentField?.value.trim() || '';
+        const endLabel = endDate ? formatDateVi(endDate) : 'Không xác định thời hạn';
+
+        return `<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" lang="vi">
+<head>
+<meta charset="utf-8">
+<title>${escapeHtml(code)} — ${escapeHtml(title)}</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+<style>
+@page { size: A4; margin: 2cm 2cm 2.5cm 3cm; }
+body { font-family: "Times New Roman", Times, serif; font-size: 13pt; line-height: 1.45; color: #000; }
+.watermark { text-align: center; font-size: 11pt; font-weight: bold; color: #b45309; border: 1px solid #f59e0b; background: #fffbeb; padding: 6px 10px; margin-bottom: 18px; }
+.center { text-align: center; }
+.right { text-align: right; }
+.bold { font-weight: bold; }
+.underline { text-decoration: underline; }
+.nation { font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
+.motto { font-style: italic; }
+.title-main { font-weight: bold; text-transform: uppercase; font-size: 16pt; margin: 18px 0 6px; }
+.title-sub { font-weight: bold; text-transform: uppercase; font-size: 13pt; margin: 0 0 14px; }
+.meta { margin: 12px 0 18px; }
+.party { margin: 10px 0; }
+.party-title { font-weight: bold; text-transform: uppercase; margin: 14px 0 6px; }
+.line { margin: 3px 0; }
+table.info { width: 100%; border-collapse: collapse; margin: 14px 0 18px; }
+table.info td { border: 1px solid #333; padding: 7px 10px; vertical-align: top; }
+table.info td.label { width: 34%; font-weight: bold; background: #f9f9f9; }
+.section-title { font-weight: bold; text-transform: uppercase; text-align: center; margin: 20px 0 10px; }
+.clause { margin: 4px 0; text-align: justify; }
+.signatures { width: 100%; margin-top: 36px; border-collapse: collapse; }
+.signatures td { width: 50%; vertical-align: top; text-align: center; padding: 8px; }
+.sign-space { height: 90px; }
+.footer-note { font-size: 11pt; color: #555; margin-top: 24px; font-style: italic; text-align: center; }
+</style>
+</head>
+<body>
+<div class="watermark">BẢN XEM TRƯỚC — CHƯA KÝ SỐ, CHƯA CÓ HIỆU LỰC PHÁP LÝ</div>
+
+<p class="center nation">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
+<p class="center motto">Độc lập – Tự do – Hạnh phúc</p>
+<p class="center underline">——————</p>
+
+<p class="center title-main">${escapeHtml(title)}</p>
+<p class="center">Số: <span class="bold">${escapeHtml(code)}</span></p>
+
+<p class="meta">Hôm nay, ngày <span class="bold">${todayVi()}</span>, tại ${escapeHtml(companyName)}, chúng tôi gồm:</p>
+
+<p class="party-title">Bên A — Người sử dụng lao động</p>
+<div class="party">
+<p class="line">Tên doanh nghiệp: <span class="bold">${escapeHtml(companyName)}</span></p>
+<p class="line">Đại diện: <span class="bold">${escapeHtml(directorName)}</span> &nbsp;&nbsp; Chức vụ: <span class="bold">Giám đốc</span></p>
+</div>
+
+<p class="party-title">Bên B — Người lao động</p>
+<div class="party">
+<p class="line">Họ và tên: <span class="bold">${escapeHtml(empName)}</span></p>
+<p class="line">Mã nhân viên: <span class="bold">${escapeHtml(empCode)}</span></p>
+<p class="line">Phòng ban: ${escapeHtml(dept)} &nbsp;&nbsp; Chức vụ: <span class="bold">${escapeHtml(position)}</span></p>
+</div>
+
+<p>Hai bên thỏa thuận ký kết hợp đồng lao động với các nội dung sau:</p>
+
+<table class="info">
+<tr><td class="label">Loại hợp đồng</td><td>${escapeHtml(typeLabels[ct] || ct || '—')}</td></tr>
+<tr><td class="label">Thời hạn</td><td>Từ ngày <span class="bold">${formatDateVi(startDate)}</span> đến ngày <span class="bold">${endLabel}</span></td></tr>
+<tr><td class="label">Nơi làm việc</td><td>${escapeHtml(workplace)}</td></tr>
+<tr><td class="label">Lương cơ bản</td><td><span class="bold">${fmt(base)}</span> VNĐ/tháng</td></tr>
+<tr><td class="label">Phụ cấp chức vụ</td><td>${fmt(allowance)} VNĐ/tháng</td></tr>
+<tr><td class="label">Phụ cấp khác</td><td>${fmt(bonus)} VNĐ/tháng</td></tr>
+<tr><td class="label">Tổng thu nhập</td><td><span class="bold">${fmt(total)}</span> VNĐ/tháng</td></tr>
+<tr><td class="label">Hình thức thanh toán</td><td>Tiền mặt và chuyển khoản</td></tr>
+</table>
+
+${formatTermsHtml(terms)}
+
+<table class="signatures">
+<tr>
+<td>
+<p class="bold">ĐẠI DIỆN BÊN A</p>
+<p><em>(Ký, ghi rõ họ tên, đóng dấu)</em></p>
+<div class="sign-space"></div>
+<p class="bold">${escapeHtml(directorName)}</p>
+</td>
+<td>
+<p class="bold">NGƯỜI LAO ĐỘNG — BÊN B</p>
+<p><em>(Ký, ghi rõ họ tên)</em></p>
+<div class="sign-space"></div>
+<p class="bold">${escapeHtml(empName)}</p>
+</td>
+</tr>
+</table>
+
+<p class="footer-note">Hợp đồng lập thành 02 bản có giá trị như nhau. Bản xem trước này chỉ phục vụ in/đối chiếu trước khi lưu nháp và gửi ký số trên hệ thống SmartHR.</p>
+</body>
+</html>`;
+    };
+
     exportBtn?.addEventListener('click', () => {
-        const content = contractContentField?.value.trim();
-        if (!content) { alert('Không có nội dung.'); return; }
-        const name = document.querySelector('[name="contract_code"]')?.value || 'hop_dong';
-        const blob = new Blob([content], { type:'application/msword;charset=utf-8' });
+        const ct = contractTypeSelect?.value;
+        if (!ct) { alert('Vui lòng chọn loại hợp đồng.'); return; }
+        const empId = document.getElementById('employeeId')?.value || document.querySelector('[name="employee_id"]')?.value;
+        if (!empId && !document.getElementById('employeeName')?.value?.trim()) {
+            alert('Vui lòng nhập mã nhân viên và bấm Tìm.');
+            return;
+        }
+        const html = buildContractDocumentHtml();
+        const code = (document.querySelector('[name="contract_code"]')?.value || 'hop_dong').replace(/\s+/g, '_');
+        const blob = new Blob(['\ufeff', html], { type: 'application/msword;charset=utf-8' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = name.replace(/\s+/g,'_') + '.doc';
+        link.download = code + '_xem_truoc.doc';
         document.body.appendChild(link); link.click(); document.body.removeChild(link);
         URL.revokeObjectURL(link.href);
     });
 
-    // Form submit (AJAX)
+    // Submit thường (không AJAX) — Laravel redirect + flash error rõ ràng hơn
     const form = document.getElementById('contractForm');
     form?.addEventListener('submit', function (e) {
-        e.preventDefault();
+        if (employeeCodeInput && !employeeCodeInput.readOnly) {
+            const empId = (employeeIdInput?.value || '').trim();
+            if (!empId) {
+                e.preventDefault();
+                lookupEmployeeByCode();
+                alert('Vui lòng nhập đúng mã nhân viên và bấm Tìm trước khi lưu.');
+                const btns = form.querySelectorAll('button[type="submit"]');
+                btns.forEach(b => b.disabled = false);
+                return;
+            }
+        }
         const btns = form.querySelectorAll('button[type="submit"]');
         btns.forEach(b => b.disabled = true);
-        fetch(form.action, { method: form.method || 'POST', headers:{'X-Requested-With':'XMLHttpRequest'}, body: new FormData(form) })
-            .then(async res => {
-                const data = await res.json().catch(() => null);
-                if (res.ok && data?.success) {
-                    window.location.href = data.redirect || '{{ route("contracts.index") }}';
-                } else {
-                    const msg = data?.errors ? Object.values(data.errors).flat().join('\n') : (data?.message || 'Lỗi lưu hợp đồng.');
-                    alert(msg);
-                }
-            })
-            .catch(() => alert('Lỗi mạng.'))
-            .finally(() => btns.forEach(b => b.disabled = false));
     });
 
     // Init
@@ -588,7 +758,6 @@
             populateTemplateContent(contractTypeSelect.value);
         }
     }
-    if (statusSelect) updateStatusBadge(statusSelect.value || '{{ $contract->status ?? "" }}');
 })();
 </script>
 @endpush

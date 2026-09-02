@@ -10,7 +10,6 @@
 <div class="page-head">
     <div>
         <h1>Đổi mật khẩu</h1>
-        <p class="muted">Thay đổi mật khẩu tài khoản của bạn</p>
     </div>
     <div class="actions">
         <a class="btn" href="{{ route('me.profile') }}">Quay lại</a>

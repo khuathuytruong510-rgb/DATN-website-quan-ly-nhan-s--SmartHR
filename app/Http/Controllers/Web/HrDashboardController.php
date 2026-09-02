@@ -129,7 +129,7 @@ class HrDashboardController extends Controller
         $totalDepartments = Department::count();
         $totalPositions = Position::count();
         $activeEmployees = Employee::where('status', 'active')->count();
-        $inactiveEmployees = Employee::where('status', 'inactive')->count();
+        $inactiveEmployees = Employee::whereIn('status', Employee::terminatedStatuses())->count();
 
         $probationEmployees = Employee::whereHas('contracts', fn($q) => $q->where('contract_type', 'probation'))->count();
         $internEmployees    = Employee::whereHas('contracts', fn($q) => $q->where('contract_type', 'internship'))->count();

@@ -10,7 +10,6 @@
     <div class="page-head">
         <div>
             <h1>Thông báo</h1>
-            <p class="muted">Thông báo dành cho bạn. Có thể đánh dấu đã đọc, không sửa hoặc xóa thông báo hệ thống.</p>
         </div>
     </div>
 
@@ -32,7 +31,6 @@
                             <div>
                                 <h5>{{ $notification->title }} @if(!$isRead)<span class="badge">Chưa đọc</span>@endif</h5>
                                 <p style="white-space:pre-wrap;">{{ $notification->message }}</p>
-                                <small class="text-muted">{{ $notification->created_at->format('d/m/Y H:i') }}</small>
                                 @if(data_get($notification->data, 'type') === 'transfer_notice' && data_get($notification->data, 'deletion_request_id'))
                                     @php
                                         $transfer = \App\Models\DeletionRequest::find(data_get($notification->data, 'deletion_request_id'));
@@ -47,7 +45,6 @@
                                                 @if(! empty($mine['hr_reply']))
                                                     <p style="margin:8px 0 0;"><strong>HR phản hồi:</strong> {{ $mine['hr_reply'] }}</p>
                                                 @else
-                                                    <p class="muted" style="margin:8px 0 0;">Đã gửi HR, đang chờ giải quyết.</p>
                                                 @endif
                                             </div>
                                         @else

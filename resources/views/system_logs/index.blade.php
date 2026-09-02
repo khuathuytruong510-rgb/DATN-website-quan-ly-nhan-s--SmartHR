@@ -6,7 +6,6 @@
     <div class="page-head">
         <div>
             <h1>Nhật ký hệ thống</h1>
-            <p class="muted">Xem nhật ký hoạt động và sự kiện hệ thống.</p>
         </div>
     </div>
 

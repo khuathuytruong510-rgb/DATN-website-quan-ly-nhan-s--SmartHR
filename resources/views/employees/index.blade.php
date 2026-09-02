@@ -21,7 +21,6 @@
 <div class="page-head">
     <div>
         <h1>Nhân viên</h1>
-        <p class="muted">{{ $directorView ? 'Xem thông tin phục vụ quản lý và phê duyệt. Không chỉnh sửa hồ sơ.' : 'Quản lý thông tin nhân viên và vị trí.' }}</p>
     </div>
     @if(auth()->user()?->canManageHr())
     <div class="page-actions">
@@ -29,6 +28,45 @@
         <a class="btn primary" href="{{ route('employees.create') }}">Tạo nhân viên</a>
     </div>
     @endif
+</div>
+
+@php
+    $filters = $filters ?? ['q' => '', 'department_id' => null, 'status' => ''];
+    $hasFilters = ($filters['q'] ?? '') !== '' || ! empty($filters['department_id']) || ($filters['status'] ?? '') !== '';
+@endphp
+<div class="card filter-card">
+    <form method="GET" action="{{ route('employees.index') }}" class="filter-form">
+        <div class="field-group">
+            <label class="form-label" for="employeeSearch">Tìm kiếm</label>
+            <input id="employeeSearch" class="form-control" name="q" value="{{ $filters['q'] }}" placeholder="Tên, mã NV, email, chức vụ">
+        </div>
+        <div class="field-group">
+            <label class="form-label" for="employeeDepartment">Phòng ban</label>
+            <select id="employeeDepartment" class="form-select" name="department_id">
+                <option value="">Tất cả phòng ban</option>
+                @foreach(($departments ?? []) as $department)
+                    <option value="{{ $department->id }}" {{ (string) ($filters['department_id'] ?? '') === (string) $department->id ? 'selected' : '' }}>
+                        [{{ $department->code }}] {{ $department->name }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+        <div class="field-group">
+            <label class="form-label" for="employeeStatus">Trạng thái</label>
+            <select id="employeeStatus" class="form-select" name="status">
+                <option value="">Tất cả trạng thái</option>
+                <option value="awaiting_contract" {{ ($filters['status'] ?? '') === 'awaiting_contract' ? 'selected' : '' }}>Chờ hợp đồng</option>
+                <option value="active" {{ ($filters['status'] ?? '') === 'active' ? 'selected' : '' }}>Còn làm việc</option>
+                <option value="on_leave" {{ ($filters['status'] ?? '') === 'on_leave' ? 'selected' : '' }}>Tạm nghỉ</option>
+                <option value="pending_termination" {{ ($filters['status'] ?? '') === 'pending_termination' ? 'selected' : '' }}>Chờ nghỉ việc</option>
+                <option value="terminated" {{ ($filters['status'] ?? '') === 'terminated' ? 'selected' : '' }}>Đã nghỉ việc</option>
+            </select>
+        </div>
+        <div class="field-group actions-row">
+            <button type="submit" class="btn primary">Lọc</button>
+            <a class="btn" href="{{ route('employees.index') }}">Xóa lọc</a>
+        </div>
+    </form>
 </div>
 
 <div class="card">
@@ -69,12 +107,17 @@
                                 <td>{{ $contractStatusLabel($latestContract?->status) }}</td>
                             @endif
                             <td>
-                                @if($employee->status === 'active')
+                                @php
+                                    $awaitingContract = $employee->isAwaitingContract();
+                                @endphp
+                                @if($awaitingContract)
+                                    <span class="badge bg-secondary-subtle text-secondary-emphasis">Chờ hợp đồng</span>
+                                @elseif($employee->status === 'active')
                                     <span class="badge bg-success-subtle text-success-emphasis">{{ $employee->statusLabel() }}</span>
-                                @elseif($employee->status === 'inactive')
-                                    <span class="badge bg-danger-subtle text-danger-emphasis">{{ $employee->statusLabel() }}</span>
                                 @elseif($employee->status === 'on_leave')
                                     <span class="badge bg-warning-subtle text-warning-emphasis">{{ $employee->statusLabel() }}</span>
+                                @elseif(in_array($employee->status, ['terminated', 'inactive', 'pending_termination'], true))
+                                    <span class="badge bg-danger-subtle text-danger-emphasis">{{ $employee->statusLabel() }}</span>
                                 @else
                                     <span class="badge bg-secondary-subtle text-secondary-emphasis">{{ $employee->statusLabel() }}</span>
                                 @endif
@@ -89,14 +132,14 @@
                                     $pendingTransferId = ($pendingEmployeeTransfers ?? [])[$employee->id] ?? null;
                                 @endphp
                                 @if($pendingDeletionId)
-                                    <a href="{{ route('deletion_requests.show', $pendingDeletionId) }}" class="btn btn-sm btn-outline-warning">Chờ GĐ duyệt xóa</a>
+                                    <a href="{{ route('deletion_requests.show', $pendingDeletionId) }}" class="btn btn-sm btn-outline-warning">Chờ GĐ duyệt nghỉ việc</a>
                                 @elseif($pendingTransferId)
                                     <a href="{{ route('deletion_requests.show', $pendingTransferId) }}" class="btn btn-sm btn-outline-warning">Chờ GĐ duyệt chuyển</a>
+                                @elseif($employee->isTerminated())
+                                    <span class="muted">Đã nghỉ việc</span>
                                 @else
-                                    @unless(optional($employee->department)->isBoard())
                                     <a href="{{ route('transfers.create', ['employee' => $employee->id]) }}" class="btn btn-sm btn-outline-secondary">Điều chuyển</a>
-                                    @endunless
-                                    <a href="{{ route('deletion_requests.create_employee', $employee) }}" class="btn btn-sm btn-outline-danger">Đề nghị xóa</a>
+                                    <a href="{{ route('deletion_requests.create_employee', $employee) }}" class="btn btn-sm btn-outline-danger">Đề nghị nghỉ việc</a>
                                 @endif
                                 @endif
                                 </div>
@@ -114,7 +157,10 @@
         @endif
     @else
         <div class="text-center py-5 text-muted">
-            <p>Không có nhân viên nào</p>
+            <p>{{ $hasFilters ? 'Không tìm thấy nhân viên phù hợp bộ lọc.' : 'Không có nhân viên nào' }}</p>
+            @if($hasFilters)
+                <a class="btn" href="{{ route('employees.index') }}">Xóa lọc</a>
+            @endif
         </div>
     @endif
 </div>

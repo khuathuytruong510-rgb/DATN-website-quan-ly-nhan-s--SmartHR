@@ -231,7 +231,6 @@
     <div class="card">
         <div class="card-head">
             <h2 class="card-title">Hợp đồng sắp hết hạn</h2>
-            <p class="card-lead">Hợp đồng hết hạn trong 30 ngày tới — cần theo dõi gia hạn hoặc thanh lý.</p>
         </div>
         @if($expiringContracts->isEmpty())
             <div class="empty">Không có hợp đồng hết hạn trong 30 ngày tới.</div>

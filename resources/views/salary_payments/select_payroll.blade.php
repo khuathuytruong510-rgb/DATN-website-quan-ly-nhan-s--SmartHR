@@ -82,7 +82,6 @@
                         <tr>
                             <td>
                                 <div class="fw-semibold">{{ $payroll->employee->name }}</div>
-                                <small class="text-muted">{{ $payroll->employee->employee_code ?? '-' }}</small>
                             </td>
                             <td>{{ $payroll->employee->position ?? '-' }}</td>
                             <td>{{ $payroll->employee->department->name ?? '-' }}</td>

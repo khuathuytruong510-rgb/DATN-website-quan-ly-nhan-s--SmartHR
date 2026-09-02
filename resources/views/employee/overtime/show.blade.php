@@ -11,7 +11,6 @@
     <div class="page-head">
         <div>
             <h1>Chi tiết yêu cầu tăng ca</h1>
-            <p class="muted">Khung được duyệt là khoảng được phép tính OT. Số giờ thực tế do hệ thống tính từ checkout, không sửa được.</p>
         </div>
     </div>
 

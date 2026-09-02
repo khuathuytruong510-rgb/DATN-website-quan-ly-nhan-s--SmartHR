@@ -7,7 +7,6 @@
     <div class="page-head">
         <div>
             <h1>{{ $benefit->exists ? 'Cập nhật phúc lợi' : 'Tạo phúc lợi mới' }}</h1>
-            <p class="muted">{{ $benefit->exists ? 'Chỉnh sửa thông tin phúc lợi cho nhân viên' : 'Tạo gói phúc lợi mới' }}</p>
         </div>
     </div>
 

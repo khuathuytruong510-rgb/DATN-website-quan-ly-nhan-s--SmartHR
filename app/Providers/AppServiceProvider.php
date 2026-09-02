@@ -4,6 +4,9 @@ namespace App\Providers;
 
 use App\Contracts\DigitalSignatureProvider;
 use App\Services\ESign\MockDigitalSignatureProvider;
+use App\Support\NavBadgeCounts;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -25,6 +28,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        View::composer('layouts.app', function ($view) {
+            $user = Auth::user();
+            $view->with('navBadges', $user ? app(NavBadgeCounts::class)->for($user) : []);
+        });
     }
 }

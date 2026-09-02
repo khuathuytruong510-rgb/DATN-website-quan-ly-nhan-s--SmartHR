@@ -6,7 +6,6 @@
 <div class="page-head">
     <div>
         <h1>Lịch sử lương</h1>
-        <p class="muted">Các kỳ lương đã thanh toán và thay đổi lương</p>
     </div>
     <div class="actions">
         <a class="btn" href="{{ route('payroll.index') }}">Bảng lương</a>

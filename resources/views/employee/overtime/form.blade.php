@@ -11,7 +11,6 @@
     <div class="page-head">
         <div>
             <h1>Tạo yêu cầu tăng ca</h1>
-            <p class="muted">Gửi đăng ký tăng ca cho {{ isset($employee) ? \App\Support\RequestApprover::queueLabel($employee) : 'HR' }} duyệt. Check-out muộn không tự thành tăng ca — chỉ tính trong khung được duyệt.</p>
         </div>
         <div class="actions">
             <a class="btn" href="{{ route('me.overtime_requests') }}">Quay lại</a>

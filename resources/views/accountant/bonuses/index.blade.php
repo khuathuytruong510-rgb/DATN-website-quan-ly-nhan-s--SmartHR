@@ -11,7 +11,6 @@
 <div class="page-head">
     <div>
         <h1>Quản lý thưởng</h1>
-        <p class="muted">Danh mục thưởng</p>
     </div>
     <div class="actions">
         <a class="btn" href="{{ route('accountant.dashboard') }}">Quay lại</a>

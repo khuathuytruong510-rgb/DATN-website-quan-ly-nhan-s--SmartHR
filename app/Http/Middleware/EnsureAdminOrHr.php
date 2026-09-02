@@ -92,6 +92,8 @@ class EnsureAdminOrHr
                 $allowed = [
                     'payroll.approve',
                     'payroll.approve_all',
+                    'payroll.period.unlock.approve',
+                    'payroll.period.unlock.reject',
                     'contracts.sign',
                     'contracts.reject_signature',
                     'notifications.store',

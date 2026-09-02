@@ -39,11 +39,11 @@ class DatabaseSeeder extends Seeder
 
         $depts = [
             ['name' => 'Ban Giám đốc',                  'code' => 'BGD',  'manager' => 'Phạm Thị Dung',      'description' => 'Điều hành và quản lý toàn bộ hoạt động của công ty.'],
-            ['name' => 'Phòng Hành chính - Nhân sự',    'code' => 'HCNS', 'manager' => 'Trần Thị Bích',      'description' => 'Quản lý nhân sự, tuyển dụng, hợp đồng, chấm công, đào tạo và phúc lợi.'],
+            ['name' => 'Phòng Nhân sự (HR)',            'code' => 'HR',   'manager' => 'Trần Thị Bích',      'description' => 'Quản lý nhân sự, tuyển dụng, hợp đồng, chấm công, đào tạo và phúc lợi.'],
             ['name' => 'Phòng Kế toán - Tài chính',     'code' => 'KTTC', 'manager' => '',                    'description' => 'Quản lý tài chính, kế toán, thu chi, thanh toán lương, báo cáo tài chính.'],
             ['name' => 'Phòng Kinh doanh',               'code' => 'KD',   'manager' => 'Lê Văn Cường',       'description' => 'Tìm kiếm khách hàng, tư vấn, ký kết hợp đồng và phát triển doanh thu.'],
             ['name' => 'Phòng Marketing',                'code' => 'MKT',  'manager' => 'Hoàng Văn Nam',      'description' => 'Xây dựng thương hiệu, quảng bá sản phẩm, triển khai các chiến dịch marketing.'],
-            ['name' => 'Phòng Công nghệ thông tin',      'code' => 'CNTT', 'manager' => 'Nguyễn Văn An',      'description' => 'Phát triển và bảo trì hệ thống phần mềm, hạ tầng mạng, hỗ trợ kỹ thuật.'],
+            ['name' => 'Phòng IT',                       'code' => 'IT',   'manager' => 'Nguyễn Văn An',      'description' => 'Phát triển và bảo trì hệ thống phần mềm, hạ tầng mạng, hỗ trợ kỹ thuật.'],
             ['name' => 'Phòng Chăm sóc khách hàng',      'code' => 'CSKH', 'manager' => '',                    'description' => 'Tiếp nhận phản hồi, hỗ trợ khách hàng và giải quyết khiếu nại.'],
             ['name' => 'Phòng Mua hàng',                 'code' => 'MH',   'manager' => '',                    'description' => 'Tìm kiếm nhà cung cấp, mua sắm vật tư, quản lý đơn hàng.'],
             ['name' => 'Phòng Kho vận',                  'code' => 'KV',   'manager' => '',                    'description' => 'Quản lý kho hàng, xuất nhập tồn và vận chuyển hàng hóa.'],
@@ -59,8 +59,8 @@ class DatabaseSeeder extends Seeder
             Department::updateOrCreate(['code' => $d['code']], $d);
         }
 
-        $it      = Department::where('code', 'CNTT')->first();
-        $hr      = Department::where('code', 'HCNS')->first();
+        $it      = Department::whereIn('code', ['IT', 'CNTT'])->first();
+        $hr      = Department::whereIn('code', ['HR', 'HCNS'])->first();
         $sales   = Department::where('code', 'KD')->first();
         $finance = Department::where('code', 'KTTC')->first();
         $mkt     = Department::where('code', 'MKT')->first();

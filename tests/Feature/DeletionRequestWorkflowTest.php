@@ -96,7 +96,7 @@ class DeletionRequestWorkflowTest extends TestCase
         $this->assertSame(DeletionRequest::PENDING, $request->status);
         $this->assertSame(DeletionRequest::EMPLOYEE, $request->subject_type);
         $this->assertSame($employee->id, $request->subject_id);
-        $this->assertNotNull($request->document_path);
+        $this->assertDatabaseHas('employees', ['id' => $employee->id, 'status' => 'pending_termination']);
         $this->assertTrue(
             Notification::where('target', 'director')->get()->contains(
                 fn ($n) => data_get($n->data, 'deletion_request_id') == $request->id
@@ -138,12 +138,13 @@ class DeletionRequestWorkflowTest extends TestCase
         $this->assertDatabaseHas('employees', ['id' => $employee->id]);
     }
 
-    public function test_director_approves_employee_deletion_keeps_history_and_notifies_admin(): void
+    public function test_director_approves_employee_termination_keeps_history_and_locks_account(): void
     {
         ['hr' => $hr, 'director' => $director, 'admin' => $admin, 'nvUser' => $nvUser, 'employee' => $employee, 'contract' => $contract] = $this->people();
 
         $this->actingAs($hr)->post(route('deletion_requests.store_employee', $employee), [
             'reason' => 'Chấm dứt HĐ',
+            'last_working_day' => '2026-08-20',
         ]);
         $request = DeletionRequest::first();
 
@@ -151,29 +152,37 @@ class DeletionRequestWorkflowTest extends TestCase
             ->post(route('deletion_requests.approve', $request))
             ->assertRedirect(route('deletion_requests.show', $request));
 
-        $this->assertDatabaseMissing('employees', ['id' => $employee->id]);
-        $this->assertDatabaseMissing('contracts', ['id' => $contract->id]);
-        $this->assertDatabaseHas('users', ['id' => $nvUser->id, 'email' => $nvUser->email]);
+        $this->assertDatabaseHas('employees', [
+            'id' => $employee->id,
+            'status' => 'terminated',
+            'terminated_at' => '2026-08-20',
+            'user_id' => $nvUser->id,
+        ]);
+        $this->assertDatabaseHas('contracts', [
+            'id' => $contract->id,
+            'status' => 'terminated',
+            'end_date' => '2026-08-20',
+        ]);
+        $this->assertDatabaseHas('attendances', ['employee_id' => $employee->id, 'date' => '2026-08-03']);
+        $this->assertDatabaseHas('users', ['id' => $nvUser->id, 'email' => $nvUser->email, 'is_locked' => 1]);
 
         $request->refresh();
         $this->assertSame(DeletionRequest::APPROVED, $request->status);
-        $this->assertNull($request->subject_id);
+        $this->assertSame($employee->id, $request->subject_id);
         $this->assertSame($nvUser->id, $request->account_user_id);
         $this->assertSame('Nguyễn Văn A', $request->snapshot['employee']['name'] ?? null);
         $this->assertSame(1, $request->snapshot['related_counts']['attendances'] ?? null);
         $this->assertSame('terminated', $request->snapshot['contracts'][0]['status'] ?? null);
         $this->assertSame('HD-KT-001', $request->snapshot['contracts'][0]['contract_code'] ?? null);
-        $this->assertStringContainsString('Chấm dứt do xóa hồ sơ nhân viên', $request->snapshot['contracts'][0]['notes'] ?? '');
+        $this->assertStringContainsString('Chấm dứt do nghỉ việc', $request->snapshot['contracts'][0]['notes'] ?? '');
+        $this->assertSame('2026-08-20', $request->snapshot['last_working_day'] ?? null);
+        $this->assertNotEmpty($request->snapshot['settlement'] ?? null);
         $this->assertTrue(Notification::where('target', 'admin')->where('data->type', 'account_deletion')->exists());
-        $this->assertTrue(Notification::where('target', 'hr')->where('title', 'like', 'Đã xóa%')->exists());
+        $this->assertTrue(Notification::where('target', 'hr')->where('title', 'like', 'Đã duyệt nghỉ việc%')->exists());
 
         $this->actingAs($admin)->get(route('admin.notifications.index'))
             ->assertOk()
-            ->assertSee('Xóa tài khoản sau khi xóa nhân viên');
-
-        $this->actingAs($admin)->get(route('accounts.index'))
-            ->assertOk()
-            ->assertSee('Cần xóa tài khoản');
+            ->assertSee('Đã khóa tài khoản sau khi nhân viên nghỉ việc');
 
         $this->actingAs($director)->get(route('deletion_requests.show', $request))
             ->assertOk()
@@ -181,13 +190,13 @@ class DeletionRequestWorkflowTest extends TestCase
             ->assertSee('Dữ liệu lưu trữ')
             ->assertSee('Hợp đồng đã chấm dứt')
             ->assertSee('HD-KT-001')
-            ->assertSee('Đã chấm dứt');
+            ->assertSee('Đã chấm dứt')
+            ->assertSee('Chốt công');
 
-        $this->actingAs($admin)->delete(route('accounts.destroy', $nvUser))
-            ->assertRedirect(route('accounts.index'));
-
-        $this->assertDatabaseMissing('users', ['id' => $nvUser->id]);
-        $this->assertNotNull($request->fresh()->account_cleared_at);
+        $this->actingAs($hr)->get(route('employees.show', $employee))
+            ->assertOk()
+            ->assertSee('Nguyễn Văn A')
+            ->assertSee('Đã nghỉ việc');
     }
 
     public function test_director_reject_keeps_employee(): void
@@ -203,7 +212,7 @@ class DeletionRequestWorkflowTest extends TestCase
             'rejection_reason' => 'Chưa đủ hồ sơ',
         ])->assertRedirect(route('deletion_requests.show', $request));
 
-        $this->assertDatabaseHas('employees', ['id' => $employee->id]);
+        $this->assertDatabaseHas('employees', ['id' => $employee->id, 'status' => 'active']);
         $this->assertSame(DeletionRequest::REJECTED, $request->fresh()->status);
         $this->assertTrue(Notification::where('target', 'hr')->where('title', 'like', 'Từ chối%')->exists());
     }
@@ -493,25 +502,40 @@ class DeletionRequestWorkflowTest extends TestCase
         $this->assertSame($department->id, $employee->fresh()->department_id);
     }
 
-    public function test_transfer_form_excludes_board_department(): void
+    public function test_transfer_form_includes_board_but_excludes_director(): void
     {
         ['hr' => $hr, 'department' => $department, 'employee' => $employee] = $this->people();
         $board = Department::create(['name' => 'Ban Giám đốc', 'code' => 'BGD', 'manager' => 'GĐ']);
+        $assistant = Employee::create([
+            'name' => 'Trợ lý BGD',
+            'email' => 'troly.bgd.'.uniqid().'@example.com',
+            'department_id' => $board->id,
+            'position' => 'Trợ lý Giám đốc',
+            'status' => Employee::STATUS_ACTIVE,
+        ]);
+        $director = Employee::create([
+            'name' => 'Giám đốc Test',
+            'email' => 'giamdoc.test.'.uniqid().'@example.com',
+            'department_id' => $board->id,
+            'position' => 'Giám đốc',
+            'status' => Employee::STATUS_ACTIVE,
+        ]);
 
         $this->actingAs($hr)->get(route('transfers.create'))
             ->assertOk()
-            ->assertDontSee('Ban Giám đốc')
+            ->assertSee('Ban Giám đốc')
             ->assertSee($department->name);
 
         $this->actingAs($hr)->get(route('transfers.create', ['from' => $board->id]))
             ->assertOk()
-            ->assertDontSee('Ban Giám đốc')
-            ->assertSee('— Chọn phòng ban trước —');
+            ->assertSee('Ban Giám đốc')
+            ->assertSee($assistant->name)
+            ->assertDontSee($director->name);
 
         $this->actingAs($hr)->post(route('transfers.store'), [
-            'employee_id' => $employee->id,
-            'target_department_id' => $board->id,
-            'reason' => 'Chuyển vào BGD',
-        ])->assertSessionHasErrors(['target_department_id']);
+            'employee_id' => $assistant->id,
+            'target_department_id' => $department->id,
+            'reason' => 'Chuyển trợ lý sang phòng khác để hỗ trợ',
+        ])->assertRedirect(route('deletion_requests.index'));
     }
 }

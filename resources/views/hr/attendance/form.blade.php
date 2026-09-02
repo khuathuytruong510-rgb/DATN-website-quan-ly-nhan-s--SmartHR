@@ -4,7 +4,6 @@
 <div class="page-head">
     <div>
         <h1>{{ $attendance->exists ? 'Chỉnh sửa chấm công' : 'Thêm chấm công' }}</h1>
-        <p class="muted">Nhập thông tin chấm công nhân viên.</p>
     </div>
     <a class="btn link" href="{{ route('attendance.index') }}">Quay lại</a>
 </div>

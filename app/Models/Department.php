@@ -26,6 +26,11 @@ class Department extends Model
         return $this->hasMany(Employee::class);
     }
 
+    public function positions(): HasMany
+    {
+        return $this->hasMany(Position::class);
+    }
+
     public function isBoard(): bool
     {
         return strtoupper((string) $this->code) === self::BOARD_CODE

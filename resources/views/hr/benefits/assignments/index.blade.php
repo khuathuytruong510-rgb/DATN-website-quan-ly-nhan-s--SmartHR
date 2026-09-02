@@ -26,7 +26,6 @@
 <div class="page-head">
     <div>
         <h1>Gán phúc lợi</h1>
-        <p class="muted">Quản lý danh sách phúc lợi đã gán cho nhân viên.</p>
     </div>
     <div class="page-actions">
         <a class="btn primary" href="{{ route('benefits.assignments.create') }}">Gán phúc lợi mới</a>

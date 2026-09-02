@@ -62,8 +62,23 @@ class PayrollCalculationService
      *
      * Chỉ được tính phiếu mới, nháp, đã tính, hoặc đang sự cố.
      */
+    /**
+     * Nhân viên được tính lương kỳ: đang làm / chờ nghỉ — không gồm Giám đốc.
+     */
+    public function payrollEligibleEmployees()
+    {
+        return Employee::query()
+            ->withoutBoardAndDirector()
+            ->whereIn('status', [Employee::STATUS_ACTIVE, Employee::STATUS_PENDING_TERMINATION])
+            ->orderBy('id');
+    }
+
     public function calculate(Employee $employee, int $month, int $year)
     {
+        if (\App\Support\RequestApprover::isDirectorProfile($employee)) {
+            throw new PayrollNotRecalculableException('Không tính lương cho Giám đốc.');
+        }
+
         return DB::transaction(function () use ($employee, $month, $year) {
             $existing = Payroll::query()
                 ->where('employee_id', $employee->id)
@@ -85,7 +100,7 @@ class PayrollCalculationService
     }
 
     /**
-     * Tính cả kỳ cho nhân viên đang làm. Bỏ qua phiếu không được tính lại.
+     * Tính cả kỳ cho nhân viên đang làm (không gồm Giám đốc). Bỏ qua phiếu không được tính lại.
      */
     public function calculatePeriod(int $month, int $year, ?User $actor = null): array
     {
@@ -94,7 +109,7 @@ class PayrollCalculationService
         $calculated = 0;
         $skipped = 0;
 
-        $employees = Employee::query()->where('status', 'active')->orderBy('id')->get();
+        $employees = $this->payrollEligibleEmployees()->get();
         foreach ($employees as $employee) {
             try {
                 $this->calculate($employee, $month, $year);
@@ -122,9 +137,9 @@ class PayrollCalculationService
      */
     public function previewPeriod(int $month, int $year): Collection
     {
-        $employees = Employee::query()
-            ->where('status', 'active')
+        $employees = $this->payrollEligibleEmployees()
             ->with(['positionDetail', 'contracts'])
+            ->reorder()
             ->orderBy('name')
             ->get();
 

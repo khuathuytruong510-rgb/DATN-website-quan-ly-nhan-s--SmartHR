@@ -111,8 +111,8 @@ class ContractWorkflowTest extends TestCase
         $this->assertNull($contract->director_signed_at);
 
         $renewed = $service->renewContract($hr, $contract, [
-            'start_date' => '2026-02-01',
-            'end_date' => '2027-01-31',
+            'start_date' => '2027-01-01',
+            'end_date' => '2027-12-31',
             'contract_type' => 'indefinite',
             'notes' => 'Renewed contract',
         ]);
@@ -142,9 +142,75 @@ class ContractWorkflowTest extends TestCase
 
         $service->signContract($employeeUser, $renewed, 'employee');
         $renewed->refresh();
-        $this->assertEquals('active', $renewed->status);
+        $this->assertContains($renewed->status, [Contract::STATUS_SIGNED, Contract::STATUS_ACTIVE]);
         $this->assertNotNull($renewed->employee_signed_at);
         $this->assertTrue($renewed->isFullySigned());
+    }
+
+    public function test_rejects_overlapping_contract_periods_for_same_employee(): void
+    {
+        $hr = User::factory()->create(['is_hr' => true, 'is_admin' => false]);
+        $department = Department::create([
+            'name' => 'Engineering',
+            'code' => 'ENG',
+            'manager' => 'Manager',
+        ]);
+        $employee = Employee::create([
+            'name' => 'Overlap Test',
+            'email' => 'overlap@example.com',
+            'position' => 'Developer',
+            'department_id' => $department->id,
+            'status' => 'active',
+            'employee_code' => 'EMP-OVR',
+        ]);
+
+        $service = app(ContractService::class);
+        $service->createContract($hr, [
+            'employee_id' => $employee->id,
+            'contract_type' => 'fixed_term',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('trùng khoảng thời gian');
+
+        $service->createContract($hr, [
+            'employee_id' => $employee->id,
+            'contract_type' => 'fixed_term',
+            'start_date' => '2026-10-01',
+            'end_date' => '2027-12-31',
+        ]);
+    }
+
+    public function test_allows_renewal_when_new_period_starts_after_parent_ends(): void
+    {
+        $hr = User::factory()->create(['is_hr' => true, 'is_admin' => false]);
+        $department = Department::create(['name' => 'ENG', 'code' => 'ENG', 'manager' => 'M']);
+        $employee = Employee::create([
+            'name' => 'Renewal OK',
+            'email' => 'renewok@example.com',
+            'position' => 'Dev',
+            'department_id' => $department->id,
+            'status' => 'active',
+            'employee_code' => 'EMP-RNW',
+        ]);
+
+        $service = app(ContractService::class);
+        $parent = $service->createContract($hr, [
+            'employee_id' => $employee->id,
+            'contract_type' => 'fixed_term',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
+        ]);
+
+        $renewed = $service->renewContract($hr, $parent, [
+            'start_date' => '2027-01-01',
+            'end_date' => '2027-12-31',
+        ]);
+
+        $this->assertSame('2027-01-01', $renewed->start_date->toDateString());
+        $this->assertSame('2027-12-31', $renewed->end_date->toDateString());
     }
 
     public function test_hr_cannot_sign_on_behalf_of_employee_and_director_signs_before_employee(): void
@@ -178,6 +244,7 @@ class ContractWorkflowTest extends TestCase
         $this->actingAs($hr)
             ->post(route('contracts.store'), [
                 'employee_id' => $employee->id,
+                'employee_email' => $employee->email,
                 'title' => 'Hợp đồng chính thức',
                 'contract_type' => 'fixed_term',
                 'start_date' => '2026-01-01',
@@ -294,5 +361,69 @@ class ContractWorkflowTest extends TestCase
         $this->assertSame('Hà Nội', $renewed->workplace);
         $this->assertNull($renewed->employee_signed_at);
         $this->assertNull($renewed->director_signed_at);
+    }
+
+    public function test_director_sign_notifies_admin_to_create_account_then_email_is_sent(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+
+        $hr = User::factory()->create(['is_hr' => true, 'is_admin' => false, 'is_director' => false]);
+        $director = User::factory()->create(['is_hr' => false, 'is_admin' => false, 'is_director' => true]);
+        $admin = User::factory()->create(['is_hr' => false, 'is_admin' => true, 'is_director' => false]);
+        $department = Department::create(['name' => 'Engineering', 'code' => 'ENG', 'manager' => 'Manager']);
+        $employee = Employee::create([
+            'name' => 'New Hire',
+            'email' => 'newhire@example.com',
+            'position' => 'Developer',
+            'department_id' => $department->id,
+            'status' => 'active',
+            'employee_code' => 'EMP-NEW-01',
+            'user_id' => null,
+        ]);
+
+        $service = app(ContractService::class);
+        $contract = $service->createContract($hr, [
+            'employee_id' => $employee->id,
+            'employee_email' => 'newhire@example.com',
+            'contract_type' => 'fixed_term',
+            'start_date' => '2026-09-01',
+            'end_date' => '2027-08-31',
+            'base_salary' => 12000000,
+        ]);
+
+        $service->sendForDirectorSignature($hr, $contract);
+        $service->signContract($director, $contract->fresh(), 'director');
+
+        $this->assertDatabaseHas('notifications', [
+            'target' => 'admin',
+            'title' => 'Tạo tài khoản để nhân viên ký hợp đồng',
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('accounts.store'), [
+                'name' => $employee->name,
+                'email' => 'newhire@example.com',
+                'password' => '123456',
+                'password_confirmation' => '123456',
+                'role' => 'employee',
+                'employee_id' => $employee->id,
+                'contract_id' => $contract->id,
+            ])
+            ->assertRedirect(route('accounts.index'));
+
+        $employee->refresh();
+        $this->assertNotNull($employee->user_id);
+
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ContractAccountCredentialsMail::class, function ($mail) use ($employee) {
+            return $mail->hasTo('newhire@example.com')
+                && $mail->loginEmail === 'newhire@example.com'
+                && $mail->plainPassword === '123456'
+                && $mail->employee->is($employee);
+        });
+
+        $this->assertDatabaseHas('notifications', [
+            'target' => 'employee',
+            'title' => 'Hợp đồng cần bạn ký',
+        ]);
     }
 }

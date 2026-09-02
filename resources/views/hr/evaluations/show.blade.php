@@ -7,10 +7,6 @@
 <div class="page-head">
     <div>
         <h1>Chi tiết đánh giá</h1>
-        <p class="muted">
-            {{ optional($evaluation->employee)->name }} · {{ $evaluation->month }} ·
-            <strong>{{ $evaluation->score_total }}/100</strong>
-        </p>
     </div>
     <div class="actions">
         <a class="btn" href="{{ route('evaluations.index') }}">← Quay lại</a>

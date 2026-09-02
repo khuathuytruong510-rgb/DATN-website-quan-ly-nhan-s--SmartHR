@@ -7,7 +7,6 @@
     <div class="page-head">
         <div>
             <h1>Yêu cầu đổi thông tin nhận lương</h1>
-            <p class="muted">Duyệt hoặc từ chối yêu cầu thay đổi QR/STK của nhân viên</p>
         </div>
     </div>
 

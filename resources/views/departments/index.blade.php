@@ -6,7 +6,6 @@
     <div class="page-head">
         <div>
             <h1>Phòng ban</h1>
-            <p class="muted">Xóa phòng ban cần Giám đốc duyệt. Còn nhân viên thì phải chuyển sang phòng khác hoặc đề nghị xóa nhân viên trước.</p>
         </div>
         @if(auth()->user()?->canManageHr())
         <div style="display:flex;gap:8px;">

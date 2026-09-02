@@ -56,10 +56,16 @@ class DeletionRequestController extends Controller
         $this->assertHr();
         abort_unless(\App\Support\RequestApprover::hrMayManage(auth()->user(), $employee), 403, 'HR không quản lý hồ sơ Giám đốc.');
 
+        if ($employee->isTerminated()) {
+            return redirect()
+                ->route('employees.show', $employee)
+                ->with('error', 'Nhân viên đã nghỉ việc. Hồ sơ lịch sử vẫn được lưu.');
+        }
+
         if ($pending = $this->service->pendingFor(DeletionRequest::EMPLOYEE, $employee->id)) {
             return redirect()
                 ->route('deletion_requests.show', $pending)
-                ->with('error', 'Đã có yêu cầu xóa nhân viên này đang chờ Giám đốc duyệt.');
+                ->with('error', 'Đã có đề nghị nghỉ việc của nhân viên này đang chờ Giám đốc duyệt.');
         }
         if ($transferId = $this->service->pendingTransferIdForEmployee($employee->id)) {
             return redirect()
@@ -93,7 +99,10 @@ class DeletionRequestController extends Controller
                 ->with('error', 'Đã có yêu cầu xóa phòng ban này đang chờ Giám đốc duyệt.');
         }
 
-        $employees = $department->employees()->orderBy('name')->get()
+        $employees = $department->employees()
+            ->whereIn('status', Employee::workingStatuses())
+            ->orderBy('name')
+            ->get()
             ->reject(fn (Employee $row) => \App\Support\RequestApprover::isDirectorEmployee($row));
 
         return view('hr.deletions.form', [
@@ -126,7 +135,8 @@ class DeletionRequestController extends Controller
                 $employee,
                 $request->user(),
                 $data['reason'] ?? null,
-                $request->file('document')
+                $request->file('document'),
+                $data['last_working_day'] ?? null
             );
         } catch (\Throwable $e) {
             return back()->withInput()->with('error', $e->getMessage());
@@ -134,7 +144,7 @@ class DeletionRequestController extends Controller
 
         return redirect()
             ->route('deletion_requests.index')
-            ->with('success', 'Đã gửi đề nghị xóa nhân viên cho Giám đốc duyệt.');
+            ->with('success', 'Đã gửi đề nghị nghỉ việc cho Giám đốc duyệt. Hồ sơ chưa bị khóa.');
     }
 
     public function storeDepartment(Request $request, Department $department): RedirectResponse
@@ -179,7 +189,7 @@ class DeletionRequestController extends Controller
 
         $target = Department::findOrFail($data['target_department_id']);
         $ids = $request->boolean('transfer_all')
-            ? $department->employees()->pluck('id')->all()
+            ? $department->employees()->whereIn('status', Employee::workingStatuses())->pluck('id')->all()
             : ($data['employee_ids'] ?? []);
 
         try {
@@ -213,10 +223,10 @@ class DeletionRequestController extends Controller
         $fresh = $deletionRequest->fresh();
         if ($fresh?->isTransfer()) {
             $message = 'Đã duyệt điều chuyển. Hồ sơ nhân viên đã cập nhật phòng ban đích.';
-        } elseif ($fresh?->isEmployee() && $fresh->account_user_id) {
-            $message = 'Đã xóa hồ sơ. Đã gửi thông báo cho Admin để xóa tài khoản đăng nhập.';
+        } elseif ($fresh?->isEmployee()) {
+            $message = 'Đã duyệt nghỉ việc. Hồ sơ lịch sử được giữ lại, hợp đồng đã chấm dứt, tài khoản đăng nhập đã khóa.';
         } else {
-            $message = 'Đã xóa và lưu vào lịch sử.';
+            $message = 'Đã xóa phòng ban và lưu vào lịch sử.';
         }
 
         return redirect()->route('deletion_requests.show', $deletionRequest)->with('success', $message);
@@ -242,7 +252,9 @@ class DeletionRequestController extends Controller
             'success',
             $fresh?->isTransfer()
                 ? 'Đã từ chối điều chuyển. Hồ sơ nhân viên giữ nguyên phòng ban hiện tại.'
-                : 'Đã từ chối yêu cầu xóa.'
+                : ($fresh?->isEmployee()
+                    ? 'Đã từ chối nghỉ việc. Nhân viên tiếp tục làm việc.'
+                    : 'Đã từ chối yêu cầu xóa phòng ban.')
         );
     }
 
@@ -279,6 +291,7 @@ class DeletionRequestController extends Controller
         return $request->validate([
             'reason' => ['nullable', 'string', 'max:2000'],
             'document' => ['nullable', 'file', 'max:10240', 'mimes:pdf,doc,docx,jpg,jpeg,png'],
+            'last_working_day' => ['nullable', 'date'],
         ]);
     }
 
@@ -292,31 +305,26 @@ class DeletionRequestController extends Controller
         $this->assertHr();
 
         $candidates = Employee::query()
-            ->with('department')
+            ->with(['department', 'positionDetail'])
+            ->whereIn('status', Employee::workingStatuses())
             ->orderBy('name')
             ->get()
-            ->reject(fn (Employee $row) => \App\Support\RequestApprover::isDirectorEmployee($row) || $row->department?->isBoard())
+            ->reject(fn (Employee $row) => \App\Support\RequestApprover::isDirectorProfile($row))
             ->values();
 
-        $departments = Department::query()->notBoard()->orderBy('name')->get();
+        $departments = Department::query()->orderBy('name')->get();
         $fromFilterId = $request->integer('from') ?: null;
-        if ($fromFilterId && optional(Department::find($fromFilterId))->isBoard()) {
-            $fromFilterId = null;
-        }
 
         $employee = null;
         if ($request->filled('employee')) {
-            $employee = Employee::with('department')->find($request->integer('employee'));
-            if ($employee && (
-                \App\Support\RequestApprover::isDirectorEmployee($employee)
-                || $employee->department?->isBoard()
-            )) {
-                abort(403, 'HR không quản lý hồ sơ Ban Giám đốc.');
+            $employee = Employee::with(['department', 'positionDetail'])->find($request->integer('employee'));
+            if ($employee && ! \App\Support\RequestApprover::hrMayManage($request->user(), $employee)) {
+                abort(403, 'HR không quản lý hồ sơ Giám đốc.');
             }
             if ($employee && $this->service->pendingFor(DeletionRequest::EMPLOYEE, $employee->id)) {
                 return redirect()
                     ->route('deletion_requests.show', $this->service->pendingFor(DeletionRequest::EMPLOYEE, $employee->id))
-                    ->with('error', 'Nhân viên đang chờ Giám đốc duyệt xóa.');
+                    ->with('error', 'Nhân viên đang chờ Giám đốc duyệt nghỉ việc.');
             }
             if ($employee && $transferId = $this->service->pendingTransferIdForEmployee($employee->id)) {
                 return redirect()
@@ -377,16 +385,7 @@ class DeletionRequestController extends Controller
         }
 
         $from = $employee->department;
-        if ($from->isBoard()) {
-            return back()->withInput()->with('error', 'Không điều chuyển nhân viên thuộc Ban Giám đốc.');
-        }
-
         $target = Department::findOrFail($data['target_department_id']);
-        if ($target->isBoard()) {
-            return back()->withInput()->withErrors([
-                'target_department_id' => 'Không điều chuyển vào Ban Giám đốc.',
-            ]);
-        }
 
         try {
             $this->service->transferEmployees(

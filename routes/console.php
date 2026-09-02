@@ -9,4 +9,5 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('payroll:auto-ready')->dailyAt('01:00');
+Schedule::command('payroll:auto-lock-period')->dailyAt('00:05');
 Schedule::command('contracts:send-expiry-alerts')->dailyAt('08:00');

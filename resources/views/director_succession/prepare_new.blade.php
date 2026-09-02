@@ -7,7 +7,6 @@
         <div>
             <p class="eyebrow">Quản trị chức vụ</p>
             <h1>Người mới chưa có trong SmartHR</h1>
-            <p class="page-lead muted">Quyết định bổ nhiệm nằm ngoài hệ thống. Admin không tự lập hồ sơ nhân sự trên trang Người giữ chức — đúng phân quyền HR / Admin.</p>
         </div>
         <div class="page-actions">
             <a class="btn" href="{{ route('director_succession.index') }}">Quay lại người giữ chức</a>
@@ -27,15 +26,12 @@
         <div class="card">
             <div class="card-head">
                 <h2 class="card-title">Bước 1 — HR tạo hồ sơ</h2>
-                <p class="card-lead">Gửi HR đường dẫn tạo hồ sơ. Form được gợi ý Ban Giám đốc / chức vụ Giám đốc. Hồ sơ tồn tại chưa đồng nghĩa đã có quyền Giám đốc.</p>
             </div>
             <p class="code-box"><code>{{ $hrCreateUrl }}</code></p>
-            <p class="muted">Admin mở link này sẽ bị từ chối — chỉ HR được tạo hồ sơ nhân sự.</p>
         </div>
         <div class="card">
             <div class="card-head">
                 <h2 class="card-title">Bước 2 — Admin tạo tài khoản</h2>
-                <p class="card-lead">Sau khi HR đã lưu hồ sơ, trang Người giữ chức sẽ liệt kê hồ sơ chưa có tài khoản. Tạo tài khoản để kết nối, rồi mới cấp role Director khi cập nhật người giữ chức.</p>
             </div>
             <div class="actions">
                 <a class="btn primary" href="{{ route('accounts.create') }}">Tạo tài khoản</a>

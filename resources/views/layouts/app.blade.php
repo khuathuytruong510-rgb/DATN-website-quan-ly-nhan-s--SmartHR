@@ -75,6 +75,20 @@
             padding: 11px 14px; border-radius: 10px; font-size: 14px; font-weight: 600; color: #cbd5e1;
         }
         .nav a i, .nav-summary i { font-size: 16px; opacity: .9; width: 1.1em; text-align: center; }
+        .nav-count {
+            margin-left: auto;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 6px;
+            border-radius: 999px;
+            background: #ef4444;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 800;
+            line-height: 18px;
+            text-align: center;
+            flex-shrink: 0;
+        }
         .nav-group { display: block; }
         .nav-group summary { list-style: none; cursor: pointer; margin: 0; }
         .nav-group summary::-webkit-details-marker { display:none; }
@@ -578,10 +592,17 @@
                 <div class="brand">SmartHR</div>
                 <p class="brand-subtitle">{{ $portalLabel }}</p>
                 <nav class="nav">
-                    @php $user = $authUser; @endphp
+                    @php
+                        $user = $authUser;
+                        $navBadges = $navBadges ?? [];
+                        $navBadge = function (string $key) use ($navBadges) {
+                            $n = (int) ($navBadges[$key] ?? 0);
+                            return $n > 0 ? '<span class="nav-count">'.($n > 99 ? '99+' : $n).'</span>' : '';
+                        };
+                    @endphp
                     @if ($user->is_admin)
                         <a class="{{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}"><i class="bi bi-house"></i>Dashboard</a>
-                        <a class="{{ request()->routeIs('admin.notifications.*') ? 'active' : '' }}" href="{{ route('admin.notifications.index') }}"><i class="bi bi-bell"></i>Thông báo</a>
+                        <a class="{{ request()->routeIs('admin.notifications.*') ? 'active' : '' }}" href="{{ route('admin.notifications.index') }}"><i class="bi bi-bell"></i>Thông báo{!! $navBadge('notifications') !!}</a>
                         <a class="{{ request()->routeIs('accounts.*') ? 'active' : '' }}" href="{{ route('accounts.index') }}"><i class="bi bi-people"></i>Quản lý tài khoản</a>
                         <a class="{{ request()->routeIs('permissions.*') ? 'active' : '' }}" href="{{ route('permissions.index') }}"><i class="bi bi-shield-lock"></i>Phân quyền</a>
                         <a class="{{ request()->routeIs('director_succession.*') ? 'active' : '' }}" href="{{ route('director_succession.index') }}"><i class="bi bi-person-badge"></i>Người giữ chức GĐ</a>
@@ -592,14 +613,14 @@
                         <a class="{{ request()->routeIs('employees.*') ? 'active' : '' }}" href="{{ route('employees.index') }}"><i class="bi bi-people"></i>Nhân viên</a>
                         <a class="{{ request()->routeIs('transfers.*') ? 'active' : '' }}" href="{{ route('transfers.create') }}"><i class="bi bi-arrow-left-right"></i>Điều chuyển</a>
                         <a class="{{ request()->routeIs('departments.*') ? 'active' : '' }}" href="{{ route('departments.index') }}"><i class="bi bi-building"></i>Phòng ban</a>
-                        <a class="{{ request()->routeIs('deletion_requests.*') ? 'active' : '' }}" href="{{ route('deletion_requests.index') }}"><i class="bi bi-trash"></i>Lịch sử xóa / chuyển</a>
+                        <a class="{{ request()->routeIs('deletion_requests.*') ? 'active' : '' }}" href="{{ route('deletion_requests.index') }}"><i class="bi bi-person-x"></i>Nghỉ việc / điều chuyển{!! $navBadge('deletion_requests') !!}</a>
                         <a class="{{ request()->routeIs('positions.*') ? 'active' : '' }}" href="{{ route('positions.index') }}"><i class="bi bi-briefcase"></i>Chức vụ</a>
                         <a class="{{ request()->routeIs('contracts.*') ? 'active' : '' }}" href="{{ route('contracts.index') }}"><i class="bi bi-file-earmark-text"></i>Hợp đồng</a>
                         <a class="{{ request()->routeIs('attendance.*') ? 'active' : '' }}" href="{{ route('attendance.index') }}"><i class="bi bi-geo-alt"></i>Chấm công</a>
                         <a class="{{ request()->routeIs('evaluations.*') ? 'active' : '' }}" href="{{ route('evaluations.index') }}"><i class="bi bi-star"></i>Đánh giá</a>
-                        <a class="{{ request()->routeIs('leave_requests.*') ? 'active' : '' }}" href="{{ route('leave_requests.index') }}"><i class="bi bi-journal-text"></i>Nghỉ phép</a>
-                        <a class="{{ request()->routeIs('overtime_requests.*') ? 'active' : '' }}" href="{{ route('overtime_requests.index') }}"><i class="bi bi-clock-history"></i>Tăng ca</a>
-                        <a class="{{ request()->routeIs('support_requests.*') ? 'active' : '' }}" href="{{ route('support_requests.index') }}"><i class="bi bi-ticket-detailed"></i>Yêu cầu hỗ trợ</a>
+                        <a class="{{ request()->routeIs('leave_requests.*') ? 'active' : '' }}" href="{{ route('leave_requests.index') }}"><i class="bi bi-journal-text"></i>Nghỉ phép{!! $navBadge('leave_requests') !!}</a>
+                        <a class="{{ request()->routeIs('overtime_requests.*') ? 'active' : '' }}" href="{{ route('overtime_requests.index') }}"><i class="bi bi-clock-history"></i>Tăng ca{!! $navBadge('overtime_requests') !!}</a>
+                        <a class="{{ request()->routeIs('support_requests.*') ? 'active' : '' }}" href="{{ route('support_requests.index') }}"><i class="bi bi-ticket-detailed"></i>Yêu cầu hỗ trợ{!! $navBadge('support_requests') !!}</a>
                         @if($user->linkedEmployee())
                         <details class="nav-group" {{ request()->routeIs('me.leave_requests*') || request()->routeIs('me.overtime_requests*') || request()->routeIs('me.attendance*') || request()->routeIs('me.notifications*') || request()->routeIs('me.payrolls') || request()->routeIs('me.payroll.*') || request()->routeIs('me.support_requests*') ? 'open' : '' }}>
                             <summary class="nav-summary"><i class="bi bi-person-badge"></i> Yêu cầu của tôi</summary>
@@ -619,21 +640,21 @@
                                 || request()->routeIs('hr-dashboard.*');
                         @endphp
                         <details class="nav-group" {{ $payrollActive ? 'open' : '' }}>
-                            <summary class="nav-summary {{ $payrollActive ? 'active' : '' }}"><i class="bi bi-cash-stack"></i> Lương</summary>
-                            <a class="{{ request()->routeIs('payroll.index') ? 'active' : '' }}" href="{{ route('payroll.index') }}">Kiểm tra bảng lương</a>
+                            <summary class="nav-summary {{ $payrollActive ? 'active' : '' }}"><i class="bi bi-cash-stack"></i> Lương{!! $navBadge('payroll') !!}</summary>
+                            <a class="{{ request()->routeIs('payroll.index') ? 'active' : '' }}" href="{{ route('payroll.index') }}">Kiểm tra bảng lương{!! $navBadge('period_verify') !!}</a>
                             <a class="{{ request()->routeIs('salary_histories.index') ? 'active' : '' }}" href="{{ route('salary_histories.index') }}">Lịch sử lương</a>
-                            <a class="{{ request()->routeIs('payroll.bank_requests.*') ? 'active' : '' }}" href="{{ route('payroll.bank_requests.index') }}">Duyệt đổi STK/QR</a>
-                            <a class="{{ request()->routeIs('payroll.issues.*') ? 'active' : '' }}" href="{{ route('payroll.issues.index') }}">Sự cố lương</a>
+                            <a class="{{ request()->routeIs('payroll.bank_requests.*') ? 'active' : '' }}" href="{{ route('payroll.bank_requests.index') }}">Duyệt đổi STK/QR{!! $navBadge('bank_requests') !!}</a>
+                            <a class="{{ request()->routeIs('payroll.issues.*') ? 'active' : '' }}" href="{{ route('payroll.issues.index') }}">Sự cố lương{!! $navBadge('payroll_issues') !!}</a>
                             <a class="{{ request()->routeIs('salary_payments.*') ? 'active' : '' }}" href="{{ route('salary_payments.index') }}">Lịch sử thanh toán</a>
                             <a class="{{ request()->routeIs('statistics.*') ? 'active' : '' }}" href="{{ route('statistics.index') }}">Thống kê & Báo cáo</a>
                             <a class="{{ request()->routeIs('hr-dashboard.*') ? 'active' : '' }}" href="{{ route('hr-dashboard.index') }}">Báo cáo tổng hợp</a>
                         </details>
-                        <a class="{{ request()->routeIs('notifications.*') ? 'active' : '' }}" href="{{ route('notifications.index') }}"><i class="bi bi-bell"></i>Thông báo</a>
+                        <a class="{{ request()->routeIs('notifications.*') ? 'active' : '' }}" href="{{ route('notifications.index') }}"><i class="bi bi-bell"></i>Thông báo{!! $navBadge('notifications') !!}</a>
                         <a class="{{ request()->routeIs('benefits.*') ? 'active' : '' }}" href="{{ route('benefits.index') }}"><i class="bi bi-gift"></i>Phúc lợi</a>
                     @elseif ($user->is_director)
                         <a class="{{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}"><i class="bi bi-house"></i>Dashboard</a>
                         <a class="{{ request()->routeIs('employees.*') ? 'active' : '' }}" href="{{ route('employees.index') }}"><i class="bi bi-people"></i>Nhân viên</a>
-                        <a class="{{ request()->routeIs('contracts.*') ? 'active' : '' }}" href="{{ route('contracts.index') }}"><i class="bi bi-file-earmark-text"></i>Hợp đồng</a>
+                        <a class="{{ request()->routeIs('contracts.*') ? 'active' : '' }}" href="{{ route('contracts.index') }}"><i class="bi bi-file-earmark-text"></i>Hợp đồng{!! $navBadge('contracts') !!}</a>
                         @php
                             $dirPayrollActive = request()->routeIs('payroll.*')
                                 || request()->routeIs('salary_histories.*')
@@ -641,25 +662,25 @@
                                 || request()->routeIs('hr-dashboard.*');
                         @endphp
                         <details class="nav-group" {{ $dirPayrollActive || request()->routeIs('leave_requests.*') || request()->routeIs('overtime_requests.*') || request()->routeIs('attendance.*') || request()->routeIs('payroll.bank_requests.*') || request()->routeIs('deletion_requests.*') || request()->routeIs('support_requests.*') ? 'open' : '' }}>
-                            <summary class="nav-summary {{ $dirPayrollActive || request()->routeIs('leave_requests.*') || request()->routeIs('overtime_requests.*') || request()->routeIs('attendance.*') || request()->routeIs('payroll.bank_requests.*') || request()->routeIs('deletion_requests.*') || request()->routeIs('support_requests.*') ? 'active' : '' }}"><i class="bi bi-check2-square"></i> Phê duyệt</summary>
-                            <a class="{{ request()->routeIs('leave_requests.*') ? 'active' : '' }}" href="{{ route('leave_requests.index') }}">Nghỉ phép (HR)</a>
-                            <a class="{{ request()->routeIs('overtime_requests.*') ? 'active' : '' }}" href="{{ route('overtime_requests.index') }}">Tăng ca (HR)</a>
-                            <a class="{{ request()->routeIs('support_requests.*') ? 'active' : '' }}" href="{{ route('support_requests.index') }}">Yêu cầu hỗ trợ (HR)</a>
+                            <summary class="nav-summary {{ $dirPayrollActive || request()->routeIs('leave_requests.*') || request()->routeIs('overtime_requests.*') || request()->routeIs('attendance.*') || request()->routeIs('payroll.bank_requests.*') || request()->routeIs('deletion_requests.*') || request()->routeIs('support_requests.*') ? 'active' : '' }}"><i class="bi bi-check2-square"></i> Phê duyệt{!! $navBadge('approvals') !!}</summary>
+                            <a class="{{ request()->routeIs('leave_requests.*') ? 'active' : '' }}" href="{{ route('leave_requests.index') }}">Nghỉ phép (HR){!! $navBadge('leave_requests') !!}</a>
+                            <a class="{{ request()->routeIs('overtime_requests.*') ? 'active' : '' }}" href="{{ route('overtime_requests.index') }}">Tăng ca (HR){!! $navBadge('overtime_requests') !!}</a>
+                            <a class="{{ request()->routeIs('support_requests.*') ? 'active' : '' }}" href="{{ route('support_requests.index') }}">Yêu cầu hỗ trợ (HR){!! $navBadge('support_requests') !!}</a>
                             <a class="{{ request()->routeIs('attendance.*') ? 'active' : '' }}" href="{{ route('attendance.index') }}">Chấm công / khuôn mặt (HR)</a>
                             <a class="{{ request()->routeIs('payroll.bank_requests.*') ? 'active' : '' }}" href="{{ route('payroll.bank_requests.index') }}">Đổi STK/QR (HR)</a>
-                            <a class="{{ request()->routeIs('deletion_requests.*') ? 'active' : '' }}" href="{{ route('deletion_requests.index', ['status' => 'pending']) }}">Xóa / chuyển nhân viên</a>
-                            <a class="{{ request()->routeIs('payroll.index') || request()->routeIs('payroll.show') ? 'active' : '' }}" href="{{ route('payroll.index') }}">Bảng lương</a>
+                            <a class="{{ request()->routeIs('deletion_requests.*') ? 'active' : '' }}" href="{{ route('deletion_requests.index', ['status' => 'pending']) }}">Nghỉ việc / điều chuyển{!! $navBadge('deletion_requests') !!}</a>
+                            <a class="{{ request()->routeIs('payroll.index') || request()->routeIs('payroll.show') ? 'active' : '' }}" href="{{ route('payroll.index') }}">Bảng lương{!! $navBadge('payroll') !!}</a>
                             <a class="{{ request()->routeIs('salary_histories.index') ? 'active' : '' }}" href="{{ route('salary_histories.index') }}">Lịch sử lương</a>
                             <a class="{{ request()->routeIs('statistics.*') ? 'active' : '' }}" href="{{ route('statistics.index') }}">Thống kê & Báo cáo</a>
                             <a class="{{ request()->routeIs('hr-dashboard.*') ? 'active' : '' }}" href="{{ route('hr-dashboard.index') }}">Báo cáo tổng hợp</a>
                         </details>
-                        <a class="{{ request()->routeIs('notifications.*') ? 'active' : '' }}" href="{{ route('notifications.index') }}"><i class="bi bi-bell"></i>Thông báo</a>
+                        <a class="{{ request()->routeIs('notifications.*') ? 'active' : '' }}" href="{{ route('notifications.index') }}"><i class="bi bi-bell"></i>Thông báo{!! $navBadge('notifications') !!}</a>
                     @elseif ($user->is_accountant)
                         <a class="{{ request()->routeIs('accountant.dashboard') ? 'active' : '' }}" href="{{ route('accountant.dashboard') }}"><i class="bi bi-house"></i>Dashboard</a>
-                        <a class="{{ request()->routeIs('accountant.payroll.generate') ? 'active' : '' }}" href="{{ route('accountant.payroll.generate') }}"><i class="bi bi-calculator"></i>Tính lương</a>
+                        <a class="{{ request()->routeIs('accountant.payroll.generate') ? 'active' : '' }}" href="{{ route('accountant.payroll.generate') }}"><i class="bi bi-calculator"></i>Tính lương{!! $navBadge('generate') !!}</a>
                         <a class="{{ request()->routeIs('accountant.payroll.index') || request()->routeIs('accountant.payroll.show') ? 'active' : '' }}" href="{{ route('accountant.payroll.index') }}"><i class="bi bi-table"></i>Bảng lương</a>
-                        <a class="{{ request()->routeIs('payroll.index') || request()->routeIs('payroll.payment.*') || request()->routeIs('payroll.show') ? 'active' : '' }}" href="{{ route('payroll.index') }}"><i class="bi bi-wallet2"></i>Thanh toán lương</a>
-                        <a class="{{ request()->routeIs('accountant.payroll.feedback') || request()->routeIs('payroll.issues.*') ? 'active' : '' }}" href="{{ route('accountant.payroll.feedback') }}"><i class="bi bi-exclamation-triangle"></i>Sự cố lương</a>
+                        <a class="{{ request()->routeIs('payroll.index') || request()->routeIs('payroll.payment.*') || request()->routeIs('payroll.show') ? 'active' : '' }}" href="{{ route('payroll.index') }}"><i class="bi bi-wallet2"></i>Thanh toán lương{!! $navBadge('payroll') !!}</a>
+                        <a class="{{ request()->routeIs('accountant.payroll.feedback') || request()->routeIs('payroll.issues.*') ? 'active' : '' }}" href="{{ route('accountant.payroll.feedback') }}"><i class="bi bi-exclamation-triangle"></i>Sự cố lương{!! $navBadge('issues') !!}</a>
                         <a class="{{ request()->routeIs('accountant.leave_requests') ? 'active' : '' }}" href="{{ route('accountant.leave_requests') }}"><i class="bi bi-calendar-check"></i>Xem nghỉ phép</a>
                         <a class="{{ request()->routeIs('salary_histories.*') && ! request()->routeIs('me.salary_histories*') ? 'active' : '' }}" href="{{ route('salary_histories.index') }}"><i class="bi bi-clock-history"></i>Lịch sử lương</a>
                         @if($user->linkedEmployee())
@@ -688,16 +709,16 @@
                         <a class="{{ request()->routeIs('me.overtime_requests') || request()->routeIs('me.overtime_requests.*') ? 'active' : '' }}" href="{{ route('me.overtime_requests') }}"><i class="bi bi-clock"></i>Tăng ca</a>
                         @php $mePayrollActive = request()->routeIs('me.payrolls') || request()->routeIs('me.salary_histories*'); @endphp
                         <details class="nav-group" {{ $mePayrollActive ? 'open' : '' }}>
-                            <summary class="nav-summary {{ $mePayrollActive ? 'active' : '' }}"><i class="bi bi-cash-stack"></i> Lương</summary>
+                            <summary class="nav-summary {{ $mePayrollActive ? 'active' : '' }}"><i class="bi bi-cash-stack"></i> Lương{!! $navBadge('payroll') !!}</summary>
                             <a class="{{ request()->routeIs('me.payrolls') ? 'active' : '' }}" href="{{ route('me.payrolls') }}">Bảng lương</a>
                             <a class="{{ request()->routeIs('me.salary_histories') ? 'active' : '' }}" href="{{ route('me.salary_histories') }}">Lịch sử lương</a>
                         </details>
-                        <a class="{{ request()->routeIs('me.contracts') ? 'active' : '' }}" href="{{ route('me.contracts') }}"><i class="bi bi-file-earmark-text"></i>Hợp đồng</a>
+                        <a class="{{ request()->routeIs('me.contracts') ? 'active' : '' }}" href="{{ route('me.contracts') }}"><i class="bi bi-file-earmark-text"></i>Hợp đồng{!! $navBadge('contracts') !!}</a>
                         <a class="{{ request()->routeIs('me.evaluations') ? 'active' : '' }}" href="{{ route('me.evaluations') }}"><i class="bi bi-star"></i>Đánh giá</a>
                         <a class="{{ request()->routeIs('me.benefits') ? 'active' : '' }}" href="{{ route('me.benefits') }}"><i class="bi bi-gift"></i>Phúc lợi</a>
-                        <a class="{{ request()->routeIs('me.notifications') ? 'active' : '' }}" href="{{ route('me.notifications') }}"><i class="bi bi-bell"></i>Thông báo</a>
+                        <a class="{{ request()->routeIs('me.notifications') ? 'active' : '' }}" href="{{ route('me.notifications') }}"><i class="bi bi-bell"></i>Thông báo{!! $navBadge('notifications') !!}</a>
                         <a class="{{ request()->routeIs('me.schedule') || request()->routeIs('me.schedule.*') ? 'active' : '' }}" href="{{ route('me.schedule') }}"><i class="bi bi-calendar-week"></i>Lịch làm việc</a>
-                        <a class="{{ request()->routeIs('me.support_requests*') ? 'active' : '' }}" href="{{ route('me.support_requests') }}"><i class="bi bi-ticket-detailed"></i>Yêu cầu hỗ trợ</a>
+                        <a class="{{ request()->routeIs('me.support_requests*') ? 'active' : '' }}" href="{{ route('me.support_requests') }}"><i class="bi bi-ticket-detailed"></i>Yêu cầu hỗ trợ{!! $navBadge('support_requests') !!}</a>
                         <a class="{{ request()->routeIs('me.password.*') || request()->routeIs('me.password.change') ? 'active' : '' }}" href="{{ route('me.password.change') }}"><i class="bi bi-lock"></i>Đổi mật khẩu</a>
                         <a class="{{ request()->routeIs('me.activity_logs') ? 'active' : '' }}" href="{{ route('me.activity_logs') }}"><i class="bi bi-journal-text"></i>Nhật ký hoạt động</a>
                     @endif

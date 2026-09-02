@@ -23,6 +23,7 @@ use App\Models\User;
 use App\Models\OvertimeRequest;
 use App\Models\SalaryAdvance;
 use App\Models\SupportRequest;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -152,7 +153,7 @@ class SmartHrController extends Controller
                 'totalDepartments'   => Department::count(),
                 'totalPositions'     => Position::count(),
                 'activeEmployees'    => Employee::where('status', 'active')->count(),
-                'inactiveEmployees'  => Employee::where('status', 'inactive')->count(),
+                'inactiveEmployees'  => Employee::whereIn('status', Employee::terminatedStatuses())->count(),
                 'probationEmployees' => Employee::whereHas('contracts', fn($q) => $q->where('contract_type', 'probation'))->count(),
                 'internEmployees'    => Employee::whereHas('contracts', fn($q) => $q->where('contract_type', 'internship'))->count(),
             ];
@@ -315,7 +316,7 @@ class SmartHrController extends Controller
             'total' => Employee::count(),
             'active' => Employee::where('status', 'active')->count(),
             'probation' => Employee::whereHas('contracts', fn ($q) => $q->where('contract_type', 'probation')->where('status', 'active'))->count(),
-            'inactive' => Employee::where('status', 'inactive')->count(),
+            'inactive' => Employee::whereIn('status', Employee::terminatedStatuses())->count(),
             'joinedThisMonth' => Employee::whereBetween('start_date', [$monthStart, $monthEnd])->count(),
         ];
 
@@ -391,34 +392,30 @@ class SmartHrController extends Controller
 
     public function positions(): View
     {
-        $positions = [
-            [
-                'name' => 'HR Manager',
-                'department' => 'Nhân sự',
-                'description' => 'Quản lý phòng nhân sự',
-                'status' => 'Hoạt động',
-            ],
-            [
-                'name' => 'HR Executive',
-                'department' => 'Nhân sự',
-                'description' => 'Phụ trách tuyển dụng, hồ sơ',
-                'status' => 'Hoạt động',
-            ],
-            [
-                'name' => 'Finance Officer',
-                'department' => 'Kế toán',
-                'description' => 'Quản lý tài chính',
-                'status' => 'Hoạt động',
-            ],
-            [
-                'name' => 'Senior Developer',
-                'department' => 'IT',
-                'description' => 'Phát triển hệ thống',
-                'status' => 'Hoạt động',
-            ],
-        ];
+        $order = ['BGD', 'HR', 'HCNS', 'TD', 'CB', 'DTPT', 'DT', 'KTTC', 'KD', 'MKT', 'IT', 'CNTT', 'VH', 'PC', 'HC'];
 
-        return view('positions.index', compact('positions'));
+        $departments = Department::withCount('positions')
+            ->get()
+            ->map(function (Department $dept) use ($order) {
+                $idx = array_search($dept->code, $order, true);
+                $dept->sort = $idx === false ? 999 : $idx;
+
+                return $dept;
+            })
+            ->sortBy('sort')
+            ->values();
+
+        $selected = null;
+        if ($code = request('department')) {
+            $selected = Department::where('code', $code)->first();
+        }
+
+        $positions = Position::with(['department', 'employees'])
+            ->when($selected, fn ($q) => $q->where('department_id', $selected->id))
+            ->orderBy('name')
+            ->get();
+
+        return view('positions.index', compact('departments', 'positions', 'selected'));
     }
 
     public function notifications(): View
@@ -450,14 +447,26 @@ class SmartHrController extends Controller
                 ->find($request->integer('employee'));
         }
 
+        $contract = null;
+        if ($request->filled('contract')) {
+            $contract = Contract::query()->with('employee')->find($request->integer('contract'));
+            if (! $linkEmployee && $contract?->employee && ! $contract->employee->user_id) {
+                $linkEmployee = $contract->employee->loadMissing('department');
+            }
+        }
+
+        $defaultPassword = $contract || $request->boolean('from_contract') ? '123456' : '';
+
         return view('accounts.form', [
             'user' => new User([
                 'name' => $linkEmployee?->name,
-                'email' => $linkEmployee?->email,
+                'email' => $linkEmployee?->email ?: data_get($contract, 'employee.email'),
             ]),
             'departments' => Department::orderBy('name')->get(),
             'directorExists' => User::query()->where('is_director', true)->exists(),
             'linkEmployee' => $linkEmployee,
+            'contract' => $contract,
+            'defaultPassword' => $defaultPassword,
         ]);
     }
 
@@ -473,18 +482,39 @@ class SmartHrController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => $emailRules,
             'password' => ['required', 'string', 'min:6', 'confirmed'],
-            'role' => ['required', 'in:employee,hr,admin,accountant,director'],
+            'role' => [
+                'required',
+                Rule::in(
+                    $request->filled('contract_id')
+                        ? ['employee', 'hr', 'accountant']
+                        : ['employee', 'hr', 'admin', 'accountant', 'director']
+                ),
+            ],
             'department_id' => [
                 Rule::requiredIf(! $linkEmployee && in_array($request->input('role'), ['employee', 'hr', 'accountant', 'director'], true)),
                 'nullable',
                 'exists:departments,id',
             ],
             'employee_id' => ['nullable', 'integer', 'exists:employees,id'],
+            'contract_id' => ['nullable', 'integer', 'exists:contracts,id'],
         ]);
+
+        $contract = ! empty($data['contract_id'])
+            ? Contract::query()->with('employee')->find($data['contract_id'])
+            : null;
+
+        if ($contract && $linkEmployee && (int) $contract->employee_id !== (int) $linkEmployee->id) {
+            return back()->withInput()->with('error', 'Hợp đồng không khớp với hồ sơ nhân viên được chọn.');
+        }
 
         if ($linkEmployee) {
             $data['name'] = $linkEmployee->name;
-            $data['email'] = $linkEmployee->email;
+            // Prefer email from form when creating from contract notification (may have been updated on contract form)
+            if (! $request->filled('contract_id')) {
+                $data['email'] = $linkEmployee->email;
+            } else {
+                $linkEmployee->forceFill(['email' => $data['email']])->save();
+            }
             $data['department_id'] = $linkEmployee->department_id;
         }
 
@@ -493,6 +523,8 @@ class SmartHrController extends Controller
                 ->route('director_succession.index')
                 ->with('error', 'Đã có người giữ vai trò Giám đốc. Sau quyết định của doanh nghiệp, hãy cập nhật người giữ chức tại đây — không tạo thêm tài khoản Director và không đổi tên tài khoản cũ.');
         }
+
+        $plainPassword = $data['password'];
 
         $user = User::create(array_merge([
             'name' => $data['name'],
@@ -505,7 +537,7 @@ class SmartHrController extends Controller
                 $linkEmployee->update(['user_id' => $user->id]);
             } else {
                 $department = Department::findOrFail($data['department_id']);
-                Employee::create([
+                $linkEmployee = Employee::create([
                     'user_id' => $user->id,
                     'name' => $data['name'],
                     'email' => $data['email'],
@@ -521,13 +553,36 @@ class SmartHrController extends Controller
             app(DirectorSuccessionService::class)->ensureOpenTenureFor($user->fresh('employee'));
         }
 
-        if ($linkEmployee) {
+        if ($contract && $linkEmployee && in_array($data['role'], ['employee', 'hr', 'accountant'], true)) {
+            $this->sendContractAccountCredentials($linkEmployee->fresh(), $user->email, $plainPassword, $contract);
+            app(ContractService::class)->notifyEmployeeToSignAfterAccountCreated($contract->fresh(['employee']), Auth::user());
+
+            return redirect()
+                ->route('accounts.index')
+                ->with('success', 'Đã tạo tài khoản và gửi email đăng nhập cho '.$linkEmployee->name.' ('.$user->email.'). Người dùng đăng nhập để ký hợp đồng '.$contract->contract_code.'.');
+        }
+
+        if ($linkEmployee && ! $contract) {
             return redirect()
                 ->route('director_succession.index')
                 ->with('success', 'Đã kết nối tài khoản với hồ sơ '.$linkEmployee->name.'. Chọn người này trong danh sách để cập nhật người giữ chức Giám đốc — không đổi tên tài khoản cũ.');
         }
 
         return redirect()->route('accounts.index')->with('success', 'Tạo tài khoản thành công.');
+    }
+
+    private function sendContractAccountCredentials(Employee $employee, string $loginEmail, string $plainPassword, Contract $contract): void
+    {
+        try {
+            Mail::to($loginEmail)->send(new \App\Mail\ContractAccountCredentialsMail(
+                $employee,
+                $loginEmail,
+                $plainPassword,
+                $contract
+            ));
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     public function editAccount(User $user): View
@@ -728,6 +783,8 @@ class SmartHrController extends Controller
 
     public function showDepartment(Department $department): View
     {
+        $department->load(['positions' => fn ($q) => $q->withCount('employees')->orderBy('name')]);
+
         return view('departments.show', compact('department'));
     }
 
@@ -749,20 +806,66 @@ class SmartHrController extends Controller
     public function employees(Request $request)
     {
         if ($request->expectsJson()) {
-            $employees = Employee::with('department')->latest()->get();
+            $employees = Employee::query()
+                ->withoutBoardAndDirector()
+                ->with('department')
+                ->latest()
+                ->get();
 
             return response()->json([
                 'employees' => $employees,
             ]);
         }
 
-        $employees = Employee::with([
-            'department',
-            'contracts' => fn ($q) => $q->latest('id'),
-        ])->latest()->paginate(10);
+        $search = trim((string) $request->input('q', ''));
+        $departmentId = $request->integer('department_id') ?: null;
+        $status = (string) $request->input('status', '');
+
+        $employees = Employee::query()
+            ->withoutBoardAndDirector()
+            ->with([
+                'department',
+                'contracts' => fn ($q) => $q->latest('id'),
+            ])
+            ->when($search !== '', function ($query) use ($search) {
+                $like = '%' . $search . '%';
+                $query->where(function ($q) use ($like) {
+                    $q->where('name', 'like', $like)
+                        ->orWhere('email', 'like', $like)
+                        ->orWhere('employee_code', 'like', $like)
+                        ->orWhere('position', 'like', $like);
+                });
+            })
+            ->when($departmentId, fn ($query) => $query->where('department_id', $departmentId))
+            ->when($status !== '', function ($query) use ($status) {
+                match ($status) {
+                    'awaiting_contract' => $query->where(function ($q) {
+                        $q->where('status', Employee::STATUS_PENDING)
+                            ->orWhere(function ($inner) {
+                                $inner->where('status', Employee::STATUS_ACTIVE)
+                                    ->whereDoesntHave('contracts', fn ($c) => $c->where('status', Contract::STATUS_ACTIVE));
+                            });
+                    }),
+                    'active' => $query->where('status', Employee::STATUS_ACTIVE)
+                        ->whereHas('contracts', fn ($c) => $c->where('status', Contract::STATUS_ACTIVE)),
+                    'on_leave' => $query->where('status', Employee::STATUS_ON_LEAVE),
+                    'pending_termination' => $query->where('status', Employee::STATUS_PENDING_TERMINATION),
+                    'terminated' => $query->whereIn('status', Employee::terminatedStatuses()),
+                    default => $query->where('status', $status),
+                };
+            })
+            ->latest()
+            ->paginate(10)
+            ->withQueryString();
 
         return view('employees.index', [
             'employees' => $employees,
+            'departments' => Department::query()->orderBy('name')->get(['id', 'code', 'name']),
+            'filters' => [
+                'q' => $search,
+                'department_id' => $departmentId,
+                'status' => $status,
+            ],
             'pendingEmployeeDeletions' => DeletionRequest::query()
                 ->where('subject_type', DeletionRequest::EMPLOYEE)
                 ->where('status', DeletionRequest::PENDING)
@@ -777,7 +880,7 @@ class SmartHrController extends Controller
         abort_unless(auth()->user()?->canManageHr(), 403, 'Chỉ HR được tạo hồ sơ nhân sự. Admin tạo tài khoản sau khi hồ sơ đã có.');
 
         $forDirector = $request->boolean('for_director');
-        $employee = new Employee(['status' => 'active']);
+        $employee = new Employee(['status' => 'pending']);
         if ($forDirector) {
             $board = Department::query()->where('code', 'BGD')->orWhere('name', 'Ban Giám đốc')->first();
             $position = Position::query()->where('name', 'Giám đốc')->first();
@@ -802,13 +905,16 @@ class SmartHrController extends Controller
         abort_unless(auth()->user()?->canManageHr(), 403, 'Chỉ HR được tạo hồ sơ nhân sự. Admin tạo tài khoản sau khi hồ sơ đã có.');
 
         $data = $this->validateEmployee($request);
-        
+
         // Auto-generate employee code based on department if not already set
         if (empty($data['employee_code'])) {
             $department = Department::findOrFail($data['department_id']);
             $data['employee_code'] = Employee::generateUniqueEmployeeCode($department);
         }
-        
+
+        $data['status'] = 'pending';
+        $data['leave_balance'] = 12;
+
         $employee = Employee::create($data);
         $this->syncDepartmentCount($employee->department_id);
 
@@ -844,6 +950,8 @@ class SmartHrController extends Controller
 
         $oldDepartmentId = $employee->department_id;
         $data = $this->validateEmployee($request, $employee->id);
+        // Trạng thái / phép năm không sửa trên form hồ sơ — giữ nguyên giá trị hiện có
+        unset($data['status'], $data['leave_balance']);
         if ($oldDepartmentId && (int) $data['department_id'] !== (int) $oldDepartmentId) {
             return back()->withInput()->withErrors([
                 'department_id' => 'Không đổi phòng ban trực tiếp trên hồ sơ. Hãy tạo yêu cầu điều chuyển để Giám đốc duyệt.',
@@ -866,13 +974,13 @@ class SmartHrController extends Controller
 
     public function destroyEmployee(Employee $employee)
     {
-        abort_if(auth()->user()?->is_director && ! auth()->user()?->canManageHr(), 403, 'Giám đốc duyệt xóa trên hàng đợi, không xóa trực tiếp.');
+        abort_if(auth()->user()?->is_director && ! auth()->user()?->canManageHr(), 403, 'Giám đốc duyệt nghỉ việc trên hàng đợi, không xóa trực tiếp.');
         abort_unless(RequestApprover::hrMayManage(auth()->user(), $employee), 403, 'HR không quản lý hồ sơ Giám đốc.');
 
         if (request()->expectsJson()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Cần gửi đề nghị xóa cho Giám đốc duyệt.',
+                'message' => 'Cần gửi đề nghị nghỉ việc cho Giám đốc duyệt. Không xóa hồ sơ nhân viên.',
             ], 403);
         }
 
@@ -1182,12 +1290,12 @@ class SmartHrController extends Controller
 
     public function storePayroll(Request $request): RedirectResponse
     {
-        abort(403, 'Không tạo phiếu lương thủ công. HR chốt kỳ → Kế toán tính lương.');
+        abort(403, 'Không tạo phiếu lương thủ công. Hệ thống chốt kỳ → Kế toán tính lương.');
     }
 
     public function generatePayroll(Request $request): RedirectResponse
     {
-        abort(403, 'Tính lương chỉ do Kế toán thực hiện sau khi HR đã chốt dữ liệu kỳ.');
+        abort(403, 'Tính lương chỉ do Kế toán thực hiện sau khi kỳ lương đã được hệ thống chốt.');
     }
 
     public function evaluations(Request $request): View
@@ -1711,11 +1819,6 @@ class SmartHrController extends Controller
 
         return view('hr.leave.index', [
             'leaveRequests' => $query->paginate(10)->withQueryString(),
-            'overtimeRequests' => OvertimeRequest::with(['employee.user', 'approver'])
-                ->where('status', OvertimeRequest::STATUS_PENDING)
-                ->latest()
-                ->limit(20)
-                ->get(),
         ]);
     }
 
@@ -1988,6 +2091,7 @@ class SmartHrController extends Controller
             return response()->json([
                 'id' => $employee->id,
                 'name' => $employee->name,
+                'email' => $employee->email,
                 'employee_code' => $employee->employee_code,
                 'position' => $position,
                 'position_id' => $employee->position_id,
@@ -2028,14 +2132,13 @@ class SmartHrController extends Controller
                 'allowed_makeup_attendance_per_month' => 3,
                 'allowed_maternity_leave_days' => 180,
             ]),
-            'employees' => Employee::orderBy('name')->get(),
             'signers' => User::where('is_director', true)->orWhere('is_hr', true)->orderBy('name')->get(),
             'positions' => Position::orderBy('name')->get(),
             'isEdit' => false,
         ]);
     }
 
-    public function storeContract(ContractFormRequest $request, ContractService $contractService): RedirectResponse
+    public function storeContract(ContractFormRequest $request, ContractService $contractService): RedirectResponse|JsonResponse
     {
         if (! $this->canManageContracts()) {
             abort(403);
@@ -2043,23 +2146,32 @@ class SmartHrController extends Controller
 
         $data = $this->prepareContractData($request, null);
 
-        if ($this->hasActiveContract($data['employee_id'], null)) {
-            return back()->withInput()->with('error', 'Nhân viên này đã có hợp đồng đang có hiệu lực.');
-        }
-
         unset($data['employee_signed_at'], $data['director_signed_at']);
 
-        $contract = $contractService->createContract(Auth::user(), $data);
+        try {
+            $contract = $contractService->createContract(Auth::user(), $data);
+        } catch (\Throwable $e) {
+            if ($request->ajax() || $request->wantsJson() || $request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+
+            return back()->withInput()->with('error', $e->getMessage());
+        }
 
         if ($request->ajax() || $request->wantsJson() || $request->expectsJson()) {
             return response()->json([
                 'success' => true,
-                'message' => 'Tạo hợp đồng thành công.',
-                'redirect' => route('contracts.index'),
+                'message' => 'Tạo hợp đồng thành công. Kiểm tra nội dung rồi bấm Gửi ký.',
+                'redirect' => route('contracts.show', $contract),
             ]);
         }
 
-        return redirect()->route('contracts.index')->with('success', 'Tạo hợp đồng thành công.');
+        return redirect()
+            ->route('contracts.show', $contract)
+            ->with('success', 'Tạo hợp đồng nháp thành công. Kiểm tra nội dung rồi bấm Gửi ký ở bên phải.');
     }
 
     public function showContract(Contract $contract, ContractService $contractService): View
@@ -2112,14 +2224,13 @@ class SmartHrController extends Controller
         }
         return view('contracts.form', [
             'contract' => $contract,
-            'employees' => Employee::orderBy('name')->get(),
             'signers' => User::where('is_director', true)->orWhere('is_hr', true)->orderBy('name')->get(),
             'positions' => Position::orderBy('name')->get(),
             'isEdit' => true,
         ]);
     }
 
-    public function updateContract(ContractFormRequest $request, Contract $contract, ContractService $contractService): RedirectResponse
+    public function updateContract(ContractFormRequest $request, Contract $contract, ContractService $contractService): RedirectResponse|JsonResponse
     {
         if (! $this->canManageContracts()) {
             abort(403);
@@ -2127,15 +2238,18 @@ class SmartHrController extends Controller
 
         $data = $this->prepareContractData($request, $contract);
 
-        if ($this->hasActiveContract($data['employee_id'], $contract->id)) {
-            return back()->withInput()->with('error', 'Nhân viên này đã có hợp đồng đang có hiệu lực.');
-        }
-
         unset($data['employee_signed_at'], $data['director_signed_at']);
 
         try {
             $contract = $contractService->updateContract(Auth::user(), $contract, $data);
         } catch (\Throwable $e) {
+            if ($request->ajax() || $request->wantsJson() || $request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+
             return back()->withInput()->with('error', $e->getMessage());
         }
 
@@ -2143,11 +2257,13 @@ class SmartHrController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Cập nhật hợp đồng thành công.',
-                'redirect' => route('contracts.index'),
+                'redirect' => route('contracts.show', $contract),
             ]);
         }
 
-        return redirect()->route('contracts.index')->with('success', 'Cập nhật hợp đồng thành công.');
+        return redirect()
+            ->route('contracts.show', $contract)
+            ->with('success', 'Cập nhật hợp đồng thành công.');
     }
 
     public function destroyContract(Contract $contract): RedirectResponse
@@ -2191,7 +2307,7 @@ class SmartHrController extends Controller
         ]);
     }
 
-    public function storeRenewalContract(StoreContractRenewalRequest $request, Contract $contract, ContractService $contractService): RedirectResponse
+    public function storeRenewalContract(StoreContractRenewalRequest $request, Contract $contract, ContractService $contractService): RedirectResponse|JsonResponse
     {
         if (! $this->canManageContracts()) {
             abort(403);
@@ -2200,6 +2316,13 @@ class SmartHrController extends Controller
         try {
             $renewed = $contractService->renewContract($request->user(), $contract, $request->validated());
         } catch (\Throwable $e) {
+            if ($request->ajax() || $request->wantsJson() || $request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+
             return back()->withInput()->with('error', $e->getMessage());
         }
 
@@ -2331,30 +2454,48 @@ class SmartHrController extends Controller
 
     private function validateEmployee(Request $request, ?int $employeeId = null): array
     {
+        $departmentId = $request->input('department_id');
+        $allowedEducation = ['THCS', 'THPT', 'Trung cấp', 'Cao đẳng', 'Đại học', 'Thạc sĩ', 'Tiến sĩ', 'Khác'];
+        if ($employeeId) {
+            $existingEducation = Employee::query()->whereKey($employeeId)->value('education');
+            if (filled($existingEducation) && ! in_array($existingEducation, $allowedEducation, true)) {
+                $allowedEducation[] = $existingEducation;
+            }
+        }
+
         return $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:employees,email,' . $employeeId],
             'position' => ['nullable', 'string', 'max:255'],
-            'position_id' => ['nullable', 'exists:positions,id'],
+            'position_id' => [
+                'nullable',
+                'exists:positions,id',
+                Rule::exists('positions', 'id')->where(function ($query) use ($departmentId) {
+                    if ($departmentId) {
+                        $query->where('department_id', $departmentId);
+                    }
+                }),
+            ],
             'department_id' => ['required', 'exists:departments,id'],
-            'status' => ['required', 'in:active,inactive,on_leave'],
             'gender' => ['nullable', 'in:male,female,other'],
             'dob' => ['nullable', 'date'],
             'cccd' => ['nullable', 'string', 'max:20'],
             'phone' => ['nullable', 'string', 'max:20'],
             'address' => ['nullable', 'string'],
             'start_date' => ['nullable', 'date'],
-            'education' => ['nullable', 'string', 'max:255'],
+            'education' => ['nullable', 'string', 'max:255', Rule::in($allowedEducation)],
             'experience' => ['nullable', 'string'],
-            'leave_balance' => ['nullable', 'integer', 'min:0'],
+        ], [
+            'position_id.exists' => 'Chức vụ phải thuộc phòng ban đã chọn.',
+            'education.in' => 'Trình độ học vấn không hợp lệ.',
         ]);
     }
 
     private function prepareContractData(ContractFormRequest $request, ?Contract $contract = null): array
     {
         $data = $request->validated();
-        $data['status'] = $data['status'] ?? \App\Models\Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE;
-        $data['contract_status'] = $data['status'];
+        unset($data['status'], $data['signer_id'], $data['working_schedule']);
+        $data['payment_method'] = 'cash_and_bank_transfer';
 
         if ($request->hasFile('document')) {
             $data['document'] = $request->file('document');
@@ -2363,6 +2504,10 @@ class SmartHrController extends Controller
         $employee = $request->employee_id ? Employee::find($request->employee_id) : null;
         if ($employee) {
             $data['employee_id'] = $employee->id;
+        }
+
+        if (! empty($data['employee_email'])) {
+            $data['employee_email'] = strtolower(trim((string) $data['employee_email']));
         }
 
         $data['allowance'] = (float) ($data['allowance'] ?? 0);
@@ -2406,21 +2551,6 @@ class SmartHrController extends Controller
             'Trưởng Phòng Nhân Sự' => 10400000,
             default => 7800000,
         };
-    }
-
-    private function hasActiveContract(int $employeeId, ?int $excludeId): bool
-    {
-        $query = Contract::where('employee_id', $employeeId)
-            ->whereIn('status', [\App\Models\Contract::STATUS_ACTIVE, \App\Models\Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE, \App\Models\Contract::STATUS_WAITING_DIRECTOR_SIGNATURE, 'expiring'])
-            ->where(function ($q) {
-                $q->whereNull('end_date')->orWhere('end_date', '>=', now()->toDateString());
-            });
-
-        if ($excludeId) {
-            $query->where('id', '!=', $excludeId);
-        }
-
-        return $query->exists();
     }
 
     private function resolveEmployeeToLink(Request $request): ?Employee
@@ -2501,7 +2631,9 @@ class SmartHrController extends Controller
         }
 
         Department::whereKey($departmentId)->update([
-            'employee_count' => Employee::where('department_id', $departmentId)->count(),
+            'employee_count' => Employee::where('department_id', $departmentId)
+                ->whereIn('status', Employee::workingStatuses())
+                ->count(),
         ]);
     }
 
@@ -2548,24 +2680,74 @@ class SmartHrController extends Controller
         ]);
     }
 
+    public function findEmployeeByCode(Request $request): JsonResponse
+    {
+        if (! $this->canManageContracts() && ! Auth::user()?->canManageHr()) {
+            abort(403);
+        }
+
+        $code = trim((string) $request->query('code', ''));
+        if ($code === '') {
+            return response()->json(['message' => 'Vui lòng nhập mã nhân viên.'], 422);
+        }
+
+        $employee = Employee::query()
+            ->withoutBoardAndDirector()
+            ->with(['department', 'positionDetail'])
+            ->whereRaw('LOWER(TRIM(employee_code)) = ?', [mb_strtolower($code)])
+            ->first();
+
+        if (! $employee) {
+            return response()->json(['message' => 'Không tìm thấy nhân viên với mã này.'], 404);
+        }
+
+        if ($employee->isTerminated()) {
+            return response()->json(['message' => 'Nhân viên này đã nghỉ việc, không thể tạo hợp đồng mới.'], 422);
+        }
+
+        $position = $employee->position ?: optional($employee->positionDetail)->name;
+        $positionDetail = $employee->positionDetail;
+        $positionMinSalary = optional($positionDetail)->salary_range_min;
+        $positionAllowance = optional($positionDetail)->allowance;
+        $positionAllowanceDefault = $positionAllowance ?: ($positionMinSalary ? (int) round($positionMinSalary * 0.1) : 0);
+
+        return response()->json([
+            'id' => $employee->id,
+            'name' => $employee->name,
+            'email' => $employee->email,
+            'employee_code' => $employee->employee_code,
+            'position' => $position,
+            'position_id' => $employee->position_id,
+            'position_salary_min' => $positionMinSalary,
+            'position_salary_max' => optional($positionDetail)->salary_range_max,
+            'position_allowance' => $positionAllowance,
+            'position_base_salary' => optional($positionDetail)->base_salary,
+            'position_allowance_default' => $positionAllowanceDefault,
+            'department' => $employee->department ? ['name' => $employee->department->name] : null,
+            'status' => $employee->status,
+            'status_label' => $employee->statusLabel(),
+        ]);
+    }
+
     public function getNextEmployeeCode(Request $request)
     {
-        if (! Auth::user()?->is_hr) {
+        if (! Auth::user()?->canManageHr()) {
             abort(403, 'Chỉ HR được tạo mã nhân viên.');
         }
 
         $departmentId = $request->query('department_id');
-        
-        if (!$departmentId) {
+
+        if (! $departmentId) {
             return response()->json(['error' => 'department_id is required'], 400);
         }
-        
+
         $department = Department::find($departmentId);
-        if (!$department) {
+        if (! $department) {
             return response()->json(['error' => 'Department not found'], 404);
         }
-        
+
         $code = Employee::generateUniqueEmployeeCode($department);
+
         return response()->json(['code' => $code]);
     }
 

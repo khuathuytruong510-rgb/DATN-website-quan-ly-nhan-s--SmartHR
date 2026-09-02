@@ -16,6 +16,13 @@
     <div class="alert alert-danger mb-3">{{ session('error') }}</div>
 @endif
 
+@if(auth()->user()?->is_hr)
+    <div class="alert alert-light border mb-3" style="font-size:14px;">
+        <strong>Gửi ký</strong> chỉ xuất hiện với hợp đồng <strong>nháp</strong> (vừa tạo, chưa khóa tài liệu).
+        Hợp đồng demo đã <em>active</em> / đã ký sẽ không có nút này — hãy <a href="{{ route('contracts.create') }}">tạo hợp đồng mới</a> để demo luồng ký.
+    </div>
+@endif
+
 <div class="card p-3">
     @if($contracts->count())
         <div style="overflow-x: auto;">

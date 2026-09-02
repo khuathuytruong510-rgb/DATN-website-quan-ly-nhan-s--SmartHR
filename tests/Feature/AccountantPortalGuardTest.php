@@ -60,6 +60,11 @@ class AccountantPortalGuardTest extends TestCase
             'month' => $month,
             'year' => $year,
         ])->assertRedirect();
+
+        $this->actingAs($hr)->post(route('payroll.period.verify'), [
+            'month' => $month,
+            'year' => $year,
+        ])->assertRedirect();
     }
 
     private function payroll(Employee $employee, string $status, array $extra = []): Payroll

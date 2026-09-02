@@ -31,7 +31,6 @@
     <div class="page-head">
         <div>
             <h1>Thanh toán lương</h1>
-            <p class="muted">{{ optional($employee)->name }} · Tháng {{ $payroll->month }}/{{ $payroll->year }}</p>
         </div>
         <div class="actions">
             <a href="{{ route('payroll.show', $payroll) }}" class="btn">← Chi tiết</a>
@@ -79,7 +78,6 @@
                     <img src="{{ asset('storage/'.$employee->qr_image) }}" alt="QR" style="max-width:180px;border:1px solid var(--line);border-radius:8px;">
                 </div>
             @endif
-            <p class="muted" style="font-size:13px;">Kế toán không sửa hồ sơ nhân viên. Đổi STK do HR xử lý. Snapshot được chốt khi HR kiểm tra phiếu.</p>
         </div>
     </div>
 
@@ -107,7 +105,6 @@
                             data-pattern="[A-Za-z0-9\\-_]{6,50}"
                             placeholder="VD: FT240721123456"
                         >
-                        <small id="txnHelp" class="muted">Bắt buộc khi chuyển khoản (6–50 ký tự chữ/số).</small>
                     </div>
                 </div>
                 <div class="field">

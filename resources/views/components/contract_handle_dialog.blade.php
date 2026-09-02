@@ -19,7 +19,6 @@
     <form method="POST" action="{{ route('contracts.handle_expiry', $contract) }}" class="contract-handle-form">
         @csrf
         <h3>Xử lý hợp đồng sắp hết hạn</h3>
-        <p class="muted" style="margin:0 0 12px;">Hệ thống chỉ ghi nhận hướng xử lý. Không tự tạo hợp đồng mới.</p>
         <dl class="contract-handle-meta">
             <div><dt>Nhân viên</dt><dd>{{ optional($contract->employee)->name ?? '—' }}</dd></div>
             <div><dt>Hợp đồng</dt><dd>{{ $typeMap[$contract->contract_type] ?? ($contract->title ?: '—') }}</dd></div>

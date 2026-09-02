@@ -6,7 +6,6 @@
     <div class="page-head">
         <div>
             <h1>Quản lý tài khoản</h1>
-            <p class="muted">Danh sách và quản lý tài khoản người dùng hệ thống. Tài khoản gắn hồ sơ nhân viên đã xóa được đánh dấu để xóa.</p>
         </div>
         <div class="page-actions">
             <a class="btn" href="{{ route('admin.notifications.index') }}">Thông báo</a>
@@ -36,7 +35,7 @@
                             <td>
                                 {{ $user->name }}
                                 @if($pendingEmployeeLabel)
-                                    <div class="muted" style="font-size:13px;color:#c2410c;">Cần xóa tài khoản — hồ sơ {{ $pendingEmployeeLabel }} đã được Giám đốc duyệt xóa</div>
+                                    <div class="muted" style="font-size:13px;color:#c2410c;">Đã khóa đăng nhập — hồ sơ {{ $pendingEmployeeLabel }} đã nghỉ việc</div>
                                 @endif
                             </td>
                             <td>{{ $user->email }}</td>

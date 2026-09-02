@@ -6,7 +6,6 @@
     <div class="auth-card">
         <p class="auth-brand">SmartHR</p>
         <h1>Đăng ký</h1>
-        <p class="muted">Tạo tài khoản quản trị để sử dụng SmartHR.</p>
 
         <form method="POST" action="{{ route('register.store') }}" style="margin-top: 22px;">
             @csrf

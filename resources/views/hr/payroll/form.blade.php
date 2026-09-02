@@ -5,7 +5,6 @@
     <div class="page-head">
         <div>
             <h1>{{ $payroll->exists ? 'Chỉnh sửa lương' : 'Tạo bản ghi lương' }}</h1>
-            <p class="muted">Quản lý thông tin lương nhân viên</p>
         </div>
     </div>
 

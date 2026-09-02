@@ -5,7 +5,6 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="mb-1">{{ $isEdit ? 'Chỉnh sửa mẫu hợp đồng' : 'Tạo mẫu hợp đồng' }}</h2>
-            <p class="text-muted mb-0">Cài đặt nội dung điều khoản mặc định cho hợp đồng.</p>
         </div>
         <a class="btn btn-outline-secondary" href="{{ route('contract-templates.index') }}">Quay lại</a>
     </div>
@@ -40,7 +39,6 @@
                 <div class="mb-4">
                     <div class="d-flex align-items-center mb-3">
                         <h5 class="mb-0">Điều khoản chuẩn</h5>
-                        <small class="text-muted ms-2">(Lựa chọn những điều khoản bắt buộc cho loại hợp đồng này)</small>
                     </div>
                     
                     <div class="alert alert-info mb-3" id="clausesInfo">
@@ -57,7 +55,6 @@
                 <div class="mb-3">
                     <label class="form-label">Nội dung tự do (Chỉnh sửa/Bổ sung)</label>
                     <textarea name="content" class="form-control" rows="15" id="contentTextarea" placeholder="Nội dung sẽ được tự động tạo từ các điều khoản chuẩn đã chọn. Bạn có thể chỉnh sửa tại đây.">{{ old('content', $template->content) }}</textarea>
-                    <small class="text-muted d-block mt-2">Hệ thống sẽ tự động tạo nội dung từ các điều khoản đã chọn. Bạn có thể thêm hoặc sửa đổi nội dung theo nhu cầu.</small>
                 </div>
 
                 <div class="mb-3">

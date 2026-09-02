@@ -6,7 +6,6 @@
     <div class="page-head">
         <div>
             <h1>Cấu hình hệ thống</h1>
-            <p class="muted">Cài đặt cấu hình chung của hệ thống.</p>
         </div>
     </div>
 

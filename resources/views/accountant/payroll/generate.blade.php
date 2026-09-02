@@ -10,6 +10,9 @@
 
 @php
     $periodLocked = (bool) optional($lock ?? null)->is_locked;
+    $periodVerified = (bool) optional($lock ?? null)->hr_verified_at;
+    $unlockPending = optional($lock ?? null)->unlock_request_status === 'pending';
+    $periodReady = $periodLocked && $periodVerified && ! $unlockPending;
     $periodLabel = sprintf('%02d/%d', $month, $year);
     $periodValue = sprintf('%04d-%02d', $year, $month);
     $periodMeta = $periodMeta ?? app(\App\Services\PayrollCalculationService::class)->periodMeta($month, $year);
@@ -18,10 +21,6 @@
 <div class="page-head">
     <div>
         <h1>Tính lương</h1>
-        <p class="muted">
-            Chọn kỳ → đối chiếu bảng số liệu (chấm công, nghỉ phép, tăng ca, phụ cấp, BH, thuế) → mới bấm Tính lương.
-            Chỉ tính phiếu nháp / đã tính / sự cố. Không tính lại phiếu HR đã kiểm tra, Giám đốc đã duyệt, NV đã xác nhận hoặc đã thanh toán.
-        </p>
     </div>
     <div class="actions">
         <a class="btn" href="{{ route('accountant.payroll.index') }}">Sang bảng lương</a>
@@ -62,7 +61,8 @@
             <thead>
                 <tr>
                     <th>Kỳ</th>
-                    <th>HR chốt</th>
+                    <th>Chốt kỳ</th>
+                    <th>HR kiểm tra</th>
                     <th>Phiếu</th>
                     <th>Đã tính / sự cố</th>
                     <th></th>
@@ -77,6 +77,17 @@
                                 <span class="badge">Đã chốt</span>
                             @else
                                 <span class="muted">Chưa chốt</span>
+                            @endif
+                        </td>
+                        <td>
+                            @if(!empty($period['unlock_pending']))
+                                <span class="muted">Chờ GĐ mở khóa</span>
+                            @elseif(!empty($period['verified']))
+                                <span class="badge">Đã xác nhận</span>
+                            @elseif(!empty($period['locked']))
+                                <span class="muted">Chờ HR</span>
+                            @else
+                                <span class="muted">—</span>
                             @endif
                         </td>
                         <td>{{ $period['total'] }}</td>
@@ -98,30 +109,30 @@
     <div class="page-head" style="margin-bottom:12px;">
         <div>
             <h3 style="margin:0;">Bảng số liệu kỳ {{ $periodLabel }}</h3>
-            <p class="muted" style="margin:4px 0 0;">
-                Kỳ lương từ {{ $periodMeta['start_label'] }} đến {{ $periodMeta['end_label'] }}.
-                {{ $periodMeta['formula_label'] }}.
-            </p>
             <p class="muted" style="margin-top:6px;">
-                @if($periodLocked)
-                    HR đã chốt kỳ này. Dòng nền xanh sẽ được ghi khi bấm Tính lương.
+                @if($periodReady)
+                    Kỳ đã chốt và HR đã xác nhận. Dòng nền xanh sẽ được ghi khi bấm Tính lương.
                     @if($recalculableCount < $rows->count())
                         Dòng xám ({{ $rows->count() - $recalculableCount }} phiếu) đã vào vòng duyệt — không tính lại.
                     @endif
+                @elseif($unlockPending)
+                    Đang chờ Giám đốc duyệt mở khóa kỳ {{ $periodLabel }}.
+                @elseif($periodLocked)
+                    Kỳ đã chốt — chờ HR xác nhận kiểm tra nguồn trước khi tính lương.
                 @else
-                    HR chưa chốt kỳ {{ $periodLabel }}. Có thể xem trước số liệu, nhưng chưa được tính lương.
+                    Kỳ {{ $periodLabel }} chưa chốt. Hệ thống tự chốt sau ngày cuối tháng; có thể xem trước nhưng chưa tính lương.
                 @endif
             </p>
         </div>
-        @if($periodLocked && $recalculableCount > 0)
+        @if($periodReady && $recalculableCount > 0)
             <form method="POST" action="{{ route('accountant.payroll.generate_post') }}"
                   onsubmit="return confirm('Xác nhận tính lương kỳ {{ $periodLabel }} cho {{ $recalculableCount }} nhân viên?\nSố liệu đang hiển thị sẽ được ghi vào phiếu.');">
                 @csrf
                 <input type="hidden" name="month" value="{{ $periodValue }}">
                 <button class="btn primary" type="submit">Tính lương kỳ {{ $periodLabel }}</button>
             </form>
-        @elseif(! $periodLocked)
-            <span class="muted">Chờ HR chốt kỳ</span>
+        @elseif(! $periodReady)
+            <span class="muted">{{ $periodLocked ? 'Chờ HR xác nhận kiểm tra' : 'Chờ hệ thống chốt kỳ' }}</span>
         @else
             <span class="muted">Không còn phiếu được tính lại</span>
         @endif
@@ -170,7 +181,6 @@
                     <tr class="{{ $periodLocked && $row->can_recalculate ? 'acct-row-write' : (! $row->can_recalculate ? 'acct-row-locked' : '') }}">
                         <td>
                             <strong>{{ $row->employee->name }}</strong><br>
-                            <small class="muted">{{ $row->employee->employee_code }}</small>
                         </td>
                         <td>{{ $row->employee->position ?: '—' }}</td>
                         <td class="num">{{ $periodLabel }}</td>
@@ -226,7 +236,7 @@
                                     {{ $workflow->statusLabel($row->status) }}
                                 </span>
                                 @if(! $row->can_recalculate)
-                                    <br><small class="muted">Không tính lại</small>
+                                    <br>
                                 @endif
                                 <br>
                                 <a class="btn link" href="{{ route('accountant.payroll.show', $row->payroll) }}">Chi tiết</a>

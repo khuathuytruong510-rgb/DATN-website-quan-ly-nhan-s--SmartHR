@@ -11,7 +11,6 @@
 <div class="page-head">
     <div>
         <h1>{{ $supportRequest->subject }}</h1>
-        <p class="muted">{{ $supportRequest->typeLabel() }} • {{ $supportRequest->created_at->format('d/m/Y') }}</p>
     </div>
     <div class="actions">
         <a class="btn" href="{{ route('me.support_requests') }}">Quay lại</a>
@@ -45,7 +44,6 @@
 @if(in_array($supportRequest->status, ['pending', 'processing'], true))
 <div class="card" style="margin-top:16px;">
     <h2>Bổ sung nội dung</h2>
-    <p class="muted">Bạn không tự đóng yêu cầu hoặc đổi trạng thái. {{ \App\Support\RequestApprover::queueLabel($supportRequest->employee) }} sẽ duyệt rồi xử lý.</p>
     <form method="POST" action="{{ route('me.support_requests.follow_up', $supportRequest) }}">
         @csrf
         <div class="field">
@@ -59,7 +57,6 @@
 @if($supportRequest->isResolved() && ! $supportRequest->employee_feedback)
 <div class="card" style="margin-top:16px;">
     <h2>Phản hồi kết quả xử lý</h2>
-    <p class="muted">Yêu cầu đã được xử lý xong. Gửi ý kiến về kết quả để {{ \App\Support\RequestApprover::queueLabel($supportRequest->employee) }} nắm thông tin.</p>
     <form method="POST" action="{{ route('me.support_requests.feedback', $supportRequest) }}">
         @csrf
         <div class="field">

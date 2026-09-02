@@ -6,7 +6,6 @@
     <div class="page-head">
         <div>
             <h1>Đào tạo</h1>
-            <p class="muted">Khóa học và chương trình đào tạo được giao cho bạn.</p>
         </div>
     </div>
 

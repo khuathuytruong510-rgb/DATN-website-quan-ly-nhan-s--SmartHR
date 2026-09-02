@@ -10,7 +10,6 @@
 <div class="page-head">
     <div>
         <h1>Điều chuyển nhân viên</h1>
-        <p class="muted">Chọn phòng ban để lọc, rồi chọn nhân viên. Hệ thống lấy phòng ban hiện tại từ hồ sơ. Chỉ sau khi Giám đốc duyệt, hồ sơ mới đổi phòng.</p>
     </div>
     <a class="btn link" href="{{ route('employees.index') }}">Quay lại danh sách</a>
 </div>
@@ -46,7 +45,6 @@
                             </option>
                         @endforeach
                     </select>
-                    <p class="form-hint">Danh sách nhân viên được lọc theo phòng ban đã chọn.</p>
                 </div>
             </div>
             <div class="col-12 col-md-6">
@@ -61,15 +59,6 @@
                             </option>
                         @endforeach
                     </select>
-                    <p class="form-hint">
-                        @if(! $fromFilterId)
-                            Danh sách nhân viên sẽ hiện sau khi chọn phòng ban.
-                        @elseif($filteredCandidates->isEmpty())
-                            Phòng ban này chưa có nhân viên để điều chuyển.
-                        @else
-                            {{ $filteredCandidates->count() }} nhân viên thuộc phòng đã chọn.
-                        @endif
-                    </p>
                 </div>
             </div>
         </div>
@@ -99,7 +88,6 @@
                         <div class="field">
                             <label class="form-label">Phòng ban hiện tại</label>
                             <input class="form-control" type="text" value="{{ $from->name }}" readonly>
-                            <p class="form-hint">Chỉ xem. Hệ thống lấy từ hồ sơ nhân viên đã chọn, không tin giá trị gửi từ form.</p>
                         </div>
                     </div>
                     <div class="col-12 col-md-6">
@@ -126,7 +114,6 @@
                 <div class="field">
                     <label class="form-label" for="transfer-document">Biên bản/quyết định</label>
                     <input id="transfer-document" class="form-control" type="file" name="document" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
-                    <p class="form-hint">Cần lý do hoặc file. Hồ sơ vẫn thuộc {{ $from->name }} cho đến khi Giám đốc duyệt.</p>
                 </div>
                 <div class="actions" style="margin-top:12px;">
                     <button class="btn primary" type="submit" onclick="return confirm('Gửi yêu cầu điều chuyển? Hồ sơ nhân viên chưa đổi phòng cho đến khi Giám đốc duyệt.')">Gửi Giám đốc duyệt</button>

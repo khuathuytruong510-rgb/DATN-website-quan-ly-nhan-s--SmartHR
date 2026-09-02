@@ -10,7 +10,6 @@
     <div class="page-head">
         <div>
             <h1>Hồ sơ cá nhân</h1>
-            <p class="muted">Bạn chỉ cập nhật thông tin cá nhân. Thông tin HR quản lý chỉ để xem.</p>
         </div>
         <div>
             <a class="btn primary" href="{{ route('me.profile.edit') }}">Cập nhật thông tin cá nhân</a>
@@ -29,15 +28,14 @@
         </div>
         <div class="card">
             <h2>Thông tin HR quản lý</h2>
-            <p class="muted" style="margin-bottom:12px;">Không thể sửa trên cổng nhân viên.</p>
             <div class="field"><label>Mã nhân viên</label><div>{{ $employee->employee_code ?? '—' }}</div></div>
             <div class="field"><label>Email tài khoản</label><div>{{ $employee->email }}</div></div>
             <div class="field"><label>Chức vụ</label><div>{{ $employee->position ?? '—' }}</div></div>
             <div class="field"><label>Phòng ban</label><div>{{ optional($employee->department)->name ?? 'Chưa gán' }}</div></div>
             <div class="field"><label>Ngày vào làm</label><div>{{ optional($employee->start_date)->format('d/m/Y') ?? '—' }}</div></div>
-            <div class="field"><label>Loại / trạng thái</label><div>{{ $employee->status ?? '—' }}</div></div>
+            <div class="field"><label>Loại / trạng thái</label><div>{{ $employee->statusLabel() }}</div></div>
             <div class="field"><label>Trình độ</label><div>{{ $employee->education ?? '—' }}</div></div>
-            <div class="field"><label>Lương cơ bản</label><div>{{ isset($baseSalary) && $baseSalary ? number_format($baseSalary, 0, ',', '.').' ₫' : '—' }}</div></div>
+            <div class="field"><label>Lương cơ bản</label><div>{{ ! empty($baseSalary) ? number_format((float) $baseSalary, 0, ',', '.').' ₫' : '—' }}</div></div>
         </div>
     </div>
 @endsection

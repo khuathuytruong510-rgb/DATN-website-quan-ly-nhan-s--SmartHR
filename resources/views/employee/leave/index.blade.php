@@ -10,7 +10,6 @@
     <div class="page-head">
         <div>
             <h1>Đơn nghỉ phép của tôi</h1>
-            <p class="muted">Tạo đơn và theo dõi trạng thái. {{ \App\Support\RequestApprover::queueLabel($employee) }} duyệt/từ chối; đơn đã duyệt được dùng khi kế toán tính lương.</p>
         </div>
         <a class="btn primary" href="{{ route('me.leave_requests.create') }}">Tạo đơn mới</a>
     </div>

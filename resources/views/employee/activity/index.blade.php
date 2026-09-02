@@ -10,7 +10,6 @@
 <div class="page-head">
     <div>
         <h1>Nhật ký hoạt động</h1>
-            <p class="muted">Các thao tác của bạn trên cổng nhân viên.</p>
     </div>
     <div class="actions">
         <a class="btn" href="{{ route('me.dashboard') }}">Quay lại</a>

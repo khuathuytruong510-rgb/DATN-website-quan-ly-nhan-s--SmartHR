@@ -7,7 +7,6 @@
 <div class="page-head">
     <div>
         <h1>Đánh giá nhân viên</h1>
-        <p class="muted">Quản lý và theo dõi hiệu suất nhân viên theo tháng</p>
     </div>
     <a href="{{ route('evaluations.create') }}" class="btn primary">+ Tạo đánh giá</a>
 </div>

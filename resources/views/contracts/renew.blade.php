@@ -9,7 +9,6 @@
     <div class="page-head">
         <div>
             <h1>Gia hạn hợp đồng</h1>
-            <p class="muted">Chỉ kéo dài thời hạn. Toàn bộ nội dung hợp đồng {{ $parent->contract_code }} được giữ nguyên.</p>
         </div>
         <a class="btn link" href="{{ route('contracts.show', $parent) }}">Quay lại</a>
     </div>
@@ -20,11 +19,6 @@
 
     <div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:14px 18px;margin-bottom:18px;">
         <div style="font-weight:700;color:#1d4ed8;margin-bottom:6px;">Gia hạn không đổi nội dung</div>
-        <p class="muted" style="margin:0;">
-            Hệ thống sao y loại hợp đồng, lương, phụ cấp và điều khoản từ hợp đồng cũ.
-            Nếu cần đổi lương, chức vụ, loại hợp đồng hoặc điều khoản, hãy
-            <a href="{{ route('contracts.create') }}">tạo hợp đồng mới</a>.
-        </p>
     </div>
 
     <form method="POST" action="{{ route('contracts.storeRenewal', $parent) }}">
@@ -46,10 +40,6 @@
                     @error('end_date')<span class="error">{{ $message }}</span>@enderror
                 </div>
             </div>
-            <p class="muted" style="margin:12px 0 0;font-size:13px;">
-                Gợi ý: bắt đầu ngày liền sau ngày hết hạn hợp đồng cũ
-                ({{ optional($parent->end_date)->format('d/m/Y') ?? '—' }}).
-            </p>
         </div>
 
         <div class="card" style="margin-bottom:20px;">
@@ -75,7 +65,6 @@
             <a class="btn" href="{{ route('contracts.create') }}">Tạo hợp đồng mới (đổi nội dung)</a>
             <a class="btn" href="{{ route('contracts.show', $parent) }}">Hủy</a>
         </div>
-        <p class="muted" style="margin:10px 0 0;font-size:13px;">Sau khi lưu, nhân viên ký rồi Giám đốc ký thì hợp đồng gia hạn mới có hiệu lực.</p>
     </form>
 </div>
 @endsection

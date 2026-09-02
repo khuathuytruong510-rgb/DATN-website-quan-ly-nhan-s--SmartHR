@@ -6,7 +6,6 @@
 <div class="page-head">
     <div>
         <h1>Yêu cầu hỗ trợ nhân viên</h1>
-        <p class="muted">Nhân viên → HR duyệt và xử lý. Yêu cầu của HR → Giám đốc duyệt và xử lý. HR không quản lý hồ sơ Giám đốc.</p>
     </div>
 </div>
 

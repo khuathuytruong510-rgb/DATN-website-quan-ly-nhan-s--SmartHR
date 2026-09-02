@@ -6,7 +6,6 @@
 <div class="page-head">
     <div>
         <h1>Tài khoản của tôi</h1>
-        <p class="muted">Quản lý thông tin đăng nhập và hồ sơ cá nhân.</p>
     </div>
 </div>
 

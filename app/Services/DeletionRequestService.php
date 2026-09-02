@@ -21,6 +21,7 @@ use App\Models\SupportRequest;
 use App\Models\User;
 use App\Support\HrApprovalNotifier;
 use App\Support\RequestApprover;
+use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -31,28 +32,39 @@ class DeletionRequestService
     {
     }
 
-    public function submitEmployee(Employee $employee, User $actor, ?string $reason, ?UploadedFile $document): DeletionRequest
+    public function submitEmployee(Employee $employee, User $actor, ?string $reason, ?UploadedFile $document, ?string $lastWorkingDay = null): DeletionRequest
     {
         $this->assertEvidence($reason, $document);
 
-        if (RequestApprover::isDirectorEmployee($employee)) {
+        if (RequestApprover::isDirectorProfile($employee)) {
             throw new RuntimeException('HR không quản lý hồ sơ Giám đốc.');
+        }
+        if ($employee->isTerminated()) {
+            throw new RuntimeException('Nhân viên này đã nghỉ việc. Hồ sơ lịch sử vẫn được lưu, không gửi nghỉ việc lại.');
         }
 
         app(DirectorSuccessionService::class)->assertMayDeleteEmployee($employee);
 
         if ($this->pendingFor(DeletionRequest::EMPLOYEE, $employee->id)) {
-            throw new RuntimeException('Đã có yêu cầu xóa nhân viên này đang chờ Giám đốc duyệt.');
+            throw new RuntimeException('Đã có đề nghị nghỉ việc của nhân viên này đang chờ Giám đốc duyệt.');
         }
         if ($this->pendingTransferIdForEmployee($employee->id)) {
             throw new RuntimeException('Nhân viên này đang chờ Giám đốc duyệt chuyển phòng ban.');
         }
 
+        $lastWorkingDay = $this->normalizeLastWorkingDay($lastWorkingDay, $employee);
+        $snapshot = $this->snapshotEmployee($employee);
+        $snapshot['previous_status'] = $employee->status ?: Employee::STATUS_ACTIVE;
+        $snapshot['last_working_day'] = $lastWorkingDay;
+
+        $employee->status = Employee::STATUS_PENDING_TERMINATION;
+        $employee->save();
+
         return $this->store(
             DeletionRequest::EMPLOYEE,
             $employee->id,
             $this->employeeLabel($employee),
-            $this->snapshotEmployee($employee),
+            $snapshot,
             $actor,
             $reason,
             $document,
@@ -65,13 +77,13 @@ class DeletionRequestService
     {
         $this->assertEvidence($reason, $document);
 
-        $headcount = $department->employees()->count();
+        $headcount = $department->employees()->whereIn('status', Employee::workingStatuses())->count();
         if ($department->isBoard()) {
             throw new RuntimeException('Không xóa Ban Giám đốc.');
         }
         if ($headcount > 0) {
             throw new RuntimeException(
-                'Còn '.$headcount.' nhân viên trong phòng ban. Hãy chuyển họ sang phòng khác hoặc đề nghị xóa nhân viên trước khi gửi Giám đốc duyệt xóa phòng ban.'
+                'Còn '.$headcount.' nhân viên đang làm việc trong phòng ban. Hãy điều chuyển họ sang phòng khác hoặc đề nghị nghỉ việc trước khi gửi Giám đốc duyệt xóa phòng ban.'
             );
         }
 
@@ -109,7 +121,7 @@ class DeletionRequestService
             }
 
             if ($request->isEmployee()) {
-                $this->executeEmployeeDeletion($request, $director);
+                $this->executeEmployeeTermination($request, $director);
             } elseif ($request->isTransfer()) {
                 $this->executeTransfer($request, $director);
             } else {
@@ -155,8 +167,13 @@ class DeletionRequestService
 
         $reason = trim($reason) !== '' ? trim($reason) : 'Giám đốc từ chối yêu cầu.';
         $isTransfer = $request->isTransfer();
+        $isEmployee = $request->isEmployee();
 
-        return DB::transaction(function () use ($request, $director, $reason, $isTransfer) {
+        return DB::transaction(function () use ($request, $director, $reason, $isTransfer, $isEmployee) {
+            if ($isEmployee && $request->subject_id) {
+                $this->restorePendingEmployee($request);
+            }
+
             $request->update([
                 'status' => DeletionRequest::REJECTED,
                 'reviewed_by' => $director->id,
@@ -173,10 +190,14 @@ class DeletionRequestService
             Notification::create([
                 'sender_id' => $director->id,
                 'target' => 'hr',
-                'title' => $isTransfer ? 'Từ chối chuyển nhân viên' : 'Từ chối xóa '.$request->typeLabel(),
+                'title' => $isTransfer
+                    ? 'Từ chối chuyển nhân viên'
+                    : ($isEmployee ? 'Từ chối nghỉ việc' : 'Từ chối xóa phòng ban'),
                 'message' => $isTransfer
                     ? $request->subject_label.' không được chuyển. Lý do: '.$reason
-                    : $request->subject_label.' không được xóa. Lý do: '.$reason,
+                    : ($isEmployee
+                        ? $request->subject_label.' tiếp tục làm việc. Lý do: '.$reason
+                        : $request->subject_label.' không được xóa. Lý do: '.$reason),
                 'is_read' => false,
                 'data' => [
                     'type' => $isTransfer ? 'transfer_request' : 'deletion_request',
@@ -218,9 +239,6 @@ class DeletionRequestService
         if ($from->is($to)) {
             throw new RuntimeException('Phòng ban đích phải khác phòng ban hiện tại.');
         }
-        if ($from->isBoard() || $to->isBoard()) {
-            throw new RuntimeException('Không điều chuyển từ hoặc sang Ban Giám đốc.');
-        }
 
         if ($this->pendingFor(DeletionRequest::DEPARTMENT, $to->id)) {
             throw new RuntimeException('Không chuyển vào phòng ban đang chờ Giám đốc duyệt xóa.');
@@ -232,13 +250,17 @@ class DeletionRequestService
         }
 
         $employees = Employee::query()
+            ->with(['department', 'positionDetail', 'user'])
             ->where('department_id', $from->id)
             ->whereIn('id', $ids)
+            ->whereIn('status', Employee::workingStatuses())
             ->orderBy('name')
-            ->get();
+            ->get()
+            ->reject(fn (Employee $row) => RequestApprover::isDirectorProfile($row))
+            ->values();
 
         if ($employees->isEmpty()) {
-            throw new RuntimeException('Không tìm thấy nhân viên thuộc phòng ban này để chuyển.');
+            throw new RuntimeException('Không có nhân viên hợp lệ để điều chuyển (Giám đốc không thuộc luồng này).');
         }
 
         $busy = $this->pendingTransferMap($employees->pluck('id')->all());
@@ -252,7 +274,7 @@ class DeletionRequestService
         $employees = $employees->reject(
             fn (Employee $row) => isset($busy[$row->id])
                 || in_array($row->id, $blockedDelete, true)
-                || RequestApprover::isDirectorEmployee($row)
+                || RequestApprover::isDirectorProfile($row)
         );
         if ($employees->isEmpty()) {
             throw new RuntimeException('Các nhân viên đã chọn đang chờ Giám đốc duyệt, thuộc hồ sơ Giám đốc, hoặc không chuyển được.');
@@ -346,24 +368,30 @@ class DeletionRequestService
             ]);
 
             $isTransfer = $type === DeletionRequest::TRANSFER;
+            $isEmployee = $type === DeletionRequest::EMPLOYEE;
             Notification::create([
                 'sender_id' => $actor->id,
                 'target' => 'director',
                 'title' => $isTransfer
                     ? 'Yêu cầu chuyển nhân viên cần duyệt'
-                    : 'Yêu cầu xóa '.$request->typeLabel().' cần duyệt',
+                    : ($isEmployee ? 'Đề nghị nghỉ việc cần duyệt' : 'Yêu cầu xóa phòng ban cần duyệt'),
                 'message' => $isTransfer
                     ? sprintf(
                         'HR đề nghị chuyển nhân viên: %s. %s Vui lòng xem rồi duyệt.',
                         $label,
                         $reason ? 'Lý do: '.$reason.'.' : 'Đã đính kèm biên bản/tài liệu.'
                     )
-                    : sprintf(
-                        'HR đề nghị xóa %s “%s”. %s Vui lòng xem lý do/biên bản rồi duyệt.',
-                        mb_strtolower($request->typeLabel()),
-                        $label,
-                        $reason ? 'Lý do: '.$reason.'.' : 'Đã đính kèm biên bản/tài liệu.'
-                    ),
+                    : ($isEmployee
+                        ? sprintf(
+                            'HR đề nghị chấm dứt quan hệ lao động với “%s”. %s Vui lòng xem lý do/biên bản rồi duyệt.',
+                            $label,
+                            $reason ? 'Lý do: '.$reason.'.' : 'Đã đính kèm biên bản/tài liệu.'
+                        )
+                        : sprintf(
+                            'HR đề nghị xóa phòng ban “%s”. %s Vui lòng xem lý do/biên bản rồi duyệt.',
+                            $label,
+                            $reason ? 'Lý do: '.$reason.'.' : 'Đã đính kèm biên bản/tài liệu.'
+                        )),
                 'is_read' => false,
                 'data' => [
                     'type' => $isTransfer ? 'transfer_request' : 'deletion_request',
@@ -375,34 +403,61 @@ class DeletionRequestService
         });
     }
 
-    private function executeEmployeeDeletion(DeletionRequest $request, User $director): void
+    private function executeEmployeeTermination(DeletionRequest $request, User $director): void
     {
         $employee = Employee::with('user', 'department')->find($request->subject_id);
         if (! $employee) {
-            throw new RuntimeException('Không tìm thấy nhân viên để xóa. Có thể đã bị xóa.');
+            throw new RuntimeException('Không tìm thấy hồ sơ nhân viên.');
+        }
+        if ($employee->isTerminated()) {
+            throw new RuntimeException('Nhân viên này đã nghỉ việc.');
         }
 
         app(DirectorSuccessionService::class)->assertMayDeleteEmployee($employee);
 
-        $this->contracts->terminateForEmployeeDeletion($employee, $director, $request->reason);
-        $snapshot = $this->snapshotEmployee($employee, true);
-        $userId = $employee->user_id;
-        $email = $employee->user?->email ?? $employee->email;
+        $lastWorkingDay = $this->normalizeLastWorkingDay(
+            data_get($request->snapshot, 'last_working_day'),
+            $employee
+        );
 
-        $departmentId = $employee->department_id;
+        $this->contracts->terminateForEmployeeDeletion($employee, $director, $request->reason, $lastWorkingDay);
+        $this->closePositionOnTermination($employee, $director, $lastWorkingDay, $request->reason);
 
-        $employee->user_id = null;
-        $employee->save();
-        $employee->delete();
+        $settlement = $this->buildSettlement($employee, $lastWorkingDay);
+        $day = Carbon::parse($lastWorkingDay);
+        $settlement['final_payroll'] = [
+            'month' => (int) $day->month,
+            'year' => (int) $day->year,
+            'status' => 'ready_for_accountant',
+            'note' => sprintf(
+                'Đã chốt dữ liệu công/OT/phép đến %s. Kế toán tính lương cuối kỳ %02d/%d trên dữ liệu này; nhân viên đã nghỉ không vào kỳ sau.',
+                $day->format('d/m/Y'),
+                $day->month,
+                $day->year
+            ),
+        ];
 
-        if ($departmentId) {
-            $this->syncEmployeeCount($departmentId);
+        $user = $employee->user;
+        if ($user) {
+            $user->is_locked = true;
+            $user->save();
         }
 
+        $employee->status = Employee::STATUS_TERMINATED;
+        $employee->terminated_at = $lastWorkingDay;
+        $employee->save();
+
+        $this->syncEmployeeCount($employee->department_id);
+
+        $snapshot = $this->snapshotEmployee($employee->fresh(['user', 'department']), true);
+        $snapshot['previous_status'] = data_get($request->snapshot, 'previous_status', Employee::STATUS_ACTIVE);
+        $snapshot['last_working_day'] = $lastWorkingDay;
+        $snapshot['settlement'] = $settlement;
+
         $request->snapshot = $snapshot;
-        $request->subject_id = null;
-        $request->account_user_id = $userId;
-        $request->account_email = $email;
+        $request->account_user_id = $employee->user_id ?: $request->account_user_id;
+        $request->account_email = $user?->email ?? $employee->email;
+        $request->account_cleared_at = now();
         $request->save();
     }
 
@@ -412,8 +467,8 @@ class DeletionRequestService
         if (! $department) {
             throw new RuntimeException('Không tìm thấy phòng ban để xóa. Có thể đã bị xóa.');
         }
-        if ($department->employees()->exists()) {
-            throw new RuntimeException('Phòng ban vẫn còn nhân viên. Hãy chuyển sang phòng khác hoặc xóa nhân viên trước.');
+        if ($department->employees()->whereIn('status', Employee::workingStatuses())->exists()) {
+            throw new RuntimeException('Phòng ban vẫn còn nhân viên đang làm việc. Hãy điều chuyển hoặc hoàn tất nghỉ việc trước.');
         }
 
         $request->snapshot = ['department' => $department->toArray(), 'employee_count' => 0];
@@ -440,6 +495,7 @@ class DeletionRequestService
         $employees = Employee::query()
             ->where('department_id', $fromId)
             ->whereIn('id', $ids)
+            ->whereIn('status', Employee::workingStatuses())
             ->get();
 
         $moved = 0;
@@ -718,13 +774,23 @@ class DeletionRequestService
     private function notifyHrExecuted(DeletionRequest $request, User $director): void
     {
         $isTransfer = $request->isTransfer();
+        $isEmployee = $request->isEmployee();
+        $settlementNote = data_get($request->snapshot, 'settlement.final_payroll.note');
         Notification::create([
             'sender_id' => $director->id,
             'target' => 'hr',
-            'title' => $isTransfer ? 'Đã chuyển nhân viên' : 'Đã xóa '.$request->typeLabel(),
+            'title' => $isTransfer
+                ? 'Đã chuyển nhân viên'
+                : ($isEmployee ? 'Đã duyệt nghỉ việc' : 'Đã xóa phòng ban'),
             'message' => $isTransfer
                 ? sprintf('Giám đốc đã duyệt. %s đã được chuyển.', $request->subject_label)
-                : sprintf('Giám đốc đã duyệt. “%s” đã được xóa và lưu vào lịch sử.', $request->subject_label),
+                : ($isEmployee
+                    ? trim(sprintf(
+                        'Giám đốc đã duyệt nghỉ việc “%s”. Hồ sơ, hợp đồng, chấm công và lương được giữ lại. Tài khoản đăng nhập đã khóa.%s',
+                        $request->subject_label,
+                        $settlementNote ? ' '.$settlementNote : ''
+                    ))
+                    : sprintf('Giám đốc đã duyệt. “%s” đã được xóa và lưu vào lịch sử.', $request->subject_label)),
             'is_read' => false,
             'data' => [
                 'type' => $isTransfer ? 'transfer_request' : 'deletion_request',
@@ -738,9 +804,9 @@ class DeletionRequestService
         Notification::create([
             'sender_id' => $director->id,
             'target' => 'admin',
-            'title' => 'Xóa tài khoản sau khi xóa nhân viên',
+            'title' => 'Đã khóa tài khoản sau khi nhân viên nghỉ việc',
             'message' => sprintf(
-                'Hồ sơ nhân viên “%s” đã được Giám đốc duyệt xóa. Vui lòng xóa tài khoản %s trên Quản lý tài khoản.',
+                'Hồ sơ “%s” đã nghỉ việc. Tài khoản %s đã bị khóa đăng nhập. Không xóa dữ liệu lịch sử (hợp đồng, chấm công, lương).',
                 $request->subject_label,
                 $request->account_email ?: ('#'.$request->account_user_id)
             ),
@@ -806,7 +872,76 @@ class DeletionRequestService
         }
 
         Department::whereKey($departmentId)->update([
-            'employee_count' => Employee::where('department_id', $departmentId)->count(),
+            'employee_count' => Employee::where('department_id', $departmentId)
+                ->whereIn('status', Employee::workingStatuses())
+                ->count(),
         ]);
+    }
+
+    private function restorePendingEmployee(DeletionRequest $request): void
+    {
+        $employee = Employee::find($request->subject_id);
+        if (! $employee || ! $employee->isPendingTermination()) {
+            return;
+        }
+
+        $previous = data_get($request->snapshot, 'previous_status', Employee::STATUS_ACTIVE);
+        if (! in_array($previous, [Employee::STATUS_ACTIVE, Employee::STATUS_ON_LEAVE], true)) {
+            $previous = Employee::STATUS_ACTIVE;
+        }
+
+        $employee->status = $previous;
+        $employee->save();
+    }
+
+    private function normalizeLastWorkingDay(?string $lastWorkingDay, Employee $employee): string
+    {
+        try {
+            $day = $lastWorkingDay ? Carbon::parse($lastWorkingDay) : now();
+        } catch (\Throwable) {
+            $day = now();
+        }
+
+        if ($employee->start_date && $day->lt($employee->start_date)) {
+            $day = $employee->start_date->copy();
+        }
+
+        return $day->toDateString();
+    }
+
+    private function buildSettlement(Employee $employee, string $lastWorkingDay): array
+    {
+        $day = Carbon::parse($lastWorkingDay);
+        $id = $employee->id;
+
+        return [
+            'last_working_day' => $day->toDateString(),
+            'attendance_days' => Attendance::where('employee_id', $id)->whereDate('date', '<=', $day)->count(),
+            'attendance_days_in_final_month' => Attendance::where('employee_id', $id)
+                ->whereYear('date', $day->year)
+                ->whereMonth('date', $day->month)
+                ->whereDate('date', '<=', $day)
+                ->count(),
+            'overtime_requests' => OvertimeRequest::where('employee_id', $id)->count(),
+            'leave_requests' => LeaveRequest::where('employee_id', $id)->count(),
+            'leave_balance' => $employee->leave_balance,
+        ];
+    }
+
+    private function closePositionOnTermination(Employee $employee, User $director, string $lastWorkingDay, ?string $reason): void
+    {
+        EmployeePositionHistory::query()
+            ->where('employee_id', $employee->id)
+            ->where('status', EmployeePositionHistory::STATUS_HOLDING)
+            ->whereNull('ended_at')
+            ->get()
+            ->each(function (EmployeePositionHistory $row) use ($lastWorkingDay, $reason) {
+                $row->update([
+                    'ended_at' => $lastWorkingDay,
+                    'status' => EmployeePositionHistory::STATUS_ENDED,
+                    'end_reason' => EmployeePositionHistory::REASON_TERMINATION,
+                    'note' => $reason ?: $row->note,
+                ]);
+            });
     }
 }

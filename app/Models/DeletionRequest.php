@@ -91,7 +91,11 @@ class DeletionRequest extends Model
     {
         return match ($this->status) {
             self::PENDING => 'Chờ Giám đốc duyệt',
-            self::APPROVED => $this->isTransfer() ? 'Đã duyệt' : 'Đã xóa',
+            self::APPROVED => match (true) {
+                $this->isTransfer() => 'Đã duyệt',
+                $this->isEmployee() => 'Đã nghỉ việc',
+                default => 'Đã xóa',
+            },
             self::REJECTED => 'Từ chối',
             default => $this->status,
         };
@@ -99,7 +103,11 @@ class DeletionRequest extends Model
 
     public function approveActionLabel(): string
     {
-        return $this->isTransfer() ? 'Duyệt chuyển' : 'Duyệt xóa';
+        return match (true) {
+            $this->isTransfer() => 'Duyệt chuyển',
+            $this->isEmployee() => 'Duyệt nghỉ việc',
+            default => 'Duyệt xóa',
+        };
     }
 
     public function transferHistory(): ?array

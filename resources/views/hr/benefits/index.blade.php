@@ -26,7 +26,6 @@
 <div class="page-head">
     <div>
         <h1>Phúc lợi</h1>
-        <p class="muted">Quản lý phúc lợi, trợ cấp và bảo hiểm cho nhân viên.</p>
     </div>
     <div class="page-actions">
         <a class="btn primary" href="{{ route('benefits.create') }}">Thêm phúc lợi</a>

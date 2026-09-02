@@ -11,7 +11,6 @@
 <div class="page-head">
     <div>
         <h1>Xuất PDF/Excel</h1>
-        <p class="muted">Xuất dữ liệu bảng lương</p>
     </div>
     <div class="actions">
         <a class="btn" href="{{ route('accountant.dashboard') }}">Quay lại</a>

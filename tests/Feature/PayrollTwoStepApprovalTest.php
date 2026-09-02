@@ -123,6 +123,16 @@ class PayrollTwoStepApprovalTest extends TestCase
             ->post(route('payroll.period.unlock'), ['month' => 7, 'year' => 2026])
             ->assertSessionHasErrors('unlock_reason');
 
+        // Đã chốt nhưng chưa HR xác nhận → chưa tính được
+        $this->actingAs($accountant)
+            ->post(route('payroll.generate'), ['month' => 7, 'year' => 2026])
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->actingAs($hr)
+            ->post(route('payroll.period.verify'), ['month' => 7, 'year' => 2026])
+            ->assertRedirect();
+
         $this->actingAs($accountant)
             ->post(route('payroll.generate'), ['month' => 7, 'year' => 2026])
             ->assertRedirect();
@@ -136,7 +146,7 @@ class PayrollTwoStepApprovalTest extends TestCase
 
     public function test_locked_period_blocks_attendance_and_leave_writes(): void
     {
-        ['hr' => $hr, 'employee' => $employee] = $this->seedPayroll();
+        ['hr' => $hr, 'director' => $director, 'employee' => $employee] = $this->seedPayroll();
 
         $this->actingAs($hr)
             ->post(route('payroll.period.lock'), ['month' => 8, 'year' => 2026])
@@ -182,19 +192,36 @@ class PayrollTwoStepApprovalTest extends TestCase
             ->assertRedirect();
 
         $this->assertDatabaseHas('activity_logs', [
+            'action' => 'payroll_period_unlock_requested',
+        ]);
+        $this->assertTrue(app(\App\Services\PayrollPeriodLockService::class)->isLocked(8, 2026));
+
+        $this->actingAs($director)
+            ->post(route('payroll.period.unlock.approve'), ['month' => 8, 'year' => 2026])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('activity_logs', [
             'action' => 'payroll_period_unlocked',
         ]);
+        $this->assertFalse(app(\App\Services\PayrollPeriodLockService::class)->isLocked(8, 2026));
     }
 
     public function test_payroll_issue_returns_to_calculated_then_hr_check_then_director(): void
     {
-        ['hr' => $hr, 'director' => $director, 'accountant' => $accountant, 'payroll' => $payroll] = $this->seedPayroll();
+        ['hr' => $hr, 'director' => $director, 'accountant' => $accountant, 'employee' => $employee, 'payroll' => $payroll] = $this->seedPayroll();
+        $employeeUser = User::factory()->create([
+            'is_hr' => false,
+            'is_admin' => false,
+            'is_accountant' => false,
+            'is_director' => false,
+        ]);
+        $employee->update(['user_id' => $employeeUser->id]);
 
         $this->actingAs($hr)->post(route('payroll.review', $payroll))->assertRedirect();
         $this->actingAs($director)->post(route('payroll.approve', $payroll))->assertRedirect();
 
         $workflow = app(PayrollPaymentWorkflowService::class);
-        $workflow->reportIssue($payroll->fresh(), 'Sai phụ cấp');
+        $workflow->reportIssue($payroll->fresh(), 'Sai phụ cấp', $employeeUser);
 
         $this->assertSame(PayrollPaymentWorkflowService::PAYROLL_ISSUE, $payroll->fresh()->status);
 
