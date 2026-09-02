@@ -58,7 +58,7 @@
         <div class="actions" style="margin-top:16px;">
             <form method="POST" action="{{ route('deletion_requests.approve', $req) }}">
                 @csrf
-                <button class="btn primary" type="submit" onclick="return confirm('{{ $req->isTransfer() ? 'Duyệt điều chuyển? Hồ sơ nhân viên sẽ đổi sang phòng ban đích ngay sau khi duyệt.' : 'Duyệt và xóa ngay? Dữ liệu được lưu vào lịch sử.' }}')">{{ $req->isTransfer() ? 'Duyệt điều chuyển' : 'Duyệt và xóa' }}</button>
+                <button class="btn primary" type="submit" data-confirm="{{ $req->isTransfer() ? 'Duyệt điều chuyển? Hồ sơ nhân viên sẽ đổi sang phòng ban đích ngay sau khi duyệt.' : 'Duyệt và xóa ngay? Dữ liệu được lưu vào lịch sử.' }}">{{ $req->isTransfer() ? 'Duyệt điều chuyển' : 'Duyệt và xóa' }}</button>
             </form>
             <form method="POST" action="{{ route('deletion_requests.reject', $req) }}" style="display:flex;gap:8px;align-items:center;">
                 @csrf

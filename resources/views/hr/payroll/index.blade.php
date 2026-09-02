@@ -92,6 +92,21 @@
                                     <i class="bi bi-printer"></i>
                                     In bảng lương
                                 </a>
+                                <a class="btn btn-outline-success"
+                                   href="{{ route('statistics.departments', ['month' => $month, 'year' => $year]) }}">
+                                    <i class="bi bi-building"></i>
+                                    Báo cáo phòng ban
+                                </a>
+                                <a class="btn btn-outline-success"
+                                   href="{{ route('statistics.departments.export', ['month' => $month, 'year' => $year]) }}">
+                                    <i class="bi bi-download"></i>
+                                    Xuất CSV
+                                </a>
+                                <a class="btn btn-outline-primary"
+                                   href="{{ route('statistics.export', ['month' => $month, 'year' => $year]) }}">
+                                    <i class="bi bi-file-earmark-spreadsheet"></i>
+                                    Xuất Excel
+                                </a>
                                 @endunless
                             </div>
                         </div>
@@ -104,7 +119,7 @@
                     @if($user->is_hr)
                         @if($periodLocked)
                             <form method="POST" action="{{ route('payroll.period.unlock') }}"
-                                  data-confirm="Mở khóa kỳ {{ sprintf('%02d/%d', $month, $year) }}? Sau đó có thể sửa chấm công/nghỉ phép. Phải chốt lại trước khi Kế toán tính.">
+                                  data-confirm="Hủy chốt lương kỳ {{ sprintf('%02d/%d', $month, $year) }}? Sau đó có thể sửa chấm công/nghỉ phép. Phải chốt lại trước khi Kế toán tính.">
                                 @csrf
                                 <input type="hidden" name="month" value="{{ $month }}">
                                 <input type="hidden" name="year" value="{{ $year }}">
@@ -114,7 +129,7 @@
                                         <input type="text" name="unlock_reason" class="form-control" required minlength="10" maxlength="500"
                                                placeholder="Lý do mở khóa (bắt buộc ≥ 10 ký tự, ghi nhật ký)">
                                     </div>
-                                    <button type="submit" class="btn btn-outline-danger">Mở khóa kỳ</button>
+                                    <button type="submit" class="btn btn-outline-danger">Hủy chốt lương</button>
                                 </div>
                                 <p class="text-muted mb-0 mt-1" style="font-size:12px;">
                                     Chốt lúc {{ optional($periodLock->locked_at)->format('d/m/Y H:i') }}

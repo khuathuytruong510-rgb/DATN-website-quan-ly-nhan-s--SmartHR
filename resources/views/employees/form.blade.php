@@ -102,7 +102,7 @@
                     <select name="position_id" id="positionSelect">
                         <option value="">-- Chọn chức vụ --</option>
                         @foreach($positions as $pos)
-                            <option value="{{ $pos->id }}" data-salary-min="{{ $pos->salary_range_min }}" data-salary-max="{{ $pos->salary_range_max }}" {{ old('position_id', $employee->position_id) == $pos->id ? 'selected' : '' }}>{{ $pos->name }}</option>
+                            <option value="{{ $pos->id }}" data-department-id="{{ $pos->department_id }}" data-salary-min="{{ $pos->salary_range_min }}" data-salary-max="{{ $pos->salary_range_max }}" {{ old('position_id', $employee->position_id) == $pos->id ? 'selected' : '' }}>{{ $pos->name }}</option>
                         @endforeach
                     </select>
                     <input type="hidden" name="position" id="positionName" value="{{ old('position', $employee->position) }}">
@@ -155,6 +155,29 @@ document.addEventListener('DOMContentLoaded', function() {
     const employeeCodeInput = document.getElementById('employeeCode');
     const isEditForm = {{ $employee->exists ? 'true' : 'false' }};
 
+    function filterPositions() {
+        if (!positionSelect || !departmentSelect) {
+            return;
+        }
+
+        const departmentId = departmentSelect.value;
+        const selectedPosition = positionSelect.value;
+
+        Array.from(positionSelect.options).forEach(function(option) {
+            if (!option.value) {
+                option.hidden = false;
+                return;
+            }
+
+            option.hidden = option.dataset.departmentId !== departmentId;
+        });
+
+        if (selectedPosition && positionSelect.selectedOptions[0]?.hidden) {
+            positionSelect.value = '';
+            positionName.value = '';
+        }
+    }
+
     // Handle position change
     positionSelect?.addEventListener('change', function() {
         const selected = this.options[this.selectedIndex];
@@ -163,6 +186,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Handle department change to auto-generate code
     departmentSelect?.addEventListener('change', function() {
+        filterPositions();
+
         if (isEditForm) {
             // Don't change code for existing employees
             return;
@@ -195,8 +220,11 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Trigger code generation if department is already selected
-    if (departmentSelect && departmentSelect.value && !isEditForm) {
-        departmentSelect.dispatchEvent(new Event('change'));
+    if (departmentSelect && !isEditForm) {
+        filterPositions();
+        if (departmentSelect.value) {
+            departmentSelect.dispatchEvent(new Event('change'));
+        }
     }
 });
 </script>

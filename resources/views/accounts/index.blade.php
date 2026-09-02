@@ -17,6 +17,28 @@
         </div>
     </div>
 
+    @php $filters = $filters ?? []; @endphp
+    <form method="GET" action="{{ route('accounts.index') }}" class="card p-3 mb-3">
+        <div class="row g-2 align-items-end">
+            <div class="col-12 col-md-6">
+                <label class="form-label" for="account-search">Tìm tài khoản</label>
+                <input id="account-search" class="form-control" type="search" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Họ tên hoặc email...">
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label" for="account-status">Trạng thái</label>
+                <select id="account-status" class="form-select" name="status">
+                    <option value="">Tất cả trạng thái</option>
+                    <option value="active" @selected(($filters['status'] ?? '') === 'active')>Đang hoạt động</option>
+                    <option value="locked" @selected(($filters['status'] ?? '') === 'locked')>Đã khóa</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Tìm kiếm</button>
+                <a href="{{ route('accounts.index') }}" class="btn btn-outline-secondary">Xóa lọc</a>
+            </div>
+        </div>
+    </form>
+
     <div class="card">
         @if ($users->isEmpty())
             <div class="empty">Chưa có tài khoản nào.</div>
@@ -27,6 +49,7 @@
                         <th>Họ tên</th>
                         <th>Email</th>
                         <th>Vai trò</th>
+                        <th>Trạng thái</th>
                         <th>Ngày tạo</th>
                         <th>Hành động</th>
                     </tr>
@@ -57,6 +80,13 @@
                                 @endif
                                 @if (! $user->is_admin && ! $user->is_director && ! $user->is_hr && ! $user->is_accountant)
                                     <span class="badge">Người dùng</span>
+                                @endif
+                            </td>
+                            <td>
+                                @if($user->is_locked)
+                                    <span class="badge" style="background:#fee2e2;color:#b91c1c;">Đã khóa</span>
+                                @else
+                                    <span class="badge" style="background:#dcfce7;color:#166534;">Đang hoạt động</span>
                                 @endif
                             </td>
                             <td>{{ $user->created_at?->format('d/m/Y') ?? '-' }}</td>

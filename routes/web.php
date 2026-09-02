@@ -4,6 +4,7 @@ use App\Http\Controllers\HR\PayrollController;
 use App\Http\Controllers\HR\PromotionRequestController;
 use App\Http\Controllers\Web\EmployeeAttendanceController;
 use App\Http\Controllers\Web\EmployeeController;
+use App\Http\Controllers\Web\DeletionRequestController;
 use App\Http\Controllers\Web\HrSupportRequestController;
 use App\Http\Controllers\Web\NotificationController;
 use App\Http\Controllers\Web\SmartHrController;

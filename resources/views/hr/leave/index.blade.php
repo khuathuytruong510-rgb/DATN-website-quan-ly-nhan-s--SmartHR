@@ -57,51 +57,6 @@
 
 @php $currentUser = Auth::user(); @endphp
 
-@if(!empty($overtimeRequests) && $overtimeRequests->isNotEmpty())
-<div class="card" style="margin-bottom:20px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-        <h2 style="margin:0;">Đăng ký tăng ca chờ duyệt</h2>
-        <a class="btn" href="{{ route('overtime_requests.index') }}">Quản lý tăng ca</a>
-    </div>
-    <table>
-        <thead>
-            <tr>
-                <th>Nhân viên</th>
-                <th>Ngày</th>
-                <th>Giờ</th>
-                <th>Lý do</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($overtimeRequests as $ot)
-                <tr>
-                    <td>{{ optional($ot->employee)->name }}</td>
-                    <td>{{ optional($ot->date)->format('d/m/Y') }}</td>
-                    <td>{{ $ot->start_time }} – {{ $ot->end_time }}</td>
-                    <td>{{ $ot->reason ?: '—' }}</td>
-                    <td>
-                        @if(\App\Support\RequestApprover::canReview($currentUser, $ot->employee))
-                            <form method="POST" action="{{ route('overtime_requests.approve', $ot) }}" style="display:inline">
-                                @csrf
-                                <button class="btn" type="submit">Duyệt</button>
-                            </form>
-                            <form method="POST" action="{{ route('overtime_requests.reject', $ot) }}" style="display:inline" onsubmit="return submitRejectReason(this)">
-                                @csrf
-                                <input type="hidden" name="rejection_reason" value="">
-                                <button class="btn" type="submit">Từ chối</button>
-                            </form>
-                        @elseif(\App\Support\RequestApprover::needsDirector($ot->employee))
-                            <span class="muted">Chờ Giám đốc duyệt</span>
-                        @endif
-                    </td>
-                </tr>
-            @endforeach
-        </tbody>
-    </table>
-</div>
-@endif
-
 @if($leaveRequests->count())
     <div class="card">
         <table>

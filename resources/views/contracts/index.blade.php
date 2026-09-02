@@ -35,6 +35,70 @@
 </div>
 @endif
 
+@php
+    $contractTypeOptions = [
+        'internship' => 'Thực tập',
+        'probation' => 'Thử việc',
+        'fixed_term' => 'Xác định thời hạn',
+        'indefinite' => 'Không xác định thời hạn',
+        'official' => 'Chính thức',
+        'seasonal' => 'Thời vụ',
+    ];
+    $statusOptions = [
+        'draft' => 'Nháp',
+        'waiting_employee_signature' => 'Chờ nhân viên ký',
+        'waiting_director_signature' => 'Chờ giám đốc ký',
+        'pending_signature' => 'Chờ ký',
+        'director_signed' => 'Giám đốc đã ký',
+        'employee_signed' => 'Nhân viên đã ký',
+        'signed' => 'Đã ký',
+        'active' => 'Có hiệu lực',
+        'expiring' => 'Sắp hết hạn',
+        'expired' => 'Hết hiệu lực',
+    ];
+    $filters = $filters ?? [];
+@endphp
+
+<form method="GET" action="{{ route('contracts.index') }}" class="card p-3 mb-3">
+    <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-4">
+            <label class="form-label" for="contract-search">Tìm hợp đồng</label>
+            <input id="contract-search" class="form-control" type="search" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Mã HĐ, tên nhân viên...">
+        </div>
+        <div class="col-12 col-md-2">
+            <label class="form-label" for="contract-status">Trạng thái</label>
+            <select id="contract-status" class="form-select" name="status">
+                <option value="">Tất cả</option>
+                @foreach($statusOptions as $value => $label)
+                    <option value="{{ $value }}" @selected(($filters['status'] ?? '') === $value)>{{ $label }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="col-12 col-md-3">
+            <label class="form-label" for="contract-type">Loại hợp đồng</label>
+            <select id="contract-type" class="form-select" name="contract_type">
+                <option value="">Tất cả</option>
+                @foreach($contractTypeOptions as $value => $label)
+                    <option value="{{ $value }}" @selected(($filters['contract_type'] ?? '') === $value)>{{ $label }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="col-12 col-md-3">
+            <label class="form-label" for="contract-department">Phòng ban</label>
+            <select id="contract-department" class="form-select" name="department_id">
+                <option value="">Tất cả</option>
+                @foreach($departments as $department)
+                    <option value="{{ $department->id }}" @selected((string) ($filters['department_id'] ?? '') === (string) $department->id)>{{ $department->name }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Tìm kiếm</button>
+            <a href="{{ route('contracts.index') }}" class="btn btn-outline-secondary">Xóa lọc</a>
+        </div>
+    </div>
+</form>
+
 <div class="card p-3">
     @if($contracts->count())
         <div style="overflow-x: auto;">
@@ -64,8 +128,9 @@
                         $hasMismatch = $pBase !== null && abs($pBase - $cBase) > 0;
                         $alertLevel = $contract->alertLevel();
                         $daysLeft = $contract->daysUntilExpiry();
+                        $isExpiring = in_array($alertLevel, ['expiring', 'urgent'], true);
 
-                        $badge = match($contract->status) {
+                        $badge = $isExpiring ? 'warning' : match($contract->status) {
                             'waiting_employee_signature', 'waiting_director_signature',
                             'waiting_employee', 'waiting_director', 'pending_signature',
                             'director_signed', 'employee_signed', 'draft' => 'warning',
@@ -76,7 +141,7 @@
                             'cancelled' => 'secondary',
                             default     => 'secondary',
                         };
-                        $label = $contract->statusLabel();
+                        $label = $isExpiring ? 'Sắp hết hiệu lực' : $contract->statusLabel();
                         $alertBadge = match($alertLevel) {
                             'overdue', 'expired' => 'danger',
                             'urgent' => 'danger',
@@ -165,7 +230,7 @@
                                 @endif
                                 @if(auth()->user()?->is_director && $contract->isPendingDirectorEsign())
                                     <form action="{{ route('contracts.sign', $contract) }}" method="POST" class="d-inline"
-                                          onsubmit="return confirm('Xác nhận ký {{ $contract->contract_code }} phía doanh nghiệp? Đây là mô phỏng, chưa phải chứng thư số pháp lý.');">
+                                        data-confirm="Xác nhận ký {{ $contract->contract_code }} phía doanh nghiệp? Đây là mô phỏng, chưa phải chứng thư số pháp lý.">
                                         @csrf
                                         <input type="hidden" name="party" value="director">
                                         <button class="btn btn-sm btn-outline-success" type="submit">Ký (GĐ)</button>

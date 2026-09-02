@@ -149,8 +149,8 @@
                         </tbody>
                     </table>
                     <div class="actions" style="margin-top:12px;">
-                        <button class="btn" type="submit" onclick="return confirm('Gửi Giám đốc duyệt chuyển nhân viên đã chọn? Nhân viên chưa đổi phòng.')">Gửi GĐ duyệt chuyển đã chọn</button>
-                        <button class="btn primary" type="submit" name="transfer_all" value="1" onclick="return confirm('Gửi Giám đốc duyệt chuyển toàn bộ nhân viên? Nhân viên chưa đổi phòng.')">Gửi GĐ duyệt chuyển tất cả</button>
+                        <button class="btn" type="submit" data-confirm="Gửi Giám đốc duyệt chuyển nhân viên đã chọn? Nhân viên chưa đổi phòng.">Gửi GĐ duyệt chuyển đã chọn</button>
+                        <button class="btn primary" type="submit" name="transfer_all" value="1" data-confirm="Gửi Giám đốc duyệt chuyển toàn bộ nhân viên? Nhân viên chưa đổi phòng.">Gửi GĐ duyệt chuyển tất cả</button>
                     </div>
                 </form>
             @endif
@@ -174,7 +174,7 @@
             <p class="muted">PDF, Word hoặc ảnh. Tối đa 10MB. Cần ít nhất lý do hoặc file.</p>
         </div>
         <div class="actions">
-            <button class="btn primary" type="submit" onclick="return confirm('Gửi đề nghị này cho Giám đốc duyệt? Hồ sơ chưa bị xóa.')">Gửi Giám đốc duyệt xóa</button>
+            <button class="btn primary" type="submit" data-confirm="Gửi đề nghị này cho Giám đốc duyệt? Hồ sơ chưa bị xóa.">Gửi Giám đốc duyệt xóa</button>
         </div>
     </form>
 </div>

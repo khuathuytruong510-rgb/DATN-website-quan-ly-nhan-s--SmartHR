@@ -135,7 +135,7 @@
 
                     @if(auth()->user()?->is_director && $contract->isPendingDirectorEsign())
                     <form action="{{ route('contracts.sign', $contract) }}" method="POST" class="mb-2"
-                          onsubmit="return confirm('Xác nhận ký hợp đồng {{ $contract->contract_code }} phía doanh nghiệp?\nHash: {{ $contract->document_hash ?: '(sẽ khóa khi ký)' }}\nĐây là mô phỏng, chưa phải chứng thư số pháp lý.\nSau khi ký, nhân viên mới được ký.');">
+                            data-confirm="Xác nhận ký hợp đồng {{ $contract->contract_code }} phía doanh nghiệp? Hash: {{ $contract->document_hash ?: '(sẽ khóa khi ký)' }}. Đây là mô phỏng, chưa phải chứng thư số pháp lý. Sau khi ký, nhân viên mới được ký.">
                         @csrf
                         <button class="btn btn-primary w-100" type="submit">Ký phía doanh nghiệp</button>
                     </form>
@@ -158,7 +158,7 @@
                         @if(isset($payroll) && $payroll)
                         <form action="{{ route('contracts.sync_salary', $contract) }}" method="POST">
                             @csrf
-                            <button type="submit" class="btn btn-outline-warning w-100" onclick="return confirm('Đồng bộ lương hợp đồng theo bảng lương gần nhất?')">Đồng bộ lương</button>
+                              <button type="submit" class="btn btn-outline-warning w-100" data-confirm="Đồng bộ lương hợp đồng theo bảng lương gần nhất?">Đồng bộ lương</button>
                         </form>
                         @endif
                     @endunless

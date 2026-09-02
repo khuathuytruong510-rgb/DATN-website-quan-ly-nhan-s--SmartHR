@@ -217,7 +217,7 @@
                 </div>
 
                 <div class="actions">
-                    <button class="btn primary" type="submit" onclick="return confirm('Xác nhận: thu hồi quyền Giám đốc của người cũ, cấp quyền cho người mới, giữ nguyên lịch sử phê duyệt?')">Cập nhật người giữ chức</button>
+                    <button class="btn primary" type="submit" data-confirm="Xác nhận: thu hồi quyền Giám đốc của người cũ, cấp quyền cho người mới, giữ nguyên lịch sử phê duyệt?">Cập nhật người giữ chức</button>
                 </div>
             </form>
         </div>
@@ -256,33 +256,6 @@
                 </tbody>
             </table>
         @endif
-    </div>
-
-    <div class="card">
-        <div class="card-head">
-            <h2 class="card-title">Quy tắc khi thay Giám đốc</h2>
-            <p class="card-lead">Phân biệt việc quyết định ngoài hệ thống và phần SmartHR được phép cập nhật.</p>
-        </div>
-        <table>
-            <thead>
-                <tr>
-                    <th>Nội dung</th>
-                    <th>Thực hiện ở đâu?</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr><td>Quyết định thay Giám đốc</td><td>Ngoài SmartHR</td></tr>
-                <tr><td>Bổ nhiệm Giám đốc mới</td><td>Ngoài SmartHR</td></tr>
-                <tr><td>Cập nhật thông tin người giữ chức vụ</td><td>SmartHR</td></tr>
-                <tr><td>Cập nhật tài khoản</td><td>SmartHR</td></tr>
-                <tr><td>Cấp quyền Director cho người mới</td><td>SmartHR</td></tr>
-                <tr><td>Thu hồi quyền Director của người cũ</td><td>SmartHR</td></tr>
-                <tr><td>Lưu lịch sử chức vụ</td><td>SmartHR</td></tr>
-                <tr><td>Lưu lịch sử phê duyệt cũ</td><td>SmartHR</td></tr>
-                <tr><td>Xóa dữ liệu Giám đốc cũ</td><td>Không</td></tr>
-                <tr><td>Sửa người duyệt của nghiệp vụ cũ</td><td>Không</td></tr>
-            </tbody>
-        </table>
     </div>
 
     <div class="card">

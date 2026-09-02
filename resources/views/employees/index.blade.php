@@ -31,6 +31,38 @@
     @endif
 </div>
 
+@php $filters = $filters ?? []; @endphp
+<form method="GET" action="{{ route('employees.index') }}" class="card p-3 mb-3">
+    <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-5">
+            <label class="form-label" for="employee-search">Tìm nhân viên</label>
+            <input id="employee-search" class="form-control" type="search" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Mã NV, họ tên, email, chức vụ...">
+        </div>
+        <div class="col-12 col-md-3">
+            <label class="form-label" for="employee-department">Phòng ban</label>
+            <select id="employee-department" class="form-select" name="department_id">
+                <option value="">Tất cả phòng ban</option>
+                @foreach($departments as $department)
+                    <option value="{{ $department->id }}" @selected((string) ($filters['department_id'] ?? '') === (string) $department->id)>{{ $department->name }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="col-12 col-md-2">
+            <label class="form-label" for="employee-status">Trạng thái</label>
+            <select id="employee-status" class="form-select" name="status">
+                <option value="">Tất cả</option>
+                <option value="active" @selected(($filters['status'] ?? '') === 'active')>Còn làm việc</option>
+                <option value="on_leave" @selected(($filters['status'] ?? '') === 'on_leave')>Tạm nghỉ</option>
+                <option value="inactive" @selected(($filters['status'] ?? '') === 'inactive')>Nghỉ việc</option>
+            </select>
+        </div>
+        <div class="col-12 col-md-2 d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Tìm kiếm</button>
+            <a href="{{ route('employees.index') }}" class="btn btn-outline-secondary">Xóa lọc</a>
+        </div>
+    </div>
+</form>
+
 <div class="card">
     @if($employees->count())
         <div class="table-responsive">

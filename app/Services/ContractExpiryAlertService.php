@@ -6,6 +6,7 @@ use App\Models\ActivityLog;
 use App\Models\Contract;
 use App\Models\ContractExpiryAction;
 use App\Models\ContractExpiryAlert;
+use App\Models\Employee;
 use App\Models\Notification;
 use App\Models\User;
 use App\Support\HrApprovalNotifier;
@@ -26,6 +27,8 @@ class ContractExpiryAlertService
     {
         $today = Carbon::parse($today ?? now())->startOfDay();
         $sent = 0;
+
+        $this->lockAccountsForExpiredContracts($today);
 
         $contracts = Contract::query()
             ->with(['employee', 'renewals', 'latestExpiryAction'])
@@ -53,6 +56,56 @@ class ContractExpiryAlertService
         }
 
         return $sent;
+    }
+
+    protected function lockAccountsForExpiredContracts(CarbonInterface $today): int
+    {
+        $locked = 0;
+        $employees = Employee::query()->with(['user', 'contracts'])->get();
+
+        foreach ($employees as $employee) {
+            $hasExpiredContract = $employee->contracts->contains(function (Contract $contract) use ($today): bool {
+                return $contract->end_date !== null
+                    && $contract->end_date->copy()->startOfDay()->lt($today->copy()->startOfDay());
+            });
+
+            if (! $hasExpiredContract) {
+                continue;
+            }
+
+            $hasCurrentContract = $employee->contracts->contains(function (Contract $contract) use ($today): bool {
+                if (in_array($contract->status, [
+                    Contract::STATUS_EXPIRED,
+                    Contract::STATUS_CANCELLED,
+                    Contract::STATUS_TERMINATED,
+                    Contract::STATUS_REJECTED,
+                ], true)) {
+                    return false;
+                }
+
+                return ($contract->end_date === null || $contract->end_date->copy()->startOfDay()->gte($today->copy()->startOfDay()))
+                    && ($contract->start_date === null || $contract->start_date->copy()->startOfDay()->lte($today->copy()->startOfDay()));
+            });
+
+            if ($hasCurrentContract) {
+                continue;
+            }
+
+            $user = $employee->user ?: User::query()->where('email', $employee->email)->first();
+            if (! $user || $user->isStaffUser() || $user->is_locked) {
+                continue;
+            }
+
+            $user->update(['is_locked' => true]);
+            ActivityLog::create([
+                'user_id' => $user->id,
+                'action' => 'account_locked_contract_expired',
+                'meta' => sprintf('employee:%d;reason:all_contracts_expired', $employee->id),
+            ]);
+            $locked++;
+        }
+
+        return $locked;
     }
 
     /**
