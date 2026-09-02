@@ -326,6 +326,5 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call(DefenseDemoSeeder::class);
-        $this->call(PositionSeeder::class);
     }
 }

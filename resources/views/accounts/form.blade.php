@@ -54,11 +54,9 @@
                     <option value="hr" {{ $currentRole === 'hr' ? 'selected' : '' }}>HR</option>
                     <option value="accountant" {{ $currentRole === 'accountant' ? 'selected' : '' }}>Kế toán</option>
                     <option value="director" {{ $currentRole === 'director' ? 'selected' : '' }}>Giám đốc</option>
-                    @if (auth()->user()?->is_admin)
-                        <option value="admin" {{ $currentRole === 'admin' ? 'selected' : '' }}>Admin (quản trị hệ thống)</option>
-                    @endif
+                    <option value="admin" {{ $currentRole === 'admin' ? 'selected' : '' }}>Admin (quản trị hệ thống)</option>
                 </select>
-                <p class="muted" style="margin:6px 0 0;font-size:13px;">Admin quản trị CNTT. Giám đốc phê duyệt nghiệp vụ. Vai trò Admin hệ thống chỉ Admin quản trị mới được gán.</p>
+                <p class="muted" style="margin:6px 0 0;font-size:13px;">Admin quản trị CNTT. Giám đốc phê duyệt nghiệp vụ. Không gán cả hai cho cùng một người.</p>
                 @error('role')<span class="error">{{ $message }}</span>@enderror
             </div>
 

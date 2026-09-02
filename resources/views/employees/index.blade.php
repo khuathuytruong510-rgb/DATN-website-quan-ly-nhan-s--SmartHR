@@ -75,7 +75,11 @@
                                 <a href="{{ route('employees.show', $employee) }}" class="btn btn-sm btn-outline-primary">Xem</a>
                                 @if(auth()->user()?->canManageHr())
                                 <a href="{{ route('employees.edit', $employee) }}" class="btn btn-sm btn-outline-secondary">Sửa</a>
-                                <a href="{{ route('deletion_requests.create', ['kind' => 'employee', 'target' => $employee->id]) }}" class="btn btn-sm btn-outline-danger">Yêu cầu xóa</a>
+                                <form method="POST" action="{{ route('employees.destroy', $employee) }}" style="display:inline;" onsubmit="return confirm('Bạn có chắc muốn xóa?')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Xóa</button>
+                                </form>
                                 @endif
                             </td>
                         </tr>

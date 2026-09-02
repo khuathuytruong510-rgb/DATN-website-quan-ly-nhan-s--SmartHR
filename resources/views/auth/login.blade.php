@@ -37,5 +37,10 @@
             Giám đốc — giamdoc@smarthr.com<br>
             Nhân viên — nv@smarthr.com
         </div>
+
+        <p class="muted" style="margin-top: 18px;">
+            Chưa có tài khoản?
+            <a href="{{ route('register') }}">Đăng ký</a>
+        </p>
     </div>
 @endsection

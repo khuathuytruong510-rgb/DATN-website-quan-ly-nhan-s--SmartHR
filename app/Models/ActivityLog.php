@@ -39,11 +39,6 @@ class ActivityLog extends Model
             'payroll_email_failed' => 'Gửi email lương thất bại',
             'payroll_period_locked' => 'HR chốt kỳ lương',
             'payroll_period_unlocked' => 'HR mở khóa kỳ lương',
-            'promotion_created' => 'HR tạo đề xuất thăng chức/tăng lương',
-            'promotion_approved' => 'Giám đốc duyệt đề xuất thăng chức/tăng lương',
-            'promotion_rejected' => 'Giám đốc từ chối đề xuất thăng chức/tăng lương',
-            'promotion_cancelled' => 'Hủy đề xuất thăng chức/tăng lương',
-            'promotion_applied' => 'Đã áp dụng thăng chức/tăng lương',
             default => str_replace('_', ' ', $this->action),
         };
     }

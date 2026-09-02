@@ -38,9 +38,6 @@ class EnsureAdminOrHr
         'evaluations.edit',
         'payroll.issues.fix_form',
         'payroll.bank_requests.index',
-        'promotion_requests.index',
-        'promotion_requests.create',
-        'promotion_requests.show',
     ];
 
     /** Form ghi dữ liệu HR/KT — Giám đốc xem, không mở màn hình sửa nguồn hay thanh toán. */
@@ -60,14 +57,13 @@ class EnsureAdminOrHr
         'payroll.issues.fix_form',
         'payroll.payment.show',
         'payroll.email.index',
-        'promotion_requests.create',
     ];
 
     public function handle(Request $request, Closure $next)
     {
         $user = auth()->user();
 
-        if (! $user || (! $user->is_admin && ! $user->is_hr && ! $user->is_accountant && ! $user->is_director)) {
+        if (! $user || (! $user->is_hr && ! $user->is_accountant && ! $user->is_director)) {
             abort(403);
         }
 
@@ -77,7 +73,7 @@ class EnsureAdminOrHr
                 abort(403, 'Giám đốc chỉ xem dữ liệu phục vụ phê duyệt, không dùng form ghi của HR hoặc Kế toán.');
             }
             if (! $request->isMethodSafe()) {
-                $allowed = ['payroll.approve', 'payroll.approve_all', 'contracts.sign', 'notifications.store', 'promotion_requests.approve', 'promotion_requests.reject', 'deletion_requests.approve', 'deletion_requests.reject'];
+                $allowed = ['payroll.approve', 'payroll.approve_all', 'contracts.sign', 'notifications.store'];
                 if (! in_array($routeName, $allowed, true)) {
                     abort(403, 'Giám đốc chỉ được phê duyệt cấp cao, không chỉnh sửa dữ liệu nhân sự hay cấu hình hệ thống.');
                 }

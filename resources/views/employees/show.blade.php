@@ -24,7 +24,6 @@
     <div>
         @if(auth()->user()?->canManageHr())
             <a class="btn" href="{{ route('employees.edit', $employee) }}">Sửa thông tin</a>
-            <a class="btn" href="{{ route('promotion_requests.create', ['employee_id' => $employee->id]) }}">+ Thăng chức / Tăng lương</a>
         @endif
         <a class="btn link" href="{{ route('employees.index') }}">Quay lại</a>
     </div>

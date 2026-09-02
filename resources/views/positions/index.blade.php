@@ -30,15 +30,30 @@
                 'deptLink' => route('departments.show', $selected),
             ])
         @else
-            @foreach ($departments as $dept)
-                @if ($positions->contains(fn ($p) => $p->department_id === $dept->id))
-                    @include('positions._table', [
-                        'positions' => $positions->where('department_id', $dept->id),
-                        'title' => $dept->name,
-                        'deptLink' => route('departments.show', $dept),
-                    ])
-                @endif
-            @endforeach
+            <div class="table-responsive">
+                <table class="table" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">STT</th>
+                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Tên chức vụ</th>
+                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Phòng ban</th>
+                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Mô tả</th>
+                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Trạng thái</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($positions as $index => $position)
+                            <tr>
+                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $index + 1 }}</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $position['name'] }}</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $position['department'] }}</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $position['description'] }}</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $position['status'] }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
         @endif
     </div>
 @endsection

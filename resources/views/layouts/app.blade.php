@@ -351,8 +351,6 @@
                         <a class="{{ request()->routeIs('employees.*') ? 'active' : '' }}" href="{{ route('employees.index') }}"><i class="bi bi-people"></i>Nhân viên</a>
                         <a class="{{ request()->routeIs('departments.*') ? 'active' : '' }}" href="{{ route('departments.index') }}"><i class="bi bi-building"></i>Phòng ban</a>
                         <a class="{{ request()->routeIs('positions.*') ? 'active' : '' }}" href="{{ route('positions.index') }}"><i class="bi bi-briefcase"></i>Chức vụ</a>
-                        <a class="{{ request()->routeIs('deletion_requests.*') ? 'active' : '' }}" href="{{ route('deletion_requests.index') }}"><i class="bi bi-trash"></i>Yêu cầu xóa</a>
-                        <a class="{{ request()->routeIs('accounts.*') ? 'active' : '' }}" href="{{ route('accounts.index') }}"><i class="bi bi-people"></i>Quản lý tài khoản</a>
                         <a class="{{ request()->routeIs('contracts.*') ? 'active' : '' }}" href="{{ route('contracts.index') }}"><i class="bi bi-file-earmark-text"></i>Hợp đồng</a>
                         <a class="{{ request()->routeIs('attendance.*') ? 'active' : '' }}" href="{{ route('attendance.index') }}"><i class="bi bi-geo-alt"></i>Chấm công</a>
                         <a class="{{ request()->routeIs('evaluations.*') ? 'active' : '' }}" href="{{ route('evaluations.index') }}"><i class="bi bi-star"></i>Đánh giá</a>
@@ -362,14 +360,12 @@
                                 || request()->routeIs('salary_histories.*')
                                 || request()->routeIs('salary_payments.*')
                                 || request()->routeIs('statistics.*')
-                                || request()->routeIs('hr-dashboard.*')
-                                || request()->routeIs('promotion_requests.*');
+                                || request()->routeIs('hr-dashboard.*');
                         @endphp
                         <details class="nav-group" {{ $payrollActive ? 'open' : '' }}>
                             <summary class="nav-summary {{ $payrollActive ? 'active' : '' }}"><i class="bi bi-cash-stack"></i> Lương</summary>
                             <a class="{{ request()->routeIs('payroll.index') ? 'active' : '' }}" href="{{ route('payroll.index') }}">Kiểm tra bảng lương</a>
                             <a class="{{ request()->routeIs('salary_histories.index') ? 'active' : '' }}" href="{{ route('salary_histories.index') }}">Lịch sử lương</a>
-                            <a class="{{ request()->routeIs('promotion_requests.index') ? 'active' : '' }}" href="{{ route('promotion_requests.index') }}">Thăng chức / Tăng lương</a>
                             <a class="{{ request()->routeIs('payroll.bank_requests.*') ? 'active' : '' }}" href="{{ route('payroll.bank_requests.index') }}">Duyệt đổi STK/QR</a>
                             <a class="{{ request()->routeIs('payroll.issues.*') ? 'active' : '' }}" href="{{ route('payroll.issues.index') }}">Sự cố lương</a>
                             <a class="{{ request()->routeIs('salary_payments.*') ? 'active' : '' }}" href="{{ route('salary_payments.index') }}">Lịch sử thanh toán</a>
@@ -386,15 +382,11 @@
                             $dirPayrollActive = request()->routeIs('payroll.*')
                                 || request()->routeIs('salary_histories.*')
                                 || request()->routeIs('statistics.*')
-                                || request()->routeIs('hr-dashboard.*')
-                                || request()->routeIs('promotion_requests.*')
-                                || request()->routeIs('deletion_requests.*');
+                                || request()->routeIs('hr-dashboard.*');
                         @endphp
                         <details class="nav-group" {{ $dirPayrollActive ? 'open' : '' }}>
                             <summary class="nav-summary {{ $dirPayrollActive ? 'active' : '' }}"><i class="bi bi-check2-square"></i> Phê duyệt</summary>
                             <a class="{{ request()->routeIs('payroll.index') || request()->routeIs('payroll.show') ? 'active' : '' }}" href="{{ route('payroll.index') }}">Bảng lương</a>
-                            <a class="{{ request()->routeIs('promotion_requests.*') ? 'active' : '' }}" href="{{ route('promotion_requests.index') }}">Thăng chức / Tăng lương</a>
-                            <a class="{{ request()->routeIs('deletion_requests.*') ? 'active' : '' }}" href="{{ route('deletion_requests.index') }}">Xóa NV / Phòng ban</a>
                             <a class="{{ request()->routeIs('salary_histories.index') ? 'active' : '' }}" href="{{ route('salary_histories.index') }}">Lịch sử lương</a>
                             <a class="{{ request()->routeIs('statistics.*') ? 'active' : '' }}" href="{{ route('statistics.index') }}">Thống kê & Báo cáo</a>
                             <a class="{{ request()->routeIs('hr-dashboard.*') ? 'active' : '' }}" href="{{ route('hr-dashboard.index') }}">Báo cáo tổng hợp</a>

@@ -378,6 +378,92 @@ class SmartHrController extends Controller
         ));
     }
 
+    protected function directorDashboard(): View
+    {
+        $now = now();
+        $month = $now->month;
+        $year = $now->year;
+        $monthStart = $now->copy()->startOfMonth()->toDateString();
+        $monthEnd = $now->copy()->endOfMonth()->toDateString();
+
+        $people = [
+            'total' => Employee::count(),
+            'active' => Employee::where('status', 'active')->count(),
+            'probation' => Employee::whereHas('contracts', fn ($q) => $q->where('contract_type', 'probation')->where('status', 'active'))->count(),
+            'inactive' => Employee::where('status', 'inactive')->count(),
+            'joinedThisMonth' => Employee::whereBetween('start_date', [$monthStart, $monthEnd])->count(),
+        ];
+
+        $waitingContractStatuses = [
+            Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE,
+            Contract::STATUS_WAITING_DIRECTOR_SIGNATURE,
+            'waiting_employee',
+            'waiting_director',
+        ];
+
+        $contracts = [
+            'active' => Contract::where('status', 'active')->count(),
+            'waitingSign' => Contract::whereIn('status', $waitingContractStatuses)->count(),
+            'expiringSoon' => Contract::where('status', 'active')
+                ->whereNotNull('end_date')
+                ->whereBetween('end_date', [$now->toDateString(), $now->copy()->addDays(30)->toDateString()])
+                ->count(),
+        ];
+
+        $payrollQuery = Payroll::where('month', $month)->where('year', $year);
+        $approvedByDirector = array_values(array_unique(array_merge(
+            PayrollPaymentWorkflowService::directorApprovedStatuses(),
+            PayrollPaymentWorkflowService::payableStatuses(),
+            [PayrollPaymentWorkflowService::PAID]
+        )));
+        $payroll = [
+            'month' => $month,
+            'year' => $year,
+            'totalFund' => (clone $payrollQuery)->sum('total_salary'),
+            'awaitingDirector' => (clone $payrollQuery)->whereIn('status', PayrollPaymentWorkflowService::hrCheckedStatuses())->count(),
+            'approved' => (clone $payrollQuery)->whereIn('status', $approvedByDirector)->count(),
+            'awaitingEmployee' => (clone $payrollQuery)->whereIn('status', PayrollPaymentWorkflowService::directorApprovedStatuses())->count(),
+            'awaitingPayment' => (clone $payrollQuery)->whereIn('status', PayrollPaymentWorkflowService::payableStatuses())->count(),
+            'paid' => (clone $payrollQuery)->where('status', PayrollPaymentWorkflowService::PAID)->count(),
+            'issues' => (clone $payrollQuery)->where('status', PayrollPaymentWorkflowService::PAYROLL_ISSUE)->count(),
+        ];
+
+        $approvedLeaves = LeaveRequest::where('status', 'approved')
+            ->where(function ($q) use ($monthStart, $monthEnd) {
+                $q->whereBetween('start_date', [$monthStart, $monthEnd])
+                    ->orWhereBetween('end_date', [$monthStart, $monthEnd]);
+            });
+
+        $leave = [
+            'pending' => LeaveRequest::where('status', 'pending')->count(),
+            'days' => (clone $approvedLeaves)->sum('days'),
+            'paidDays' => (clone $approvedLeaves)->whereIn('type', ['annual', 'sick'])->sum('days'),
+            'unpaidDays' => (clone $approvedLeaves)->whereIn('type', ['unpaid', 'personal'])->sum('days'),
+        ];
+
+        $attendanceQuery = Attendance::whereBetween('date', [$monthStart, $monthEnd]);
+        $attendance = [
+            'full' => (clone $payrollQuery)->whereRaw('(COALESCE(working_days, 0) + COALESCE(paid_leave_days, 0)) >= COALESCE(required_working_days, 26)')->count(),
+            'short' => (clone $payrollQuery)->whereRaw('(COALESCE(working_days, 0) + COALESCE(paid_leave_days, 0)) < COALESCE(required_working_days, 26)')->count(),
+            'late' => (clone $attendanceQuery)->where(function ($q) {
+                $q->where('status', 'late')->orWhere('late_minutes', '>', 0);
+            })->count(),
+            'absent' => (clone $attendanceQuery)->where('status', 'absent')->count(),
+        ];
+
+        $expiringContracts = Contract::with(['employee.department'])
+            ->where('status', 'active')
+            ->whereNotNull('end_date')
+            ->whereBetween('end_date', [now()->toDateString(), now()->addDays(30)->toDateString()])
+            ->orderBy('end_date')
+            ->limit(8)
+            ->get();
+
+        return view('director.dashboard', compact(
+            'people', 'contracts', 'payroll', 'leave', 'attendance', 'expiringContracts'
+        ));
+    }
+
     public function positions(): View
     {
         $order = ['BGD', 'HR', 'TD', 'CB', 'DTPT', 'KTTC', 'KD', 'MKT', 'IT', 'VH', 'PC', 'HC'];
@@ -440,10 +526,6 @@ class SmartHrController extends Controller
             'department_id' => ['required_if:role,employee,hr,accountant,director', 'nullable', 'exists:departments,id'],
         ]);
 
-        if ($data['role'] === 'admin' && ! Auth::user()->is_admin) {
-            abort(403, 'Chỉ Admin quản trị mới được gán vai trò hệ thống.');
-        }
-
         $user = User::create(array_merge([
             'name' => $data['name'],
             'email' => $data['email'],
@@ -487,10 +569,6 @@ class SmartHrController extends Controller
             'role' => ['required', 'in:employee,hr,admin,accountant,director'],
             'department_id' => ['required_if:role,employee,hr,accountant,director', 'nullable', 'exists:departments,id'],
         ]);
-
-        if ($data['role'] === 'admin' && ! Auth::user()->is_admin) {
-            abort(403, 'Chỉ Admin quản trị mới được gán vai trò hệ thống.');
-        }
 
         $update = array_merge([
             'name' => $data['name'],
