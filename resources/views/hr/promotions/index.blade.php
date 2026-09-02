@@ -99,22 +99,22 @@
                                 @if($promo->isPending() && $isDirector)
                                     <form method="POST" action="{{ route('promotion_requests.approve', $promo) }}">
                                         @csrf
-                                        <button class="btn primary" type="submit" onclick="return confirm('Duyệt đề xuất này?')">Duyệt</button>
+                                        <button class="btn primary" type="submit" data-confirm="Duyệt đề xuất này?">Duyệt</button>
                                     </form>
                                     <form method="POST" action="{{ route('promotion_requests.reject', $promo) }}">
                                         @csrf
                                         <input type="hidden" name="review_note" value="Không phù hợp tại thời điểm này">
-                                        <button class="btn danger" type="submit" onclick="return confirm('Từ chối đề xuất này?')">Từ chối</button>
+                                        <button class="btn danger" type="submit" data-confirm="Từ chối đề xuất này?">Từ chối</button>
                                     </form>
                                 @elseif($promo->isApproved() && $isManager)
                                     <form method="POST" action="{{ route('promotion_requests.apply', $promo) }}">
                                         @csrf
-                                        <button class="btn primary" type="submit" onclick="return confirm('Áp dụng đề xuất: cập nhật chức vụ, hợp đồng và lịch sử lương?')">Áp dụng</button>
+                                        <button class="btn primary" type="submit" data-confirm="Áp dụng đề xuất: cập nhật chức vụ, hợp đồng và lịch sử lương?">Áp dụng</button>
                                     </form>
                                     <form method="POST" action="{{ route('promotion_requests.cancel', $promo) }}">
                                         @csrf
                                         <input type="hidden" name="cancellation_note" value="Hủy đề xuất">
-                                        <button class="btn link" type="submit" onclick="return confirm('Hủy đề xuất này?')">Hủy</button>
+                                        <button class="btn link" type="submit" data-confirm="Hủy đề xuất này?">Hủy</button>
                                     </form>
                                 @endif
                                 <a class="btn link" href="{{ route('promotion_requests.show', $promo) }}">Xem</a>

@@ -138,7 +138,7 @@
                                     </form>
                                 @endif
                                 @if($currentUser->is_hr && $leave->status === 'pending')
-                                    <form method="POST" action="{{ route('leave_requests.destroy', $leave) }}" style="display:inline" onsubmit="return confirm('Xóa đơn nghỉ phép đang chờ duyệt?')">
+                                    <form method="POST" action="{{ route('leave_requests.destroy', $leave) }}" style="display:inline" data-confirm="Xóa đơn nghỉ phép đang chờ duyệt?">
                                         @csrf
                                         @method('DELETE')
                                         <button class="btn danger" type="submit">Xóa</button>
@@ -161,18 +161,74 @@
     </div>
 @endif
 
+<div class="modal fade" id="leaveRejectModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Lý do từ chối</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+            </div>
+            <div class="modal-body">
+                <textarea id="leaveRejectInput" class="form-control" rows="3" required placeholder="Nhập lý do từ chối đơn nghỉ phép..."></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                <button type="button" class="btn btn-danger" id="leaveRejectOk">Xác nhận từ chối</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
-    function submitRejectReason(form) {
-        var reason = prompt('Vui lòng nhập lý do từ chối:');
+    (function () {
+        var rejectForm = null;
+        var rejectModal = null;
 
-        if (!reason || !reason.trim()) {
-            alert('Bạn phải nhập lý do từ chối.');
+        document.addEventListener('DOMContentLoaded', function () {
+            var modalEl = document.getElementById('leaveRejectModal');
+            var input = document.getElementById('leaveRejectInput');
+            if (!modalEl || !input) return;
+
+            rejectModal = new bootstrap.Modal(modalEl);
+
+            document.getElementById('leaveRejectOk').addEventListener('click', function () {
+                var reason = input.value.trim();
+                if (!reason) {
+                    alert('Bạn phải nhập lý do từ chối.');
+                    return;
+                }
+                if (rejectForm) {
+                    rejectForm.querySelector('input[name="rejection_reason"]').value = reason;
+                    rejectForm.removeAttribute('onsubmit');
+                    rejectForm.submit();
+                }
+                rejectModal.hide();
+                rejectForm = null;
+                input.value = '';
+            });
+
+            modalEl.addEventListener('hidden.bs.modal', function () {
+                rejectForm = null;
+                input.value = '';
+            });
+        });
+
+        window.submitRejectReason = function (form) {
+            rejectForm = form;
+            if (rejectModal) {
+                rejectModal.show();
+            } else {
+                var reason = prompt('Vui lòng nhập lý do từ chối:');
+                if (!reason || !reason.trim()) {
+                    alert('Bạn phải nhập lý do từ chối.');
+                    return false;
+                }
+                form.querySelector('input[name="rejection_reason"]').value = reason.trim();
+                return true;
+            }
             return false;
-        }
-
-        form.querySelector('input[name="rejection_reason"]').value = reason.trim();
-        return true;
-    }
+        };
+    })();
 </script>
 
 @endsection

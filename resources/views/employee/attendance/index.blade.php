@@ -780,12 +780,18 @@
 
     // Allow check-in/out without location after user confirmation
     function allowWithoutLocation() {
-        if (!confirm('Bạn có chắc muốn chấm công mà không gửi vị trí? Điều này có thể yêu cầu xác minh thêm từ HR.')) return;
-        // Enable buttons and set a flag so server can record missing location
-        locationAvailable = false;
-        setCheckButtonsEnabled(true);
-        // mark UI to indicate missing location
-        showMessage('check-in-message', 'Đã cho phép chấm công không cần vị trí. Vui lòng ghi chú lý do nếu cần.', 'success');
+        const proceed = function () {
+            // Enable buttons and set a flag so server can record missing location
+            locationAvailable = false;
+            setCheckButtonsEnabled(true);
+            // mark UI to indicate missing location
+            showMessage('check-in-message', 'Đã cho phép chấm công không cần vị trí. Vui lòng ghi chú lý do nếu cần.', 'success');
+        };
+        if (typeof window.SmartHrConfirm === 'function') {
+            SmartHrConfirm('Bạn có chắc muốn chấm công mà không gửi vị trí? Điều này có thể yêu cầu xác minh thêm từ HR.', proceed);
+        } else {
+            proceed();
+        }
     }
 
     // Submit manual coordinates as check-in

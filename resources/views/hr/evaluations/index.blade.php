@@ -185,7 +185,7 @@
                     </form>
                     @endif
                     <form method="POST" action="{{ route('evaluations.destroy', $ev) }}" style="display:inline;"
-                          onsubmit="return confirm('Xóa đánh giá tháng {{ $ev->month }} của {{ optional($ev->employee)->name }}?')">
+                          data-confirm="Xóa đánh giá tháng {{ $ev->month }} của {{ optional($ev->employee)->name }}?">
                         @csrf @method('DELETE')
                         <button type="submit" class="btn danger" style="padding:5px 10px;font-size:12px;">Xóa</button>
                     </form>

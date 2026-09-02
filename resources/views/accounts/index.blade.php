@@ -59,7 +59,7 @@
                                 <form action="{{ route('accounts.destroy', $user) }}" method="POST" style="display:inline">
                                     @csrf
                                     @method('DELETE')
-                                    <button class="btn" type="submit" onclick="return confirm('Bạn có chắc muốn xoá tài khoản này?')">Xoá</button>
+                                    <button class="btn" type="submit" data-confirm="Bạn có chắc muốn xoá tài khoản này?">Xoá</button>
                                 </form>
                                 <form action="{{ route('accounts.toggle_lock', $user) }}" method="POST" style="display:inline">
                                     @csrf

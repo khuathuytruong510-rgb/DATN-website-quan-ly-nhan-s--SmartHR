@@ -192,10 +192,13 @@ document.addEventListener('DOMContentLoaded', function () {
             if (methodEl.value === 'cash') {
                 txnInput.disabled = true;
             }
-            if (!confirm('Xác nhận đã thanh toán lương?')) {
-                e.preventDefault();
-                txnInput.disabled = false;
-                syncPaymentMethod();
+            e.preventDefault();
+            const proceed = function () { payForm.submit(); };
+            const cancel = function () { txnInput.disabled = false; syncPaymentMethod(); };
+            if (typeof window.SmartHrConfirm === 'function') {
+                SmartHrConfirm('Xác nhận đã thanh toán lương?', proceed, cancel);
+            } else {
+                proceed();
             }
         });
     }

@@ -62,7 +62,7 @@
                             <td>
                                 <div class="actions" style="gap: 6px;">
                                     <a href="{{ route('benefits.assignments.edit', $assignment) }}" class="btn" style="padding: 6px 10px; font-size: 12px;">Sửa</a>
-                                    <form method="POST" action="{{ route('benefits.assignments.destroy', $assignment) }}" style="display: inline;" onsubmit="return confirm('Bạn có chắc muốn xóa gán phúc lợi này?');">
+                                    <form method="POST" action="{{ route('benefits.assignments.destroy', $assignment) }}" style="display: inline;" data-confirm="Bạn có chắc muốn xóa gán phúc lợi này?">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="btn danger" style="padding: 6px 10px; font-size: 12px;">Xóa</button>

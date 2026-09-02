@@ -181,6 +181,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/contracts/{contract}/renew', [SmartHrController::class, 'storeRenewalContract'])->name('contracts.storeRenewal');
         Route::post('/contracts/{contract}/sign', [SmartHrController::class, 'signContract'])->name('contracts.sign');
         Route::post('/contracts/{contract}/sync-salary', [SmartHrController::class, 'syncContractSalary'])->name('contracts.sync_salary');
+        Route::post('/contracts/sync-salary/from-payroll', [\App\Http\Controllers\Web\SmartHrController::class, 'syncAllContractSalariesFromPayroll'])->name('contracts.sync_salary_from_payroll');
+        Route::post('/contracts/sync-salary/from-contract', [\App\Http\Controllers\Web\SmartHrController::class, 'syncAllPayrollSalariesFromContracts'])->name('contracts.sync_salary_from_contract');
 
         Route::get('/contract-templates/content', [\App\Http\Controllers\Web\ContractTemplateController::class, 'templateContent'])->name('contract-templates.content');
         Route::resource('contract-templates', \App\Http\Controllers\Web\ContractTemplateController::class)->names('contract-templates');

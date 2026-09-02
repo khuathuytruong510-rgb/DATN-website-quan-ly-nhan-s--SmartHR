@@ -15,13 +15,13 @@
             @if($workflow->actorCanReview($user, $payroll))
                 <form method="POST" action="{{ route('payroll.review', $payroll) }}">
                     @csrf
-                    <button type="submit" class="btn primary" onclick="return confirm('Xác nhận đã kiểm tra dữ liệu bảng lương này?')">Kiểm tra dữ liệu</button>
+                    <button type="submit" class="btn primary" data-confirm="Xác nhận đã kiểm tra dữ liệu bảng lương này?">Kiểm tra dữ liệu</button>
                 </form>
             @endif
             @if($workflow->actorCanFinalApprove($user, $payroll))
                 <form method="POST" action="{{ route('payroll.approve', $payroll) }}">
                     @csrf
-                    <button type="submit" class="btn primary" onclick="return confirm('Phê duyệt cuối bảng lương này?')">Phê duyệt cuối</button>
+                    <button type="submit" class="btn primary" data-confirm="Phê duyệt cuối bảng lương này?">Phê duyệt cuối</button>
                 </form>
             @endif
 

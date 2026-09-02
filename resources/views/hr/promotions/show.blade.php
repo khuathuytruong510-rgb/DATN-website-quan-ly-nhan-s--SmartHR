@@ -138,23 +138,23 @@
                     <label class="form-label" for="review_note_reject">Lý do từ chối <span style="color:#dc2626;">*</span></label>
                     <input type="text" name="review_note" id="review_note_reject" class="form-control" maxlength="500" required>
                 </div>
-                <button class="btn danger" type="submit" onclick="return confirm('Từ chối đề xuất này?')">Từ chối</button>
+                <button class="btn danger" type="submit" data-confirm="Từ chối đề xuất này?">Từ chối</button>
             </form>
         @elseif($promotion->isApproved() && $isManager)
             <form method="POST" action="{{ route('promotion_requests.apply', $promotion) }}">
                 @csrf
-                <button class="btn primary" type="submit" onclick="return confirm('Áp dụng đề xuất? Hệ thống sẽ cập nhật chức vụ, hợp đồng đang hiệu lực và ghi lịch sử lương.')">Áp dụng ngay</button>
+                <button class="btn primary" type="submit" data-confirm="Áp dụng đề xuất? Hệ thống sẽ cập nhật chức vụ, hợp đồng đang hiệu lực và ghi lịch sử lương.">Áp dụng ngay</button>
             </form>
             <form method="POST" action="{{ route('promotion_requests.cancel', $promotion) }}">
                 @csrf
                 <input type="hidden" name="cancellation_note" value="Hủy đề xuất đã duyệt">
-                <button class="btn" type="submit" onclick="return confirm('Hủy đề xuất đã duyệt này?')">Hủy đề xuất</button>
+                <button class="btn" type="submit" data-confirm="Hủy đề xuất đã duyệt này?">Hủy đề xuất</button>
             </form>
         @elseif($promotion->isPending() && $isManager)
             <form method="POST" action="{{ route('promotion_requests.cancel', $promotion) }}">
                 @csrf
                 <input type="hidden" name="cancellation_note" value="Hủy đề xuất đang chờ duyệt">
-                <button class="btn" type="submit" onclick="return confirm('Hủy đề xuất này?')">Hủy đề xuất</button>
+                <button class="btn" type="submit" data-confirm="Hủy đề xuất này?">Hủy đề xuất</button>
             </form>
         @endif
     </div>

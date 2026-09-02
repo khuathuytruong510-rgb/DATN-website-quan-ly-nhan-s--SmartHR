@@ -54,7 +54,7 @@
                             @if(in_array($contract->status, ['waiting_employee_signature', 'waiting_employee'], true) && ! $contract->employee_signed_at)
                                 <form method="POST" action="{{ route('me.contracts.sign', $contract) }}" class="mt-3">
                                     @csrf
-                                    <button class="btn btn-primary" type="submit" onclick="return confirm('Xác nhận ký hợp đồng này?')">✍️ Ký hợp đồng</button>
+                                    <button class="btn btn-primary" type="submit" data-confirm="Xác nhận ký hợp đồng này?">✍️ Ký hợp đồng</button>
                                 </form>
                             @endif
                         </div>
