@@ -272,7 +272,7 @@
                                     @if($canApprove)
                                         <form method="POST" action="{{ route('payroll.approve', $payroll) }}" class="d-inline">
                                             @csrf
-                                            <button type="submit" class="btn btn-sm btn-success" title="Duyệt" onclick="return confirm('Duyệt bảng lương của {{ optional($payroll->employee)->name }}?')">
+                                            <button type="submit" class="btn btn-sm btn-success" title="Duyệt" data-confirm="Duyệt bảng lương của {{ optional($payroll->employee)->name }}?">
                                                 Duyệt
                                             </button>
                                         </form>

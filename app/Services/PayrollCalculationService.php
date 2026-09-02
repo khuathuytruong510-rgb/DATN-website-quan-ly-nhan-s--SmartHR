@@ -116,68 +116,65 @@ class PayrollCalculationService
     }
 
     /**
-     * Số liệu kỳ để kế toán đối chiếu trước khi ghi phiếu (không ghi DB).
-     *
-     * @return Collection<int, object>
+     * Lương cơ bản của nhân viên khi tính lương:
+     * - Theo chức vụ: lấy mức lương chuẩn của vị trí (positions.base_salary).
+     * - Không được thấp hơn lương cơ bản ghi trong hợp đồng đang hiệu lực.
+     * => lấy giá trị cao hơn giữa 2 mức.
      */
-    public function previewPeriod(int $month, int $year): Collection
+    protected function baseSalaryFor(Employee $employee): int
     {
-        $employees = Employee::query()
-            ->where('status', 'active')
-            ->with(['positionDetail', 'contracts'])
-            ->orderBy('name')
-            ->get();
+        // 1) Lương theo chức vụ (chuẩn vị trí)
+        $positionSalary = 0;
 
-        $existingByEmployee = Payroll::query()
-            ->where('month', $month)
-            ->where('year', $year)
-            ->whereIn('employee_id', $employees->pluck('id'))
-            ->get()
-            ->keyBy('employee_id');
+        if ($employee->positionDetail && (int) $employee->positionDetail->base_salary > 0) {
+            $positionSalary = (int) $employee->positionDetail->base_salary;
+        } else {
+            $positionSalary = match ($employee->position) {
+                'Giám Đốc' => 13000000,
+                'Trưởng Phòng Nhân Sự' => 10400000,
+                default => 7800000,
+            };
+        }
 
-        return $employees->map(function (Employee $employee) use ($month, $year, $existingByEmployee) {
-            $existing = $existingByEmployee->get($employee->id);
-            $canRecalculate = ! $existing
-                || in_array($existing->status, PayrollPaymentWorkflowService::recalculableStatuses(), true);
+        // 2) Lương cơ bản theo hợp đồng đang hiệu lực
+        $contractSalary = 0;
+        $contract = Contract::query()
+            ->where('employee_id', $employee->id)
+            ->where('status', Contract::STATUS_ACTIVE)
+            ->latest('id')
+            ->first();
 
-            $amounts = ($existing && ! $canRecalculate)
-                ? $this->amountsFromPayroll($existing)
-                : $this->buildAmounts($employee, $month, $year);
+        if ($contract) {
+            $contractSalary = (int) ($contract->base_salary ?: $contract->salary ?: 0);
+        }
 
-            $contract = $this->activeContract($employee);
-
-            return (object) array_merge($amounts, $this->workFacts($employee, $month, $year), [
-                'employee' => $employee,
-                'payroll' => $existing,
-                'can_recalculate' => $canRecalculate,
-                'status' => $existing?->status,
-                'month' => $month,
-                'year' => $year,
-                'contract_type' => $contract?->contract_type,
-                'contract_code' => $contract?->contract_code,
-                'contract_status' => $contract?->status,
-                'working_schedule' => $contract?->working_schedule,
-            ]);
-        });
+        return max($positionSalary, $contractSalary);
     }
 
-    protected function activeContract(Employee $employee): ?Contract
+    protected function persistCalculated(Employee $employee, int $month, int $year, ?Payroll $existing): Payroll
     {
-        $employee->loadMissing('contracts');
+        /*
+        |--------------------------------------------------------------------------
+        | 1. Lương cơ bản: ưu tiên theo hợp đồng đang hiệu lực của nhân viên.
+        | Chỉ khi không có hợp đồng mới dùng lương mặc định theo chức vụ.
+        |--------------------------------------------------------------------------
+        */
+        $baseSalary = $this->baseSalaryFor($employee);
 
-        return $employee->contracts
-            ->sortByDesc(fn (Contract $item) => optional($item->start_date)?->toDateString())
-            ->first(fn (Contract $item) => $item->status === 'active')
-            ?? $employee->contracts->sortByDesc(fn (Contract $item) => optional($item->start_date)?->toDateString())->first();
-    }
+        /*
+        |--------------------------------------------------------------------------
+        | 2. Quy định công chuẩn
+        |--------------------------------------------------------------------------
+        */
+        $requiredWorkingDays = 26;
+        $dailySalary = $baseSalary / $requiredWorkingDays;
+        $hourSalary = $dailySalary / 8;
 
-    /**
-     * Ngày công / giờ / tăng ca / đi muộn — không gồm số tiền.
-     *
-     * @return array<string, float|int>
-     */
-    protected function workFacts(Employee $employee, int $month, int $year): array
-    {
+        /*
+        |--------------------------------------------------------------------------
+        | 3. Lấy dữ liệu chấm công
+        |--------------------------------------------------------------------------
+        */
         $attendances = Attendance::where('employee_id', $employee->id)
             ->whereMonth('date', $month)
             ->whereYear('date', $year)

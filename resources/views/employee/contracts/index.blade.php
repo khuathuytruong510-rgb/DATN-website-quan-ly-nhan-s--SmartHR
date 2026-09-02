@@ -47,7 +47,7 @@
                             @if($contract->isPendingEmployeeEsign())
                                 <form method="POST" action="{{ route('me.contracts.sign', $contract) }}" class="mt-3">
                                     @csrf
-                                    <button class="btn btn-primary" type="submit" onclick="return confirm('Xác nhận ký hợp đồng này phía người lao động? Đây là mô phỏng quy trình ký điện tử, chưa phải chứng thư số pháp lý.')">Ký hợp đồng</button>
+                                    <button class="btn btn-primary" type="submit" data-confirm="Xác nhận ký hợp đồng này?">✍️ Ký hợp đồng</button>
                                 </form>
                             @elseif(! $contract->director_signed_at && ! $contract->employee_signed_at)
                                 <p class="text-muted mt-3 mb-0">Chờ HR gửi và Giám đốc ký phía doanh nghiệp trước.</p>

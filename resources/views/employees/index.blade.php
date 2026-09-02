@@ -80,24 +80,14 @@
                                 @endif
                             </td>
                             <td>
-                                <div class="table-actions">
-                                <a href="{{ route('employees.show', $employee) }}" class="btn btn-sm">Xem</a>
-                                @if(auth()->user()?->canManageHr() && \App\Support\RequestApprover::hrMayManage(auth()->user(), $employee))
-                                <a href="{{ route('employees.edit', $employee) }}" class="btn btn-sm">Sửa</a>
-                                @php
-                                    $pendingDeletionId = $pendingEmployeeDeletions[$employee->id] ?? null;
-                                    $pendingTransferId = ($pendingEmployeeTransfers ?? [])[$employee->id] ?? null;
-                                @endphp
-                                @if($pendingDeletionId)
-                                    <a href="{{ route('deletion_requests.show', $pendingDeletionId) }}" class="btn btn-sm btn-outline-warning">Chờ GĐ duyệt xóa</a>
-                                @elseif($pendingTransferId)
-                                    <a href="{{ route('deletion_requests.show', $pendingTransferId) }}" class="btn btn-sm btn-outline-warning">Chờ GĐ duyệt chuyển</a>
-                                @else
-                                    @unless(optional($employee->department)->isBoard())
-                                    <a href="{{ route('transfers.create', ['employee' => $employee->id]) }}" class="btn btn-sm btn-outline-secondary">Điều chuyển</a>
-                                    @endunless
-                                    <a href="{{ route('deletion_requests.create_employee', $employee) }}" class="btn btn-sm btn-outline-danger">Đề nghị xóa</a>
-                                @endif
+                                <a href="{{ route('employees.show', $employee) }}" class="btn btn-sm btn-outline-primary">Xem</a>
+                                @if(auth()->user()?->canManageHr())
+                                <a href="{{ route('employees.edit', $employee) }}" class="btn btn-sm btn-outline-secondary">Sửa</a>
+                                <form method="POST" action="{{ route('employees.destroy', $employee) }}" style="display:inline;" data-confirm="Bạn có chắc muốn xóa?">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Xóa</button>
+                                </form>
                                 @endif
                                 </div>
                             </td>

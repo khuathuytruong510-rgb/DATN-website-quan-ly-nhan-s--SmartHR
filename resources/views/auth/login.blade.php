@@ -29,15 +29,5 @@
 
             <button class="btn primary" type="submit" style="width: 100%;">Đăng nhập</button>
         </form>
-
-        <div class="callout" style="margin-top:18px;">
-            <p class="callout-title">Tài khoản demo (mật khẩu: 123456)</p>
-            <p class="muted">HR — hr@smarthr.com<br>Kế toán — accountant@smarthr.com<br>Giám đốc — giamdoc@smarthr.com<br>Nhân viên — nv@smarthr.com</p>
-        </div>
-
-        <p class="muted" style="margin-top: 18px;">
-            Chưa có tài khoản?
-            <a href="{{ route('register') }}">Đăng ký</a>
-        </p>
     </div>
 @endsection

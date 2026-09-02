@@ -80,9 +80,9 @@
                             <td><span class="badge {{ $statusClass($assignment->status) }}">{{ $statusLabel($assignment->status) }}</span></td>
                             <td>{{ Illuminate\Support\Str::limit($assignment->notes, 100) }}</td>
                             <td>
-                                <div class="table-actions">
-                                    <a href="{{ route('benefits.assignments.edit', $assignment) }}" class="btn btn-sm">Sửa</a>
-                                    <form method="POST" action="{{ route('benefits.assignments.destroy', $assignment) }}" onsubmit="return confirm('Bạn có chắc muốn xóa gán phúc lợi này?');">
+                                <div class="actions" style="gap: 6px;">
+                                    <a href="{{ route('benefits.assignments.edit', $assignment) }}" class="btn" style="padding: 6px 10px; font-size: 12px;">Sửa</a>
+                                    <form method="POST" action="{{ route('benefits.assignments.destroy', $assignment) }}" style="display: inline;" data-confirm="Bạn có chắc muốn xóa gán phúc lợi này?">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="btn btn-sm danger">Xóa</button>

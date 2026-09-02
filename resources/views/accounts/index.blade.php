@@ -11,7 +11,9 @@
         <div class="page-actions">
             <a class="btn" href="{{ route('admin.notifications.index') }}">Thông báo</a>
             <a class="btn primary" href="{{ route('accounts.create') }}">Tạo tài khoản</a>
-            <a class="btn" href="{{ route('permissions.index') }}">Quản lý phân quyền</a>
+            @if (auth()->user()->is_admin)
+                <a class="btn" href="{{ route('permissions.index') }}">Quản lý phân quyền</a>
+            @endif
         </div>
     </div>
 
@@ -59,18 +61,17 @@
                             </td>
                             <td>{{ $user->created_at?->format('d/m/Y') ?? '-' }}</td>
                             <td>
-                                <div class="table-actions">
-                                    <a class="btn" href="{{ route('accounts.edit', $user) }}">Sửa</a>
-                                    <form action="{{ route('accounts.destroy', $user) }}" method="POST">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button class="btn {{ $pendingEmployeeLabel ? 'danger' : '' }}" type="submit" onclick="return confirm('Bạn có chắc muốn xoá tài khoản này?')">{{ $pendingEmployeeLabel ? 'Xóa tài khoản' : 'Xoá' }}</button>
-                                    </form>
-                                    <form action="{{ route('accounts.toggle_lock', $user) }}" method="POST">
-                                        @csrf
-                                        <button class="btn" type="submit">{{ $user->is_locked ? 'Mở khoá' : 'Khoá' }}</button>
-                                    </form>
-                                </div>
+                                <a class="btn" href="{{ route('accounts.edit', $user) }}">Sửa</a>
+                                
+                                <form action="{{ route('accounts.destroy', $user) }}" method="POST" style="display:inline">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button class="btn" type="submit" data-confirm="Bạn có chắc muốn xoá tài khoản này?">Xoá</button>
+                                </form>
+                                <form action="{{ route('accounts.toggle_lock', $user) }}" method="POST" style="display:inline">
+                                    @csrf
+                                    <button class="btn" type="submit">{{ $user->is_locked ? 'Mở khoá' : 'Khoá' }}</button>
+                                </form>
                             </td>
                         </tr>
                     @endforeach

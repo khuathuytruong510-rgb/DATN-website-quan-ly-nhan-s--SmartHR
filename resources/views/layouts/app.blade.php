@@ -43,9 +43,16 @@
             --space-6: 32px;
         }
         * { box-sizing: border-box; }
-        html, body { height: 100%; }
-        body { margin: 0; font-family: "Segoe UI", Inter, system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; overflow: hidden; }
-        body:has(> .auth-page) { overflow: auto; height: auto; }
+        body { margin: 0; font-family: "Segoe UI", Inter, system-ui, sans-serif; background: var(--bg); color: var(--text); }
+        html { scrollbar-width: thin; scrollbar-color: #aab4c2 transparent; }
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb {
+            background: #aab4c2; border-radius: 999px;
+            border: 2px solid transparent; background-clip: content-box;
+        }
+        ::-webkit-scrollbar-thumb:hover { background: #8b97a8; background-clip: content-box; }
+        ::-webkit-scrollbar-corner { background: transparent; }
         a { color: inherit; }
         a:where(.content a, .card a):not(.btn):not(.emp-kpi):not(.emp-action):not(.emp-chip) {
             color: var(--primary); font-weight: 650; text-decoration: none;
@@ -58,8 +65,7 @@
         .auth-card { width: min(440px, 100%); background: var(--panel); border-radius: 20px; padding: var(--space-6); box-shadow: 0 24px 60px rgba(15, 23, 42, .35); }
         .auth-card h1 { margin: 0 0 8px; font-size: 26px; letter-spacing: -.03em; }
         .auth-brand { font-size: 22px; font-weight: 800; letter-spacing: -.03em; color: #312e81; margin: 0 0 4px; }
-        .auth-form { margin-top: 22px; }
-        .shell { height: 100%; min-height: 100vh; display: grid; grid-template-columns: 248px 1fr; background: var(--bg); overflow: hidden; }
+        .shell { height: 100vh; overflow: hidden; display: grid; grid-template-columns: 248px 1fr; background: var(--bg); }
         .sidebar {
             background: linear-gradient(180deg, #0f172a 0%, #1e1b4b 55%, #312e81 100%);
             color: #e5e7eb; padding: 24px 16px 36px; height: 100%; max-height: 100%; overflow-y: auto;
@@ -81,9 +87,9 @@
         .nav-group a { display: flex; padding: 9px 12px; margin: 4px 0 0 12px; border-radius: 10px; font-weight: 500; }
         .nav-group[open] .nav-summary, .nav-summary.active,
         .nav a.active, .nav a:hover { background: var(--sidebar-soft); color: #fff; }
-        .main { min-width: 0; min-height: 0; height: 100%; overflow: hidden; display: flex; flex-direction: column; }
+        .main { min-width: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         .topbar {
-            position: sticky; top: 0; z-index: 20; flex-shrink: 0;
+            flex: none; position: sticky; top: 0; z-index: 20;
             background: rgba(255,255,255,.92); backdrop-filter: blur(10px);
             border-bottom: 1px solid var(--line); padding: 14px 28px;
             display: flex; justify-content: space-between; align-items: center; gap: var(--space-3);
@@ -96,31 +102,11 @@
             width: 36px; height: 36px; border-radius: 999px; display: grid; place-items: center;
             background: #e0e7ff; color: #3730a3; font-weight: 800; font-size: 13px;
         }
-        .userbox .btn { background: #fff; min-height: 36px; padding: 6px 12px; font-size: 13px; }
-        .content {
-            padding: 28px 32px 64px; min-height: 0; flex: 1 1 auto;
-            display: flex; flex-direction: column; overflow: auto; scrollbar-gutter: stable;
-        }
-        .content::-webkit-scrollbar, .sidebar::-webkit-scrollbar { width: 10px; height: 10px; }
-        .content::-webkit-scrollbar-thumb, .sidebar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
-        .content::-webkit-scrollbar-track, .sidebar::-webkit-scrollbar-track { background: transparent; }
-        .table-responsive { overflow-x: auto; margin: 4px 0; }
-        .content > * + * { margin-top: var(--space-5); }
-        section.content > .content {
-            padding: 0; margin: 0; overflow: visible; display: block; flex: none; min-height: 0;
-        }
-        section.content > .content > * + * { margin-top: var(--space-5); }
-        .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px 24px; margin-bottom: 0; }
-        .page-head h1 { font-size: 24px; letter-spacing: -.03em; line-height: 1.25; margin: 0 0 8px; }
-        .page-head .muted, .page-lead { max-width: 72ch; line-height: 1.6; font-size: 14px; }
-        .page-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-        .page-stack { display: grid; gap: var(--space-5); }
-        .eyebrow {
-            margin: 0 0 6px; font-size: 12px; font-weight: 750; letter-spacing: .06em;
-            text-transform: uppercase; color: var(--accent);
-        }
-        h1 { margin: 0 0 8px; font-size: 24px; letter-spacing: -.03em; }
-        h2 { margin: 0; font-size: 17px; letter-spacing: -.02em; line-height: 1.3; }
+        .userbox .btn { background: #fff; border: 1px solid #e2e8f0; }
+        .content { flex: 1 1 auto; min-height: 0; padding: 20px 28px 48px; display: flex; flex-direction: column; overflow-y: auto; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+        .page-head h1 { font-size: 26px; letter-spacing: -.03em; }
+        h1 { margin: 0 0 8px; font-size: 32px; }
         .muted { color: var(--muted); margin: 0; }
         .grid {
             display: grid; gap: var(--space-4);
@@ -409,6 +395,64 @@
         .text-bg-success { background: var(--ok-bg); color: var(--ok); }
         .text-wrap { white-space: normal; }
         button.w-full, .w-full.rounded-lg, .w-full.rounded-xl { cursor: pointer; }
+
+        /* ===== Bootstrap màu — tinh chỉnh cho đồng bộ & dễ nhìn ===== */
+        .btn-primary, .btn-primary:hover { background: var(--primary); border-color: var(--primary); }
+        .btn-success { background: #16a34a; }
+        .btn-success:hover { background: #15803d; }
+        .btn-danger, .btn-danger:hover { background: var(--danger); }
+        .btn-info { background: #e0f2fe; color: #075985; }
+        .btn-info:hover { background: #bae6fd; color: #0c4a6e; }
+        .btn-warning { background: #fef3c7; color: #78350f; }
+        .btn-warning:hover { background: #fde68a; color: #78350f; }
+        .btn-secondary { background: #e2e8f0; color: #334155; }
+        .btn-secondary:hover { background: #cbd5e1; color: #1e293b; }
+        .btn-light { background: #f8fafc; color: #334155; border: 1px solid #e2e8f0; }
+        .btn-light:hover { background: #f1f5f9; color: #0f172a; }
+        .btn-outline-primary:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .btn-outline-secondary:hover { background: #e2e8f0; }
+        .btn-outline-info { background: #f0f9ff; border: 1px solid #bae6fd; color: #0369a1; }
+        .btn-outline-info:hover { background: #e0f2fe; color: #0c4a6e; }
+        .btn-outline-warning { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+        .btn-outline-warning:hover { background: #fef3c7; color: #78350f; }
+        .btn-outline-success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+        .btn-outline-success:hover { background: #dcfce7; color: #14532d; }
+        .alert-success { background: #dcfce7; color: #14532d; border: 1px solid #bbf7d0; }
+        .alert-danger { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        .alert-warning { background: #fef3c7; color: #78350f; border: 1px solid #fde68a; }
+        .alert-info { background: #e0f2fe; color: #0c4a6e; border: 1px solid #bae6fd; }
+        .table-success, .table-success > td, .table-success > th { background: #f0fdf4 !important; }
+        .table-danger, .table-danger > td, .table-danger > th { background: #fef2f2 !important; }
+        .badge.bg-primary { background: #dbeafe !important; color: #1d4ed8 !important; }
+        .badge.bg-success { background: #dcfce7 !important; color: #166534 !important; }
+        .badge.bg-danger { background: #fee2e2 !important; color: #b91c1c !important; }
+        .badge.bg-warning { background: #fef3c7 !important; color: #92400e !important; }
+        .badge.bg-info { background: #e0f2fe !important; color: #0369a1 !important; }
+        .badge.bg-secondary { background: #e2e8f0 !important; color: #334155 !important; }
+        .badge.bg-light { background: #f8fafc !important; color: #334155 !important; border: 1px solid #e2e8f0; }
+        .text-primary { color: var(--primary) !important; }
+        .text-success { color: #16a34a !important; }
+        .text-danger { color: var(--danger) !important; }
+        .text-warning { color: #b45309 !important; }
+        .text-info { color: #0369a1 !important; }
+        .text-secondary { color: #475569 !important; }
+        .text-bg-primary { background: var(--primary) !important; color: #fff !important; }
+        .text-bg-light { background: #f8fafc !important; color: #334155 !important; border: 1px solid #e2e8f0; }
+        .bg-primary { background: var(--primary) !important; }
+        .bg-success { background: #16a34a !important; }
+        .bg-danger { background: var(--danger) !important; }
+        .bg-warning { background: #f59e0b !important; }
+        .bg-info { background: #0ea5e9 !important; }
+        .bg-secondary { background: #64748b !important; }
+        .pagination .page-link { color: var(--primary); border: 1px solid var(--line); border-radius: 8px; margin: 0 3px; }
+        .pagination .page-item.active .page-link { background: var(--primary); border-color: var(--primary); color: #fff; }
+        .pagination .page-item.disabled .page-link { color: #94a3b8; }
+        .pagination .page-link:hover { background: #eff6ff; }
+        .form-control:focus, .form-select:focus, .form-check-input:focus { border-color: var(--primary); box-shadow: 0 0 0 .2rem rgba(37, 99, 235, .15); }
+        .form-check-input:checked { background-color: var(--primary); border-color: var(--primary); }
+        .modal-content { border: 0; border-radius: 16px; box-shadow: 0 24px 60px rgba(15, 23, 42, .25); }
+        .btn-close:focus { box-shadow: none; }
+
         @media (min-width: 768px) {
             .md\:grid-cols-2 { grid-template-columns: 1fr 1fr; }
             .md\:grid-cols-3 { grid-template-columns: 1fr 1fr 1fr; }
@@ -419,8 +463,10 @@
             .lg\:grid-cols-2 { grid-template-columns: 1fr 1fr; }
         }
         @media (max-width: 900px) {
-            .shell { grid-template-columns: 1fr; height: auto; min-height: 100vh; overflow: visible; }
-            .stats, .two-cols, .split-2 { grid-template-columns: 1fr; }
+            .shell { height: auto; overflow: visible; grid-template-columns: 1fr; }
+            .main { height: auto; overflow: visible; }
+            .content { overflow: visible; flex: none; }
+            .stats, .two-cols { grid-template-columns: 1fr; }
             .topbar, .page-head { flex-direction: column; align-items: stretch; }
             html, body { height: auto; overflow: auto; }
             .sidebar { max-height: none; height: auto; }
@@ -747,6 +793,106 @@
             @yield('content')
         </main>
     @endauth
+
+    {{-- Modal xác nhận Bootstrap dùng chung: form có data-confirm hoặc nút/link data-confirm --}}
+    <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmModalTitle">Xác nhận</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="confirmModalMessage" style="margin:0;white-space:pre-wrap;"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="button" class="btn btn-danger" id="confirmModalOk">Đồng ý</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const modalEl = document.getElementById('confirmModal');
+            if (!modalEl) return;
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            const messageEl = document.getElementById('confirmModalMessage');
+            const okBtn = document.getElementById('confirmModalOk');
+            let pendingAction = null;
+            let pendingCancel = null;
+
+            function openConfirm(message, onConfirm, onCancel) {
+                messageEl.textContent = message || 'Bạn có chắc muốn thực hiện?';
+                pendingAction = onConfirm;
+                pendingCancel = onCancel || null;
+                modal.show();
+            }
+
+            // Hàm dùng chung cho các script trang muốn mở modal xác nhận.
+            window.SmartHrConfirm = openConfirm;
+
+            okBtn.addEventListener('click', function () {
+                const action = pendingAction;
+                pendingAction = null;
+                pendingCancel = null;
+                modal.hide();
+                if (action) action();
+            });
+
+            modalEl.addEventListener('hidden.bs.modal', function () {
+                const cancel = pendingCancel;
+                pendingAction = null;
+                pendingCancel = null;
+                if (cancel) cancel();
+            });
+
+            // Form: thuộc tính data-confirm trên thẻ <form>
+            document.addEventListener('submit', function (e) {
+                const form = e.target;
+                if (!form.matches || !form.matches('[data-confirm]')) return;
+                const message = form.getAttribute('data-confirm');
+                e.preventDefault();
+                openConfirm(message, function () {
+                    form.removeAttribute('data-confirm');
+                    form.requestSubmit ? form.requestSubmit() : form.submit();
+                });
+            });
+
+            // Nút / link: thuộc tính data-confirm
+            document.addEventListener('click', function (e) {
+                const el = e.target.closest
+                    ? e.target.closest('[data-confirm]:not(form)')
+                    : null;
+                if (!el) return;
+                const message = el.getAttribute('data-confirm');
+                const href = el.getAttribute('href');
+                const formEl = el.closest('form');
+                if (href) {
+                    e.preventDefault();
+                } else if (formEl) {
+                    e.preventDefault();
+                } else {
+                    return;
+                }
+
+                openConfirm(message, function () {
+                    if (href) {
+                        window.location.href = el.href;
+                        return;
+                    }
+                    const submit = function () {
+                        formEl.removeAttribute('data-confirm');
+                        if (formEl.requestSubmit) formEl.requestSubmit();
+                        else formEl.submit();
+                    };
+                    submit();
+                });
+            });
+        });
+    </script>
+
     @stack('scripts')
 </body>
 </html>

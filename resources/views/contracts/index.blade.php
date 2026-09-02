@@ -16,6 +16,25 @@
     <div class="alert alert-danger mb-3">{{ session('error') }}</div>
 @endif
 
+@if(auth()->user()?->canManageHr())
+<div class="mb-3 d-flex flex-wrap gap-2">
+    <form action="{{ route('contracts.sync_salary_from_contract') }}" method="POST" class="d-inline">
+        @csrf
+        <button type="submit" class="btn btn-sm btn-primary"
+            data-confirm="Đồng bộ toàn bộ mức lương từ hợp đồng đang hiệu lực vào các phiếu lương (chỉ áp dụng cho phiếu chưa vào quy trình duyệt)?">
+            🔄 Đồng bộ HĐ → Bảng lương (tất cả)
+        </button>
+    </form>
+    <form action="{{ route('contracts.sync_salary_from_payroll') }}" method="POST" class="d-inline">
+        @csrf
+        <button type="submit" class="btn btn-sm btn-outline-primary"
+            data-confirm="Đồng bộ toàn bộ lương từ bảng lương gần nhất vào các hợp đồng đang lệch?">
+            💰 Đồng bộ Bảng lương → HĐ (tất cả)
+        </button>
+    </form>
+</div>
+@endif
+
 <div class="card p-3">
     @if($contracts->count())
         <div style="overflow-x: auto;">
@@ -131,7 +150,7 @@
                                         <form action="{{ route('contracts.sync_salary', $contract) }}" method="POST" class="d-inline">
                                             @csrf
                                             <button type="submit" class="btn btn-sm btn-warning"
-                                                onclick="return confirm('Cập nhật lương hợp đồng [{{ $contract->contract_code }}] theo bảng lương T{{ $latestPayroll->month }}/{{ $latestPayroll->year }}?')"
+                                                data-confirm="Cập nhật lương hợp đồng [{{ $contract->contract_code }}] theo bảng lương T{{ $latestPayroll->month }}/{{ $latestPayroll->year }}?"
                                                 title="Đồng bộ lương từ bảng lương">
                                                 💰 Đồng bộ lương
                                             </button>

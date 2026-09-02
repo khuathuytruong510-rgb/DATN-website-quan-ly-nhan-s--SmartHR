@@ -26,6 +26,7 @@ class ContractService
     {
         return DB::transaction(function () use ($actor, $data): Contract {
             $employee = Employee::findOrFail($data['employee_id']);
+            $this->assertSalaryAboveFloor($employee, (float) ($data['base_salary'] ?? 0));
             $contract = Contract::create($this->buildPayload($actor, $employee, $data, null));
             $this->syncStatus($contract);
             $this->log($contract, $actor, 'created', 'Tạo hợp đồng', ['contract_code' => $contract->contract_code]);
@@ -39,12 +40,29 @@ class ContractService
         return DB::transaction(function () use ($actor, $contract, $data): Contract {
             $this->assertContentEditable($contract);
             $employee = $contract->employee ?? Employee::find($contract->employee_id);
+            $oldBase      = (float) $contract->base_salary;
+            $oldAllowance = (float) $contract->allowance;
+
             $payload = $this->buildPayload($actor, $employee, $data, $contract);
+            $this->assertSalaryAboveFloor($employee, (float) $payload['base_salary'], $contract);
 
             $contract->fill($payload);
             $contract->save();
             $this->syncStatus($contract);
             $this->log($contract, $actor, 'updated', 'Cập nhật hợp đồng', ['contract_code' => $contract->contract_code]);
+
+            $newBase      = (float) $contract->base_salary;
+            $newAllowance = (float) $contract->allowance;
+            if ($oldBase !== $newBase || $oldAllowance !== $newAllowance) {
+                $details = [
+                    'old_base_salary' => $oldBase,
+                    'new_base_salary' => $newBase,
+                    'old_allowance'   => $oldAllowance,
+                    'new_allowance'   => $newAllowance,
+                ];
+                $this->log($contract, $actor, 'salary_updated', 'Cập nhật mức lương trên hợp đồng', $details);
+                $this->notifyEmployeeSalaryChanged($actor, $contract, $details);
+            }
 
             return $contract->fresh();
         });
@@ -55,9 +73,14 @@ class ContractService
         return DB::transaction(function () use ($actor, $parentContract, $data): Contract {
             $parentContract = Contract::query()->whereKey($parentContract->id)->lockForUpdate()->firstOrFail();
 
-            $startDate = $data['start_date'] ?? null;
-            if (! $startDate) {
-                throw new \InvalidArgumentException('Ngày bắt đầu hợp đồng gia hạn là bắt buộc.');
+            $this->assertSalaryAboveFloor($employee, (float) ($data['base_salary'] ?? 0));
+
+            $contract = Contract::create($this->buildPayload($actor, $employee, $data, null));
+
+            // Đảm bảo parent_contract_id được lưu (buildPayload đã nhận, nhưng ghi lại cho chắc)
+            if ($contract->parent_contract_id !== $parentContract->id) {
+                $contract->parent_contract_id = $parentContract->id;
+                $contract->save();
             }
 
             $renewed = $parentContract->replicate([
@@ -647,6 +670,84 @@ class ContractService
         ]);
     }
 
+    /**
+     * Mức sàn = lương cơ bản của hợp đồng đang hiệu lực (active) của nhân viên.
+     * Nếu đang sửa đúng hợp đồng active thì sàn là lương CB hiện tại của chính nó.
+     */
+    protected function salaryFloorFor(Employee $employee, ?Contract $editing = null): float
+    {
+        $contract = ($editing && $editing->status === Contract::STATUS_ACTIVE)
+            ? $editing
+            : Contract::query()
+                ->where('employee_id', $employee->id)
+                ->where('status', Contract::STATUS_ACTIVE)
+                ->latest('id')
+                ->first();
+
+        return (float) ($contract?->base_salary ?: $contract?->salary ?: 0);
+    }
+
+    /**
+     * Lương cơ bản không được giảm xuống dưới mức sàn (lương CB hợp đồng đang hiệu lực).
+     */
+    protected function assertSalaryAboveFloor(Employee $employee, float $salary, ?Contract $editing = null): void
+    {
+        $floor = $this->salaryFloorFor($employee, $editing);
+
+        if ($floor > 0 && $salary + 0.0001 < $floor) {
+            throw new \RuntimeException(sprintf(
+                'Lương cơ bản (%s₫) không được thấp hơn mức lương cơ bản đang hiệu lực (%s₫) của nhân viên.',
+                number_format($salary, 0, ',', '.'),
+                number_format($floor, 0, ',', '.')
+            ));
+        }
+    }
+
+    /**
+     * Gửi thông báo cho nhân viên khi mức lương trên hợp đồng thay đổi.
+     * Không chặn tính lương — chỉ ghi log + thông báo, lương mới áp dụng ngay.
+     */
+    protected function notifyEmployeeSalaryChanged(User $actor, Contract $contract, array $details): void
+    {
+        if (! $contract->employee) {
+            return;
+        }
+
+        $userId = $contract->employee->user_id
+            ?? User::where('email', $contract->employee->email)->value('id');
+
+        if (! $userId) {
+            return;
+        }
+
+        $oldBase      = (float) ($details['old_base_salary'] ?? 0);
+        $newBase      = (float) ($details['new_base_salary'] ?? 0);
+        $oldAllowance = (float) ($details['old_allowance'] ?? 0);
+        $newAllowance = (float) ($details['new_allowance'] ?? 0);
+
+        Notification::create([
+            'sender_id' => $actor->id,
+            'target'    => 'employee',
+            'title'     => 'Mức lương trên hợp đồng thay đổi',
+            'message'   => sprintf(
+                'Hợp đồng %s của bạn vừa được cập nhật: lương cơ bản %sđ → %sđ, phụ cấp %sđ → %sđ. Bạn có thể xem chi tiết trong phần Hợp đồng.',
+                $contract->contract_code,
+                number_format($oldBase, 0, ',', '.'),
+                number_format($newBase, 0, ',', '.'),
+                number_format($oldAllowance, 0, ',', '.'),
+                number_format($newAllowance, 0, ',', '.')
+            ),
+            'data' => [
+                'type'          => 'contract_salary_updated',
+                'contract_id'   => $contract->id,
+                'employee_id'   => $contract->employee_id,
+                'old_base_salary' => $oldBase,
+                'new_base_salary' => $newBase,
+            ],
+            'is_read' => false,
+        ]);
+    }
+
     // =========================================================
     //  ĐỒNG BỘ LƯƠNG PAYROLL → HỢP ĐỒNG
     // =========================================================
@@ -666,6 +767,17 @@ class ContractService
         $oldAllowance = (float) $contract->allowance;
         $newAllowance = (float) ($payroll->allowance ?? $contract->allowance);
 
+        // Không được giảm lương hợp đồng xuống dưới mức lương cơ bản đang hiệu lực
+        if ($newBase < $oldBase) {
+            throw new \RuntimeException(sprintf(
+                'Không thể giảm lương hợp đồng %s từ %s₫ xuống %s₫. Lương không được thấp hơn mức lương cơ bản đang hiệu lực (%s₫).',
+                $contract->contract_code,
+                number_format($oldBase, 0, ',', '.'),
+                number_format($newBase, 0, ',', '.'),
+                number_format($oldBase, 0, ',', '.')
+            ));
+        }
+
         // Không có gì thay đổi → trả về luôn, không cần ghi log thừa
         if ($oldBase === $newBase && $oldAllowance === $newAllowance) {
             return $contract;
@@ -680,6 +792,12 @@ class ContractService
             $this->log($contract, $actor, 'salary_synced', 'Cập nhật lương từ bảng lương', [
                 'payroll_id'      => $payroll->id,
                 'payroll_period'  => $payroll->month . '/' . $payroll->year,
+                'old_base_salary' => $oldBase,
+                'new_base_salary' => $newBase,
+                'old_allowance'   => $oldAllowance,
+                'new_allowance'   => $newAllowance,
+            ]);
+            $this->notifyEmployeeSalaryChanged($actor, $contract, [
                 'old_base_salary' => $oldBase,
                 'new_base_salary' => $newBase,
                 'old_allowance'   => $oldAllowance,

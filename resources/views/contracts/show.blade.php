@@ -141,8 +141,10 @@
                     </form>
                     <form action="{{ route('contracts.reject_signature', $contract) }}" method="POST" class="mb-2">
                         @csrf
-                        <input class="form-control mb-2" name="reason" required minlength="8" placeholder="Lý do từ chối">
-                        <button class="btn btn-outline-danger w-100" type="submit">Từ chối</button>
+                        <button type="submit" class="btn btn-warning w-100"
+                            data-confirm="Cập nhật lương hợp đồng theo bảng lương tháng {{ $payroll->month }}/{{ $payroll->year }}?">
+                            🔄 Đồng bộ lương hợp đồng
+                        </button>
                     </form>
                     @endif
 

@@ -26,20 +26,8 @@ class Department extends Model
         return $this->hasMany(Employee::class);
     }
 
-    public function isBoard(): bool
+    public function positions(): HasMany
     {
-        return strtoupper((string) $this->code) === self::BOARD_CODE
-            || $this->name === self::BOARD_NAME;
-    }
-
-    public function scopeNotBoard($query)
-    {
-        return $query
-            ->where(function ($q) {
-                $q->whereNull('code')->orWhere('code', '!=', self::BOARD_CODE);
-            })
-            ->where(function ($q) {
-                $q->whereNull('name')->orWhere('name', '!=', self::BOARD_NAME);
-            });
+        return $this->hasMany(Position::class);
     }
 }

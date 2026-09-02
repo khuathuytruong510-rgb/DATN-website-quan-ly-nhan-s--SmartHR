@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ContractFormRequest;
-use App\Http\Requests\StoreContractRenewalRequest;
+use App\Models\ActivityLog;
 use App\Models\Attendance;
 use App\Models\Contract;
 use App\Models\ContractExpiryAction;
@@ -391,34 +391,29 @@ class SmartHrController extends Controller
 
     public function positions(): View
     {
-        $positions = [
-            [
-                'name' => 'HR Manager',
-                'department' => 'Nhân sự',
-                'description' => 'Quản lý phòng nhân sự',
-                'status' => 'Hoạt động',
-            ],
-            [
-                'name' => 'HR Executive',
-                'department' => 'Nhân sự',
-                'description' => 'Phụ trách tuyển dụng, hồ sơ',
-                'status' => 'Hoạt động',
-            ],
-            [
-                'name' => 'Finance Officer',
-                'department' => 'Kế toán',
-                'description' => 'Quản lý tài chính',
-                'status' => 'Hoạt động',
-            ],
-            [
-                'name' => 'Senior Developer',
-                'department' => 'IT',
-                'description' => 'Phát triển hệ thống',
-                'status' => 'Hoạt động',
-            ],
-        ];
+        $order = ['BGD', 'HR', 'TD', 'CB', 'DTPT', 'KTTC', 'KD', 'MKT', 'IT', 'VH', 'PC', 'HC'];
 
-        return view('positions.index', compact('positions'));
+        $departments = Department::withCount('positions')
+            ->get()
+            ->map(function (Department $dept) use ($order) {
+                $dept->sort = array_search($dept->code, $order, true);
+
+                return $dept;
+            })
+            ->sortBy('sort')
+            ->values();
+
+        $selected = null;
+        if ($code = request('department')) {
+            $selected = Department::where('code', $code)->first();
+        }
+
+        $positions = Position::with(['department', 'employees'])
+            ->when($selected, fn ($q) => $q->where('department_id', $selected->id))
+            ->orderBy('name')
+            ->get();
+
+        return view('positions.index', compact('departments', 'positions', 'selected'));
     }
 
     public function notifications(): View
@@ -541,6 +536,10 @@ class SmartHrController extends Controller
 
     public function updateAccount(Request $request, User $user): RedirectResponse
     {
+        if (! Auth::user()->is_admin && $user->is_admin) {
+            abort(403, 'Chỉ Admin quản trị mới được chỉnh sửa tài khoản Admin.');
+        }
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
@@ -704,8 +703,7 @@ class SmartHrController extends Controller
             ->pluck('id', 'subject_id');
 
         return view('departments.index', [
-            'departments' => Department::withCount('employees')->latest()->paginate(10),
-            'pendingDepartmentDeletions' => $pendingDepartmentDeletions,
+            'departments' => Department::withCount(['employees', 'positions'])->latest()->paginate(10),
         ]);
     }
 
@@ -728,6 +726,8 @@ class SmartHrController extends Controller
 
     public function showDepartment(Department $department): View
     {
+        $department->load(['positions' => fn ($q) => $q->withCount('employees')->orderBy('name')]);
+
         return view('departments.show', compact('department'));
     }
 
@@ -741,9 +741,10 @@ class SmartHrController extends Controller
 
     public function destroyDepartment(Department $department): RedirectResponse
     {
-        abort_if(auth()->user()?->is_director && ! auth()->user()?->canManageHr(), 403, 'Giám đốc duyệt xóa trên hàng đợi, không xóa trực tiếp.');
-
-        return redirect()->route('deletion_requests.create_department', $department);
+        return redirect()->route('deletion_requests.create', [
+            'kind' => 'department',
+            'target' => $department->id,
+        ])->with('info', 'Xóa phòng ban phải qua Giám đốc duyệt. Vui lòng nhập lý do và gửi yêu cầu.');
     }
 
     public function employees(Request $request)
@@ -864,19 +865,16 @@ class SmartHrController extends Controller
         return redirect()->route('employees.index')->with('success', 'Cập nhật nhân viên thành công.');
     }
 
-    public function destroyEmployee(Employee $employee)
+    public function destroyEmployee(Employee $employee): RedirectResponse
     {
-        abort_if(auth()->user()?->is_director && ! auth()->user()?->canManageHr(), 403, 'Giám đốc duyệt xóa trên hàng đợi, không xóa trực tiếp.');
-        abort_unless(RequestApprover::hrMayManage(auth()->user(), $employee), 403, 'HR không quản lý hồ sơ Giám đốc.');
-
         if (request()->expectsJson()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cần gửi đề nghị xóa cho Giám đốc duyệt.',
-            ], 403);
+            abort(403, 'Xóa nhân viên phải qua Giám đốc duyệt.');
         }
 
-        return redirect()->route('deletion_requests.create_employee', $employee);
+        return redirect()->route('deletion_requests.create', [
+            'kind' => 'employee',
+            'target' => $employee->id,
+        ])->with('info', 'Xóa nhân viên phải qua Giám đốc duyệt. Vui lòng nhập lý do và gửi yêu cầu.');
     }
 
     public function contracts(): View
@@ -2302,11 +2300,11 @@ class SmartHrController extends Controller
             return back()->with('error', 'Nhân viên chưa có bảng lương nào để đồng bộ.');
         }
 
-        // Đồng bộ trực tiếp vào hợp đồng hiện tại (bất kể trạng thái),
-        // không chỉ active/expiring — vì user đang ở trang show của đúng hợp đồng đó
         try {
+            // Đồng bộ trực tiếp vào hợp đồng hiện tại (bất kể trạng thái),
+            // không chỉ active/expiring — vì user đang ở trang show của đúng hợp đồng đó
             $updated = $contractService->syncSalaryToContract(Auth::user(), $contract, $payroll);
-        } catch (\Throwable $e) {
+        } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }
 
@@ -2317,6 +2315,122 @@ class SmartHrController extends Controller
             $payroll->year,
             number_format($updated->base_salary, 0, ',', '.'),
             number_format($updated->allowance,   0, ',', '.')
+        ));
+    }
+
+    /** Đồng bộ lương toàn bộ hợp đồng theo bảng lương gần nhất của từng nhân viên (BL → HĐ) */
+    public function syncAllContractSalariesFromPayroll(ContractService $contractService): RedirectResponse
+    {
+        if (! $this->canManageContracts()) {
+            abort(403);
+        }
+
+        $updated = 0;
+        $skipped = 0;
+        $blocked = 0;
+
+        Contract::with('employee')->each(function (Contract $contract) use (&$updated, &$skipped, &$blocked, $contractService) {
+            $employee = $contract->employee;
+            if (! $employee) {
+                $skipped++;
+                return;
+            }
+
+            $payroll = $employee->payrolls()
+                ->orderByDesc('year')
+                ->orderByDesc('month')
+                ->first();
+
+            if (! $payroll) {
+                $skipped++;
+                return;
+            }
+
+            $newBase      = (float) $payroll->base_salary;
+            $newAllowance = (float) ($payroll->allowance ?? $contract->allowance ?? 0);
+            if ((float) $contract->base_salary === $newBase && (float) $contract->allowance === $newAllowance) {
+                $skipped++;
+                return;
+            }
+
+            try {
+                $contractService->syncSalaryToContract(Auth::user(), $contract, $payroll);
+                $updated++;
+            } catch (\RuntimeException $e) {
+                // Không được giảm xuống dưới mức lương cơ bản đang hiệu lực
+                $blocked++;
+            }
+        });
+
+        ActivityLog::create([
+            'user_id' => Auth::id(),
+            'action'  => 'contract_salary_synced_from_payroll_all',
+            'meta'    => sprintf('updated:%d;skipped:%d;blocked:%d', $updated, $skipped, $blocked),
+        ]);
+
+        return back()->with('success', sprintf(
+            'Đã đồng bộ %d hợp đồng theo bảng lương mới nhất. Bỏ qua %d không cần thay đổi, chặn %d hợp đồng có lương thấp hơn mức lương cơ bản hiện tại.',
+            $updated, $skipped, $blocked
+        ));
+    }
+
+    /** Đồng bộ lương từ hợp đồng đang hiệu lực vào phiếu lương chưa vào quy trình duyệt (HĐ → BL) */
+    public function syncAllPayrollSalariesFromContracts(): RedirectResponse
+    {
+        if (! $this->canManageContracts()) {
+            abort(403);
+        }
+
+        $recalculable = PayrollPaymentWorkflowService::recalculableStatuses();
+        $updated      = 0;
+        $skipped      = 0;
+
+        Contract::where('status', Contract::STATUS_ACTIVE)
+            ->with('employee')
+            ->latest('id')
+            ->get()
+            ->unique('employee_id')
+            ->each(function (Contract $contract) use (&$updated, &$skipped, $recalculable) {
+                $base      = (float) ($contract->base_salary ?: $contract->salary ?: 0);
+                $allowance = (float) ($contract->allowance ?? 0);
+
+                if ($base <= 0) {
+                    $skipped++;
+                    return;
+                }
+
+                $payrolls = Payroll::where('employee_id', $contract->employee_id)
+                    ->whereIn('status', $recalculable)
+                    ->get();
+
+                $changed = false;
+                foreach ($payrolls as $payroll) {
+                    if ((float) $payroll->base_salary === $base && (float) ($payroll->allowance ?? 0) === $allowance) {
+                        continue;
+                    }
+
+                    $payroll->base_salary = $base;
+                    $payroll->allowance   = $allowance;
+                    $payroll->save();
+
+                    $changed = true;
+                    $updated++;
+                }
+
+                if (! $changed) {
+                    $skipped++;
+                }
+            });
+
+        ActivityLog::create([
+            'user_id' => Auth::id(),
+            'action'  => 'payroll_salary_synced_from_contracts_all',
+            'meta'    => sprintf('updated:%d;skipped:%d', $updated, $skipped),
+        ]);
+
+        return back()->with('success', sprintf(
+            'Đã đồng bộ %d phiếu lương theo lương hợp đồng đang hiệu lực (bỏ qua %d không có thay đổi).',
+            $updated, $skipped
         ));
     }
 

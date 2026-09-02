@@ -523,21 +523,38 @@
 
     // Contract type → title + template content
     const populateTemplateContent = (ct) => {
-        if (!ct) return;
-        previousContractType = ct;
-        if (templateLoader) templateLoader.style.display = 'block';
-        showAlert(templateAlert, templateAlertText, '');
-        fetch(`/contract-templates/content?contract_type=${encodeURIComponent(ct)}`, { headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'} })
-            .then(r => r.json())
-            .then(data => {
-                const content = (data.content || '').trim();
-                setOfficialTerms(content);
-                if (!content) {
-                    showAlert(templateAlert, templateAlertText, `Chưa cấu hình mẫu hợp đồng cho loại "${typeLabels[ct]||ct}".`);
-                }
-            })
-            .catch(() => showAlert(templateAlert, templateAlertText, 'Không thể tải mẫu hợp đồng.'))
-            .finally(() => { if (templateLoader) templateLoader.style.display = 'none'; });
+        if (!ct || !contractContentField) return;
+
+        const applyTemplate = () => {
+            previousContractType = ct;
+            if (templateLoader) templateLoader.style.display = 'block';
+            showAlert(templateAlert, templateAlertText, '');
+            fetch(`/contract-templates/content?contract_type=${encodeURIComponent(ct)}`, { headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'} })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.content?.trim()) {
+                        contractContentField.value = data.content;
+                        autoFilledContent = data.content;
+                        userModified = false;
+                        if (contentModifiedHint) contentModifiedHint.style.display = 'none';
+                    } else {
+                        showAlert(templateAlert, templateAlertText, `Chưa cấu hình mẫu hợp đồng cho loại "${typeLabels[ct]||ct}".`);
+                    }
+                })
+                .catch(() => showAlert(templateAlert, templateAlertText, 'Không thể tải mẫu hợp đồng.'))
+                .finally(() => { if (templateLoader) templateLoader.style.display = 'none'; });
+        };
+
+        if (userModified && contractContentField.value.trim() !== (autoFilledContent || '').trim()) {
+            if (typeof window.SmartHrConfirm === 'function') {
+                SmartHrConfirm('Bạn đã chỉnh sửa điều khoản. Đổi loại hợp đồng sẽ ghi đè. Tiếp tục?', applyTemplate);
+            } else {
+                applyTemplate();
+            }
+            if (contractTypeSelect) contractTypeSelect.value = previousContractType;
+            return;
+        }
+        applyTemplate();
     };
 
     contractTypeSelect?.addEventListener('change', function () {

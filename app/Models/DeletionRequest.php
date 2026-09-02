@@ -4,137 +4,103 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class DeletionRequest extends Model
 {
-    public const EMPLOYEE = 'employee';
-    public const DEPARTMENT = 'department';
-    public const TRANSFER = 'transfer';
+    public const KIND_EMPLOYEE = 'employee';
+    public const KIND_DEPARTMENT = 'department';
 
-    public const PENDING = 'pending';
-    public const APPROVED = 'approved';
-    public const REJECTED = 'rejected';
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_APPROVED = 'approved';
+    public const STATUS_APPLIED = 'applied';
+    public const STATUS_REJECTED = 'rejected';
+    public const STATUS_CANCELLED = 'cancelled';
 
     protected $fillable = [
-        'subject_type',
-        'subject_id',
-        'subject_label',
-        'snapshot',
+        'code',
+        'kind',
+        'requestable_id',
+        'requestable_type',
+        'name',
+        'payload',
         'reason',
-        'document_path',
-        'document_name',
         'status',
-        'requested_by',
+        'submitted_by',
         'reviewed_by',
         'reviewed_at',
-        'rejection_reason',
-        'executed_at',
-        'account_user_id',
-        'account_email',
-        'account_cleared_at',
+        'review_note',
+        'applied_by',
+        'applied_at',
+        'cancellation_note',
     ];
 
     protected $casts = [
-        'snapshot' => 'array',
+        'payload' => 'array',
+        'requestable_id' => 'integer',
         'reviewed_at' => 'datetime',
-        'executed_at' => 'datetime',
-        'account_cleared_at' => 'datetime',
+        'applied_at' => 'datetime',
     ];
 
-    public function requester(): BelongsTo
+    public function requestable(): MorphTo
     {
-        return $this->belongsTo(User::class, 'requested_by');
+        return $this->morphTo();
     }
 
-    public function reviewer(): BelongsTo
+    public function submittedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'submitted_by');
+    }
+
+    public function reviewedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
     }
 
-    public function accountUser(): BelongsTo
+    public function appliedBy(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'account_user_id');
+        return $this->belongsTo(User::class, 'applied_by');
     }
 
     public function isPending(): bool
     {
-        return $this->status === self::PENDING;
+        return $this->status === self::STATUS_PENDING;
     }
 
-    public function isEmployee(): bool
+    public function isApproved(): bool
     {
-        return $this->subject_type === self::EMPLOYEE;
+        return $this->status === self::STATUS_APPROVED;
     }
 
-    public function isTransfer(): bool
+    public function isApplied(): bool
     {
-        return $this->subject_type === self::TRANSFER;
+        return $this->status === self::STATUS_APPLIED;
     }
 
-    public function documentUrl(): ?string
+    public function isRejected(): bool
     {
-        return $this->document_path ? Storage::url($this->document_path) : null;
+        return $this->status === self::STATUS_REJECTED;
     }
 
-    public function typeLabel(): string
+    public function isCancelled(): bool
     {
-        return match ($this->subject_type) {
-            self::EMPLOYEE => 'Nhân viên',
-            self::DEPARTMENT => 'Phòng ban',
-            self::TRANSFER => 'Chuyển phòng ban',
-            default => $this->subject_type,
-        };
+        return $this->status === self::STATUS_CANCELLED;
+    }
+
+    public function kindLabel(): string
+    {
+        return $this->kind === self::KIND_EMPLOYEE ? 'Nhân viên' : 'Phòng ban';
     }
 
     public function statusLabel(): string
     {
         return match ($this->status) {
-            self::PENDING => 'Chờ Giám đốc duyệt',
-            self::APPROVED => $this->isTransfer() ? 'Đã duyệt' : 'Đã xóa',
-            self::REJECTED => 'Từ chối',
-            default => $this->status,
+            self::STATUS_PENDING => 'Chờ Giám đốc duyệt',
+            self::STATUS_APPROVED => 'Đã duyệt — chờ HR thực hiện xóa',
+            self::STATUS_APPLIED => 'Đã xóa',
+            self::STATUS_REJECTED => 'Bị từ chối',
+            self::STATUS_CANCELLED => 'Đã hủy',
+            default => $this->status ? ucfirst($this->status) : '—',
         };
-    }
-
-    public function approveActionLabel(): string
-    {
-        return $this->isTransfer() ? 'Duyệt chuyển' : 'Duyệt xóa';
-    }
-
-    public function transferHistory(): ?array
-    {
-        $history = data_get($this->snapshot, 'history');
-
-        return is_array($history) ? $history : null;
-    }
-
-    public function feedbackEntries(): array
-    {
-        $raw = data_get($this->snapshot, 'feedback', []);
-        if (! is_array($raw)) {
-            return [];
-        }
-
-        $entries = [];
-        foreach ($raw as $entry) {
-            if (is_array($entry) && isset($entry['employee_id'])) {
-                $entries[(int) $entry['employee_id']] = $entry;
-            }
-        }
-
-        return $entries;
-    }
-
-    public function feedbackFor(int $employeeId): ?array
-    {
-        return $this->feedbackEntries()[$employeeId] ?? null;
-    }
-
-    public function pendingFeedbackCount(): int
-    {
-        return collect($this->feedbackEntries())
-            ->filter(fn (array $row) => ($row['status'] ?? 'pending') === 'pending')
-            ->count();
     }
 }

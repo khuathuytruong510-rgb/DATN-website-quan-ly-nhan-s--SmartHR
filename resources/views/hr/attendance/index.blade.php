@@ -149,7 +149,7 @@
                                     <form action="{{ route('attendance.destroy', $attendance) }}" method="POST" style="display:inline">
                                         @csrf
                                         @method('DELETE')
-                                        <button class="btn btn-sm btn-danger" type="submit" onclick="return confirm('Xóa bản ghi chấm công?')">Xóa</button>
+                                        <button class="btn btn-sm btn-danger" type="submit" data-confirm="Xóa bản ghi chấm công?">Xóa</button>
                                     </form>
                                     @endif
                                 </div>

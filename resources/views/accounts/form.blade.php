@@ -6,10 +6,7 @@
     <div class="page-head">
         <div>
             <h1>Tạo tài khoản</h1>
-            <p class="muted">{{ !empty($linkEmployee) ? 'Kết nối tài khoản với hồ sơ nhân sự đã có. Role Director cấp ở trang Người giữ chức nếu đã có Giám đốc.' : 'Chỉ admin được tạo tài khoản đăng nhập cho hệ thống.' }}</p>
-        </div>
-        <div class="page-actions">
-            <a class="btn" href="{{ !empty($linkEmployee) ? route('director_succession.index') : route('accounts.index') }}">Quay lại</a>
+            <p class="muted">Tạo tài khoản đăng nhập cho hệ thống.</p>
         </div>
     </div>
 
