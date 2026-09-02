@@ -10,7 +10,9 @@
         </div>
         <div>
             <a class="btn primary" href="{{ route('accounts.create') }}">Tạo tài khoản</a>
-            <a class="btn" href="{{ route('permissions.index') }}">Quản lý phân quyền</a>
+            @if (auth()->user()->is_admin)
+                <a class="btn" href="{{ route('permissions.index') }}">Quản lý phân quyền</a>
+            @endif
         </div>
     </div>
 

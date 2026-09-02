@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\HR\PayrollController;
+use App\Http\Controllers\HR\PromotionRequestController;
 use App\Http\Controllers\Web\EmployeeAttendanceController;
 use App\Http\Controllers\Web\EmployeeController;
 use App\Http\Controllers\Web\NotificationController;
@@ -42,7 +43,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/admin', [SmartHrController::class, 'dashboard'])
         ->name('admin.dashboard');
 
-    Route::middleware(\App\Http\Middleware\EnsureAdmin::class)->group(function () {
+    Route::middleware(\App\Http\Middleware\EnsureHrOrAdmin::class)->group(function () {
         Route::get('/accounts', [SmartHrController::class, 'accounts'])->name('accounts.index');
         Route::get('/accounts/create', [SmartHrController::class, 'createAccount'])->name('accounts.create');
         Route::post('/accounts', [SmartHrController::class, 'storeAccount'])->name('accounts.store');
@@ -51,6 +52,9 @@ Route::middleware('auth')->group(function () {
         Route::delete('/accounts/{user}', [SmartHrController::class, 'destroyAccount'])->name('accounts.destroy');
         Route::post('/accounts/{user}/toggle-lock', [SmartHrController::class, 'toggleLockAccount'])->name('accounts.toggle_lock');
         Route::post('/accounts/{user}/impersonate', [SmartHrController::class, 'impersonate'])->name('accounts.impersonate');
+    });
+
+    Route::middleware(\App\Http\Middleware\EnsureAdmin::class)->group(function () {
         Route::get('/permissions', [SmartHrController::class, 'permissions'])->name('permissions.index');
         Route::put('/permissions/{user}', [SmartHrController::class, 'updatePermissions'])->name('permissions.update');
         Route::get('/system-logs', [SmartHrController::class, 'systemLogs'])->name('system_logs.index');
@@ -147,6 +151,16 @@ Route::middleware('auth')->group(function () {
         Route::get('/departments/{department}', [SmartHrController::class, 'showDepartment'])->name('departments.show');
         Route::put('/departments/{department}', [SmartHrController::class, 'updateDepartment'])->name('departments.update');
         Route::delete('/departments/{department}', [SmartHrController::class, 'destroyDepartment'])->name('departments.destroy');
+
+        // Yêu cầu xóa nhân viên / phòng ban — HR tạo, Giám đốc duyệt, HR thực hiện
+        Route::get('/deletion-requests', [\App\Http\Controllers\HR\DeletionRequestController::class, 'index'])->name('deletion_requests.index');
+        Route::get('/deletion-requests/create', [\App\Http\Controllers\HR\DeletionRequestController::class, 'create'])->name('deletion_requests.create');
+        Route::post('/deletion-requests', [\App\Http\Controllers\HR\DeletionRequestController::class, 'store'])->name('deletion_requests.store');
+        Route::get('/deletion-requests/{deletionRequest}', [\App\Http\Controllers\HR\DeletionRequestController::class, 'show'])->name('deletion_requests.show');
+        Route::post('/deletion-requests/{deletionRequest}/approve', [\App\Http\Controllers\HR\DeletionRequestController::class, 'approve'])->name('deletion_requests.approve');
+        Route::post('/deletion-requests/{deletionRequest}/reject', [\App\Http\Controllers\HR\DeletionRequestController::class, 'reject'])->name('deletion_requests.reject');
+        Route::post('/deletion-requests/{deletionRequest}/execute', [\App\Http\Controllers\HR\DeletionRequestController::class, 'execute'])->name('deletion_requests.execute');
+        Route::post('/deletion-requests/{deletionRequest}/cancel', [\App\Http\Controllers\HR\DeletionRequestController::class, 'cancel'])->name('deletion_requests.cancel');
 
         Route::get('/employees', [SmartHrController::class, 'employees'])->name('employees.index');
         Route::get('/employees/create', [SmartHrController::class, 'createEmployee'])->name('employees.create');
@@ -285,6 +299,16 @@ Route::middleware('auth')->group(function () {
         Route::post('/leave-requests/{leaveRequest}/reject', [SmartHrController::class, 'rejectLeaveRequest'])->name('leave_requests.reject');
         Route::delete('/leave-requests/{leaveRequest}', [SmartHrController::class, 'destroyLeaveRequest'])->name('leave_requests.destroy');
         
+        // Đề xuất thăng chức / tăng lương
+        Route::get('/promotion-requests', [PromotionRequestController::class, 'index'])->name('promotion_requests.index');
+        Route::get('/promotion-requests/create', [PromotionRequestController::class, 'create'])->name('promotion_requests.create');
+        Route::post('/promotion-requests', [PromotionRequestController::class, 'store'])->name('promotion_requests.store');
+        Route::get('/promotion-requests/{promotionRequest}', [PromotionRequestController::class, 'show'])->name('promotion_requests.show');
+        Route::post('/promotion-requests/{promotionRequest}/approve', [PromotionRequestController::class, 'approve'])->name('promotion_requests.approve');
+        Route::post('/promotion-requests/{promotionRequest}/reject', [PromotionRequestController::class, 'reject'])->name('promotion_requests.reject');
+        Route::post('/promotion-requests/{promotionRequest}/apply', [PromotionRequestController::class, 'apply'])->name('promotion_requests.apply');
+        Route::post('/promotion-requests/{promotionRequest}/cancel', [PromotionRequestController::class, 'cancel'])->name('promotion_requests.cancel');
+
         // Salary history detail
         Route::get('/salary-histories/{salaryHistory}', [\App\Http\Controllers\Web\SalaryHistoryController::class, 'show'])->name('salary_histories.show');
         // Route to view salary history by payroll

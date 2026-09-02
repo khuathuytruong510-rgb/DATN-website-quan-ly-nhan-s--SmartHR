@@ -470,6 +470,97 @@
             @yield('content')
         </main>
     @endauth
+
+    {{-- Modal xác nhận Bootstrap dùng chung: form có data-confirm hoặc nút/link data-confirm --}}
+    <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmModalTitle">Xác nhận</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="confirmModalMessage" style="margin:0;white-space:pre-wrap;"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="button" class="btn btn-danger" id="confirmModalOk">Đồng ý</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const modalEl = document.getElementById('confirmModal');
+            if (!modalEl) return;
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            const messageEl = document.getElementById('confirmModalMessage');
+            const okBtn = document.getElementById('confirmModalOk');
+            let pendingAction = null;
+
+            function openConfirm(message, onConfirm) {
+                messageEl.textContent = message || 'Bạn có chắc muốn thực hiện?';
+                pendingAction = onConfirm;
+                modal.show();
+            }
+
+            okBtn.addEventListener('click', function () {
+                const action = pendingAction;
+                pendingAction = null;
+                modal.hide();
+                if (action) action();
+            });
+
+            modalEl.addEventListener('hidden.bs.modal', function () {
+                pendingAction = null;
+            });
+
+            // Form: thuộc tính data-confirm trên thẻ <form>
+            document.addEventListener('submit', function (e) {
+                const form = e.target;
+                if (!form.matches || !form.matches('[data-confirm]')) return;
+                const message = form.getAttribute('data-confirm');
+                e.preventDefault();
+                openConfirm(message, function () {
+                    form.removeAttribute('data-confirm');
+                    form.requestSubmit ? form.requestSubmit() : form.submit();
+                });
+            });
+
+            // Nút / link: thuộc tính data-confirm
+            document.addEventListener('click', function (e) {
+                const el = e.target.closest
+                    ? e.target.closest('[data-confirm]:not(form)')
+                    : null;
+                if (!el) return;
+                const message = el.getAttribute('data-confirm');
+                const href = el.getAttribute('href');
+                const formEl = el.closest('form');
+                if (href) {
+                    e.preventDefault();
+                } else if (formEl) {
+                    e.preventDefault();
+                } else {
+                    return;
+                }
+
+                openConfirm(message, function () {
+                    if (href) {
+                        window.location.href = el.href;
+                        return;
+                    }
+                    const submit = function () {
+                        formEl.removeAttribute('data-confirm');
+                        if (formEl.requestSubmit) formEl.requestSubmit();
+                        else formEl.submit();
+                    };
+                    submit();
+                });
+            });
+        });
+    </script>
+
     @stack('scripts')
 </body>
 </html>

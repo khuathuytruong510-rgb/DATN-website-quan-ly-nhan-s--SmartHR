@@ -378,36 +378,117 @@ class SmartHrController extends Controller
         ));
     }
 
-    public function positions(): View
+    protected function directorDashboard(): View
     {
-        $positions = [
-            [
-                'name' => 'HR Manager',
-                'department' => 'Nhân sự',
-                'description' => 'Quản lý phòng nhân sự',
-                'status' => 'Hoạt động',
-            ],
-            [
-                'name' => 'HR Executive',
-                'department' => 'Nhân sự',
-                'description' => 'Phụ trách tuyển dụng, hồ sơ',
-                'status' => 'Hoạt động',
-            ],
-            [
-                'name' => 'Finance Officer',
-                'department' => 'Kế toán',
-                'description' => 'Quản lý tài chính',
-                'status' => 'Hoạt động',
-            ],
-            [
-                'name' => 'Senior Developer',
-                'department' => 'IT',
-                'description' => 'Phát triển hệ thống',
-                'status' => 'Hoạt động',
-            ],
+        $now = now();
+        $month = $now->month;
+        $year = $now->year;
+        $monthStart = $now->copy()->startOfMonth()->toDateString();
+        $monthEnd = $now->copy()->endOfMonth()->toDateString();
+
+        $people = [
+            'total' => Employee::count(),
+            'active' => Employee::where('status', 'active')->count(),
+            'probation' => Employee::whereHas('contracts', fn ($q) => $q->where('contract_type', 'probation')->where('status', 'active'))->count(),
+            'inactive' => Employee::where('status', 'inactive')->count(),
+            'joinedThisMonth' => Employee::whereBetween('start_date', [$monthStart, $monthEnd])->count(),
         ];
 
-        return view('positions.index', compact('positions'));
+        $waitingContractStatuses = [
+            Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE,
+            Contract::STATUS_WAITING_DIRECTOR_SIGNATURE,
+            'waiting_employee',
+            'waiting_director',
+        ];
+
+        $contracts = [
+            'active' => Contract::where('status', 'active')->count(),
+            'waitingSign' => Contract::whereIn('status', $waitingContractStatuses)->count(),
+            'expiringSoon' => Contract::where('status', 'active')
+                ->whereNotNull('end_date')
+                ->whereBetween('end_date', [$now->toDateString(), $now->copy()->addDays(30)->toDateString()])
+                ->count(),
+        ];
+
+        $payrollQuery = Payroll::where('month', $month)->where('year', $year);
+        $approvedByDirector = array_values(array_unique(array_merge(
+            PayrollPaymentWorkflowService::directorApprovedStatuses(),
+            PayrollPaymentWorkflowService::payableStatuses(),
+            [PayrollPaymentWorkflowService::PAID]
+        )));
+        $payroll = [
+            'month' => $month,
+            'year' => $year,
+            'totalFund' => (clone $payrollQuery)->sum('total_salary'),
+            'awaitingDirector' => (clone $payrollQuery)->whereIn('status', PayrollPaymentWorkflowService::hrCheckedStatuses())->count(),
+            'approved' => (clone $payrollQuery)->whereIn('status', $approvedByDirector)->count(),
+            'awaitingEmployee' => (clone $payrollQuery)->whereIn('status', PayrollPaymentWorkflowService::directorApprovedStatuses())->count(),
+            'awaitingPayment' => (clone $payrollQuery)->whereIn('status', PayrollPaymentWorkflowService::payableStatuses())->count(),
+            'paid' => (clone $payrollQuery)->where('status', PayrollPaymentWorkflowService::PAID)->count(),
+            'issues' => (clone $payrollQuery)->where('status', PayrollPaymentWorkflowService::PAYROLL_ISSUE)->count(),
+        ];
+
+        $approvedLeaves = LeaveRequest::where('status', 'approved')
+            ->where(function ($q) use ($monthStart, $monthEnd) {
+                $q->whereBetween('start_date', [$monthStart, $monthEnd])
+                    ->orWhereBetween('end_date', [$monthStart, $monthEnd]);
+            });
+
+        $leave = [
+            'pending' => LeaveRequest::where('status', 'pending')->count(),
+            'days' => (clone $approvedLeaves)->sum('days'),
+            'paidDays' => (clone $approvedLeaves)->whereIn('type', ['annual', 'sick'])->sum('days'),
+            'unpaidDays' => (clone $approvedLeaves)->whereIn('type', ['unpaid', 'personal'])->sum('days'),
+        ];
+
+        $attendanceQuery = Attendance::whereBetween('date', [$monthStart, $monthEnd]);
+        $attendance = [
+            'full' => (clone $payrollQuery)->whereRaw('(COALESCE(working_days, 0) + COALESCE(paid_leave_days, 0)) >= COALESCE(required_working_days, 26)')->count(),
+            'short' => (clone $payrollQuery)->whereRaw('(COALESCE(working_days, 0) + COALESCE(paid_leave_days, 0)) < COALESCE(required_working_days, 26)')->count(),
+            'late' => (clone $attendanceQuery)->where(function ($q) {
+                $q->where('status', 'late')->orWhere('late_minutes', '>', 0);
+            })->count(),
+            'absent' => (clone $attendanceQuery)->where('status', 'absent')->count(),
+        ];
+
+        $expiringContracts = Contract::with(['employee.department'])
+            ->where('status', 'active')
+            ->whereNotNull('end_date')
+            ->whereBetween('end_date', [now()->toDateString(), now()->addDays(30)->toDateString()])
+            ->orderBy('end_date')
+            ->limit(8)
+            ->get();
+
+        return view('director.dashboard', compact(
+            'people', 'contracts', 'payroll', 'leave', 'attendance', 'expiringContracts'
+        ));
+    }
+
+    public function positions(): View
+    {
+        $order = ['BGD', 'HR', 'TD', 'CB', 'DTPT', 'KTTC', 'KD', 'MKT', 'IT', 'VH', 'PC', 'HC'];
+
+        $departments = Department::withCount('positions')
+            ->get()
+            ->map(function (Department $dept) use ($order) {
+                $dept->sort = array_search($dept->code, $order, true);
+
+                return $dept;
+            })
+            ->sortBy('sort')
+            ->values();
+
+        $selected = null;
+        if ($code = request('department')) {
+            $selected = Department::where('code', $code)->first();
+        }
+
+        $positions = Position::with(['department', 'employees'])
+            ->when($selected, fn ($q) => $q->where('department_id', $selected->id))
+            ->orderBy('name')
+            ->get();
+
+        return view('positions.index', compact('departments', 'positions', 'selected'));
     }
 
     public function notifications(): View
@@ -477,6 +558,10 @@ class SmartHrController extends Controller
 
     public function updateAccount(Request $request, User $user): RedirectResponse
     {
+        if (! Auth::user()->is_admin && $user->is_admin) {
+            abort(403, 'Chỉ Admin quản trị mới được chỉnh sửa tài khoản Admin.');
+        }
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
@@ -634,6 +719,8 @@ class SmartHrController extends Controller
 
     public function showDepartment(Department $department): View
     {
+        $department->load(['positions' => fn ($q) => $q->withCount('employees')->orderBy('name')]);
+
         return view('departments.show', compact('department'));
     }
 
@@ -647,9 +734,10 @@ class SmartHrController extends Controller
 
     public function destroyDepartment(Department $department): RedirectResponse
     {
-        $department->delete();
-
-        return redirect()->route('departments.index')->with('success', 'Xóa phòng ban thành công.');
+        return redirect()->route('deletion_requests.create', [
+            'kind' => 'department',
+            'target' => $department->id,
+        ])->with('info', 'Xóa phòng ban phải qua Giám đốc duyệt. Vui lòng nhập lý do và gửi yêu cầu.');
     }
 
     public function employees(Request $request)
@@ -735,17 +823,16 @@ class SmartHrController extends Controller
         return redirect()->route('employees.index')->with('success', 'Cập nhật nhân viên thành công.');
     }
 
-    public function destroyEmployee(Employee $employee)
+    public function destroyEmployee(Employee $employee): RedirectResponse
     {
-        $departmentId = $employee->department_id;
-        $employee->delete();
-        $this->syncDepartmentCount($departmentId);
-
         if (request()->expectsJson()) {
-            return response()->json(['success' => true], 200);
+            abort(403, 'Xóa nhân viên phải qua Giám đốc duyệt.');
         }
 
-        return redirect()->route('employees.index')->with('success', 'Xóa nhân viên thành công.');
+        return redirect()->route('deletion_requests.create', [
+            'kind' => 'employee',
+            'target' => $employee->id,
+        ])->with('info', 'Xóa nhân viên phải qua Giám đốc duyệt. Vui lòng nhập lý do và gửi yêu cầu.');
     }
 
     public function contracts(): View

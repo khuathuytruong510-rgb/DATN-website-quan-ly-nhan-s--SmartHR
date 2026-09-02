@@ -6,7 +6,7 @@
     <div class="page-head">
         <div>
             <h1>Tạo tài khoản</h1>
-            <p class="muted">Chỉ admin được tạo tài khoản đăng nhập cho hệ thống.</p>
+            <p class="muted">Tạo tài khoản đăng nhập cho hệ thống.</p>
         </div>
         <a class="btn" href="{{ route('accounts.index') }}">Quay lại</a>
     </div>
