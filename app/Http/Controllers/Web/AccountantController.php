@@ -12,6 +12,7 @@ use App\Services\PayrollCalculationService;
 use App\Services\PayrollPaymentWorkflowService;
 use App\Services\PayrollPeriodLockService;
 use Carbon\Carbon;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
@@ -73,10 +74,11 @@ class AccountantController extends Controller
 
     public function payrollShow(Payroll $payroll): View
     {
-        $payroll->load('employee');
+        $payroll->load(['employee', 'directorApprovedBy']);
         return view('accountant.payroll.show', [
             'payroll' => $payroll,
             'workflow' => app(PayrollPaymentWorkflowService::class),
+            'formula' => app(PayrollCalculationService::class)->explain($payroll),
         ]);
     }
 
@@ -208,26 +210,30 @@ class AccountantController extends Controller
         return redirect()->route('accountant.payroll.index')->with('success', "Đã gửi {$sent} bảng lương. {$failed} thất bại.");
     }
 
-    public function payrollGenerate(PayrollPeriodLockService $periodLock): View
-    {
+    public function payrollGenerate(
+        Request $request,
+        PayrollPeriodLockService $periodLock,
+        PayrollCalculationService $calc,
+        PayrollPaymentWorkflowService $workflow,
+    ): View {
         $periods = collect();
         $cursor = Carbon::now()->startOfMonth();
         for ($i = 0; $i < 6; $i++) {
-            $month = (int) $cursor->month;
-            $year = (int) $cursor->year;
-            $lock = $periodLock->find($month, $year);
+            $periodMonth = (int) $cursor->month;
+            $periodYear = (int) $cursor->year;
+            $lockRow = $periodLock->find($periodMonth, $periodYear);
             $statusCounts = Payroll::query()
-                ->where('month', $month)
-                ->where('year', $year)
+                ->where('month', $periodMonth)
+                ->where('year', $periodYear)
                 ->pluck('status')
                 ->countBy();
 
             $periods->push([
-                'month' => $month,
-                'year' => $year,
+                'month' => $periodMonth,
+                'year' => $periodYear,
                 'label' => $cursor->format('m/Y'),
                 'value' => $cursor->format('Y-m'),
-                'locked' => (bool) $lock?->is_locked,
+                'locked' => (bool) $lockRow?->is_locked,
                 'total' => $statusCounts->sum(),
                 'calculated' => (int) $statusCounts->only(PayrollPaymentWorkflowService::calculatedStatuses())->sum(),
                 'issue' => (int) ($statusCounts[PayrollPaymentWorkflowService::PAYROLL_ISSUE] ?? 0),
@@ -235,7 +241,31 @@ class AccountantController extends Controller
             $cursor = $cursor->copy()->subMonth();
         }
 
-        return view('accountant.payroll.generate', compact('periods'));
+        $month = (int) $request->input('month', 0);
+        $year = (int) $request->input('year', 0);
+        if ($month < 1 || $month > 12 || $year < 2000) {
+            $preferred = $periods->first(fn (array $period) => $period['locked'] && $period['total'] > 0)
+                ?? $periods->first(fn (array $period) => $period['locked'])
+                ?? $periods->first();
+            $month = (int) ($preferred['month'] ?? now()->month);
+            $year = (int) ($preferred['year'] ?? now()->year);
+        }
+
+        $lock = $periodLock->find($month, $year);
+        $rows = $calc->previewPeriod($month, $year);
+        $recalculableCount = $rows->where('can_recalculate', true)->count();
+        $periodMeta = $calc->periodMeta($month, $year);
+
+        return view('accountant.payroll.generate', compact(
+            'periods',
+            'month',
+            'year',
+            'lock',
+            'rows',
+            'periodMeta',
+            'workflow',
+            'recalculableCount',
+        ));
     }
 
     public function generatePayroll(Request $request, PayrollCalculationService $service)
@@ -249,11 +279,12 @@ class AccountantController extends Controller
         [$year, $month] = explode('-', $monthInput);
         $year = (int) $year;
         $month = (int) $month;
+        $back = ['month' => $month, 'year' => $year];
 
         try {
             $result = $service->calculatePeriod($month, $year, $request->user());
         } catch (\Throwable $e) {
-            return redirect()->route('accountant.payroll.generate')->with('error', $e->getMessage());
+            return redirect()->route('accountant.payroll.generate', $back)->with('error', $e->getMessage());
         }
 
         $msg = "Đã tính lương cho {$result['calculated']} nhân viên kỳ {$monthInput}.";
@@ -261,7 +292,7 @@ class AccountantController extends Controller
             $msg .= " Bỏ qua {$result['skipped']} phiếu đã vào vòng duyệt (không tính lại).";
         }
 
-        return redirect()->route('accountant.payroll.generate')->with('success', $msg);
+        return redirect()->route('accountant.payroll.generate', $back)->with('success', $msg);
     }
 
     public function payrollSend(): View
@@ -351,6 +382,7 @@ class AccountantController extends Controller
     public function activityLogs(): View
     {
         $logs = ActivityLog::query()
+            ->with('user')
             ->where(function ($q) {
                 $q->where('user_id', auth()->id())
                     ->orWhere('action', 'like', '%payroll%')
@@ -362,9 +394,13 @@ class AccountantController extends Controller
         return view('accountant.activity_logs.index', compact('logs'));
     }
 
-    public function profile(): View
+    public function profile(): RedirectResponse
     {
-        return view('accountant.profile');
+        $employee = auth()->user()?->linkedEmployee();
+
+        return $employee
+            ? redirect()->route('me.profile')
+            : redirect()->route('accountant.dashboard');
     }
 
     public function showChangePassword(): View
@@ -386,7 +422,7 @@ class AccountantController extends Controller
         $user->password = \Hash::make($data['password']);
         $user->save();
 
-        return redirect()->route('accountant.profile')->with('success', 'Đổi mật khẩu thành công');
+        return redirect()->route('accountant.dashboard')->with('success', 'Đổi mật khẩu thành công');
     }
 }
 

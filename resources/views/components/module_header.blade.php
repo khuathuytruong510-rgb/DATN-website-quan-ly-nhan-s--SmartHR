@@ -16,9 +16,10 @@
 </div>
 
 <style>
-.module-header { background: linear-gradient(90deg, #2d9cff 0%, #3aa0ff 50%, #6fc3ff 100%); border-radius: .6rem; }
-.module-header-body { color: #fff; }
-.module-title { color: #fff; }
-.module-subtitle { color: rgba(255,255,255,0.85); }
-.module-primary-btn { background: #fff; color: #1967d2; border: none; }
+.module-header { background: linear-gradient(90deg, #2563eb 0%, #4f46e5 100%); border-radius: 14px; }
+.module-header-body { color: #fff; gap: 16px; }
+.module-title { color: #fff; margin: 0 0 6px; }
+.module-subtitle { color: rgba(255,255,255,0.88); }
+.module-primary-btn { background: #fff; color: #1d4ed8; border: 1px solid transparent; }
+.module-primary-btn:hover { background: #eff6ff; color: #1e40af; }
 </style>

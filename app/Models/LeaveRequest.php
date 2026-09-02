@@ -54,4 +54,14 @@ class LeaveRequest extends Model
     {
         return $this->belongsTo(User::class, 'cancelled_by');
     }
+
+    public function getTypeLabelAttribute(): string
+    {
+        return \App\Support\LeaveTypes::label($this->type);
+    }
+
+    public function isPaidLeave(): bool
+    {
+        return \App\Support\LeaveTypes::isPaid($this->type);
+    }
 }

@@ -33,8 +33,8 @@
             @foreach($logs as $l)
                 <tr>
                     <td>{{ $l->created_at->format('d/m/Y H:i') }}</td>
-                    <td>{{ $l->label() }}</td>
-                    <td>{{ $l->meta }}</td>
+                    <td style="font-weight:600;">{{ $l->label() }}</td>
+                    <td>{{ $l->detail() }}</td>
                 </tr>
             @endforeach
             </tbody>

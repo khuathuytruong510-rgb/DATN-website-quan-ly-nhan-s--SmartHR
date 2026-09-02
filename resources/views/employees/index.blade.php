@@ -6,7 +6,9 @@
     $contractStatusLabel = function (?string $status): string {
         return match ($status) {
             'waiting_employee_signature', 'waiting_employee' => 'Chờ NV ký',
-            'waiting_director_signature', 'waiting_director' => 'Chờ GĐ ký',
+            'waiting_director_signature', 'waiting_director', 'pending_signature' => 'Chờ GĐ ký',
+            'director_signed' => 'Chờ NV ký',
+            'employee_signed', 'signed' => 'Đã ký',
             'active' => 'Có hiệu lực',
             'expired' => 'Hết hạn',
             'rejected' => 'Từ chối',
@@ -18,11 +20,14 @@
 @endphp
 <div class="page-head">
     <div>
-        <h1>👥 Nhân viên</h1>
+        <h1>Nhân viên</h1>
         <p class="muted">{{ $directorView ? 'Xem thông tin phục vụ quản lý và phê duyệt. Không chỉnh sửa hồ sơ.' : 'Quản lý thông tin nhân viên và vị trí.' }}</p>
     </div>
     @if(auth()->user()?->canManageHr())
-    <a class="btn btn-primary" href="{{ route('employees.create') }}">+ Tạo nhân viên</a>
+    <div class="page-actions">
+        <a class="btn" href="{{ route('transfers.create') }}">Điều chuyển nhân viên</a>
+        <a class="btn primary" href="{{ route('employees.create') }}">Tạo nhân viên</a>
+    </div>
     @endif
 </div>
 
@@ -48,7 +53,8 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($employees as $employee)
+                    @php $pendingEmployeeDeletions = $pendingEmployeeDeletions ?? collect(); @endphp
+            @foreach($employees as $employee)
                         @php $latestContract = $employee->contracts->first(); @endphp
                         <tr>
                             <td><code>{{ $employee->employee_code ?? '—' }}</code></td>
@@ -57,30 +63,43 @@
                                 <td>{{ $employee->email }}</td>
                             @endunless
                             <td>{{ $employee->position ?? '-' }}</td>
-                            <td>{{ $employee->department ? '[' . $employee->department->code . '] ' . $employee->department->name : '-' }}</td>
+                            <td>{{ $employee->department ? '[' . $employee->department->code . '] ' . $employee->department->name : 'Chưa xác định' }}</td>
                             @if($directorView)
                                 <td>{{ optional($employee->start_date)->format('d/m/Y') ?? '—' }}</td>
                                 <td>{{ $contractStatusLabel($latestContract?->status) }}</td>
                             @endif
                             <td>
                                 @if($employee->status === 'active')
-                                    <span class="badge bg-success-subtle text-success-emphasis">Active</span>
+                                    <span class="badge bg-success-subtle text-success-emphasis">{{ $employee->statusLabel() }}</span>
                                 @elseif($employee->status === 'inactive')
-                                    <span class="badge bg-danger-subtle text-danger-emphasis">Inactive</span>
+                                    <span class="badge bg-danger-subtle text-danger-emphasis">{{ $employee->statusLabel() }}</span>
+                                @elseif($employee->status === 'on_leave')
+                                    <span class="badge bg-warning-subtle text-warning-emphasis">{{ $employee->statusLabel() }}</span>
                                 @else
-                                    <span class="badge bg-secondary-subtle text-secondary-emphasis">{{ ucfirst($employee->status) }}</span>
+                                    <span class="badge bg-secondary-subtle text-secondary-emphasis">{{ $employee->statusLabel() }}</span>
                                 @endif
                             </td>
                             <td>
-                                <a href="{{ route('employees.show', $employee) }}" class="btn btn-sm btn-outline-primary">Xem</a>
-                                @if(auth()->user()?->canManageHr())
-                                <a href="{{ route('employees.edit', $employee) }}" class="btn btn-sm btn-outline-secondary">Sửa</a>
-                                <form method="POST" action="{{ route('employees.destroy', $employee) }}" style="display:inline;" onsubmit="return confirm('Bạn có chắc muốn xóa?')">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">Xóa</button>
-                                </form>
+                                <div class="table-actions">
+                                <a href="{{ route('employees.show', $employee) }}" class="btn btn-sm">Xem</a>
+                                @if(auth()->user()?->canManageHr() && \App\Support\RequestApprover::hrMayManage(auth()->user(), $employee))
+                                <a href="{{ route('employees.edit', $employee) }}" class="btn btn-sm">Sửa</a>
+                                @php
+                                    $pendingDeletionId = $pendingEmployeeDeletions[$employee->id] ?? null;
+                                    $pendingTransferId = ($pendingEmployeeTransfers ?? [])[$employee->id] ?? null;
+                                @endphp
+                                @if($pendingDeletionId)
+                                    <a href="{{ route('deletion_requests.show', $pendingDeletionId) }}" class="btn btn-sm btn-outline-warning">Chờ GĐ duyệt xóa</a>
+                                @elseif($pendingTransferId)
+                                    <a href="{{ route('deletion_requests.show', $pendingTransferId) }}" class="btn btn-sm btn-outline-warning">Chờ GĐ duyệt chuyển</a>
+                                @else
+                                    @unless(optional($employee->department)->isBoard())
+                                    <a href="{{ route('transfers.create', ['employee' => $employee->id]) }}" class="btn btn-sm btn-outline-secondary">Điều chuyển</a>
+                                    @endunless
+                                    <a href="{{ route('deletion_requests.create_employee', $employee) }}" class="btn btn-sm btn-outline-danger">Đề nghị xóa</a>
                                 @endif
+                                @endif
+                                </div>
                             </td>
                         </tr>
                     @endforeach
@@ -100,12 +119,4 @@
     @endif
 </div>
 
-<style>
-    .bg-success-subtle { background-color: #e6f4ea !important; }
-    .text-success-emphasis { color: #137333 !important; }
-    .bg-danger-subtle { background-color: #fce8e6 !important; }
-    .text-danger-emphasis { color: #d93025 !important; }
-    .bg-secondary-subtle { background-color: #e8eaed !important; }
-    .text-secondary-emphasis { color: #3c4043 !important; }
-</style>
 @endsection

@@ -87,6 +87,31 @@ class DatabaseSeeder extends Seeder
             'employee_code' => 'BGD0001',
         ]);
 
+        app(\App\Services\DirectorSuccessionService::class)->ensureOpenTenureFor($directorUser->fresh('employee'));
+
+        $hrUser = User::updateOrCreate([
+            'email' => 'hr@smarthr.com',
+        ], [
+            'name' => 'Trần Thị Bích',
+            'password' => Hash::make('123456'),
+            'api_token' => Str::random(60),
+            'is_admin' => false,
+            'is_hr' => true,
+            'is_accountant' => false,
+            'is_director' => false,
+        ]);
+
+        Employee::updateOrCreate(['email' => 'hr@smarthr.com'], [
+            'user_id' => $hrUser->id,
+            'name' => 'Trần Thị Bích',
+            'position' => 'Trưởng phòng nhân sự',
+            'department_id' => $hr?->id,
+            'status' => 'active',
+            'employee_code' => 'HCNS-HR-01',
+            'gender' => 'female',
+            'leave_balance' => 12,
+        ]);
+
         // Employee Users
         $employeeUser1 = User::updateOrCreate([
             'email' => 'nguyenvana@example.com',
@@ -180,8 +205,11 @@ class DatabaseSeeder extends Seeder
         ], [
             'base_salary' => 18000000,
             'start_date' => '2025-01-01',
-            'end_date' => '2025-12-31',
+            'end_date' => '2026-09-30',
             'status' => 'active',
+            'salary' => 18000000,
+            'employee_signed_at' => '2025-10-01 09:00:00',
+            'director_signed_at' => '2025-10-01 11:00:00',
         ]);
 
         Contract::updateOrCreate([
@@ -328,5 +356,6 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call(DefenseDemoSeeder::class);
+        $this->call(CompleteDemoDataSeeder::class);
     }
 }

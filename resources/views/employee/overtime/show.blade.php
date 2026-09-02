@@ -11,25 +11,20 @@
     <div class="page-head">
         <div>
             <h1>Chi tiết yêu cầu tăng ca</h1>
-            <p class="muted">Xem chi tiết yêu cầu của bạn.</p>
+            <p class="muted">Khung được duyệt là khoảng được phép tính OT. Số giờ thực tế do hệ thống tính từ checkout, không sửa được.</p>
         </div>
     </div>
 
     <div class="card">
+        <div class="field"><label>Nguồn</label><div>{{ $overtimeRequest->sourceLabel() }}</div></div>
         <div class="field"><label>Ngày</label><div>{{ optional($overtimeRequest->date)->format('d/m/Y') }}</div></div>
-        <div class="field"><label>Giờ đăng ký</label><div>{{ $overtimeRequest->start_time }} – {{ $overtimeRequest->end_time }}</div></div>
-        <div class="field"><label>Ghi chú nghiệp vụ</label><div class="muted">Giờ đăng ký khác giờ tính lương. HR/Kế toán đối soát theo dữ liệu chấm công (ACTUAL) khi tính lương.</div></div>
+        <div class="field"><label>Thời gian đăng ký</label><div>{{ $overtimeRequest->requestedWindowLabel() }}</div></div>
+        <div class="field"><label>Thời gian được duyệt</label><div>{{ $overtimeRequest->approvedWindowLabel() }}</div></div>
+        <div class="field"><label>Thời gian thực tế</label><div>{{ $overtimeRequest->actualWindowLabel() }}</div></div>
         <div class="field"><label>Lý do</label><div>{{ $overtimeRequest->reason ?? '-' }}</div></div>
-        <div class="field"><label>Trạng thái</label>
-            <div>
-                @if($overtimeRequest->status === 'pending')
-                    <span class="badge bg-warning">Chờ duyệt</span>
-                @elseif($overtimeRequest->status === 'approved')
-                    <span class="badge bg-success">Đã duyệt</span>
-                @else
-                    <span class="badge bg-danger">Từ chối</span>
-                @endif
-            </div>
-        </div>
+        <div class="field"><label>Trạng thái</label><div>{{ $overtimeRequest->statusLabel() }}</div></div>
+        @if($overtimeRequest->rejection_reason)
+            <div class="field"><label>Lý do từ chối</label><div>{{ $overtimeRequest->rejection_reason }}</div></div>
+        @endif
     </div>
 @endsection

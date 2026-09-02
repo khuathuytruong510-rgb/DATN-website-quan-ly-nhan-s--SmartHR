@@ -344,7 +344,8 @@ class PayrollAuthorizationHardeningTest extends TestCase
             'end_date' => '2026-12-31',
             'salary' => 10000000,
             'base_salary' => 10000000,
-            'status' => 'waiting_employee_signature',
+            'status' => Contract::STATUS_DIRECTOR_SIGNED,
+            'director_signed_at' => now(),
         ]);
 
         $contracts->signContract($aliceUser, $contract, 'employee');
@@ -357,5 +358,69 @@ class PayrollAuthorizationHardeningTest extends TestCase
         } catch (\RuntimeException) {
         }
         $this->assertTrue($signedAt->equalTo($contract->fresh()->employee_signed_at));
+    }
+
+    public function test_generate_routes_forbid_non_accountant_and_reject_put_patch_delete(): void
+    {
+        ['hr' => $hr, 'director' => $gd, 'accountant' => $kt, 'aliceUser' => $nv] = $this->seedPeople();
+
+        foreach ([$hr, $gd, $nv] as $user) {
+            $this->actingAs($user)->get(route('accountant.payroll.generate'))->assertForbidden();
+            $this->actingAs($user)->post(route('accountant.payroll.generate_post'), ['month' => '2026-08'])->assertForbidden();
+            $this->actingAs($user)->post(route('payroll.generate'), ['month' => 8, 'year' => 2026])->assertForbidden();
+        }
+
+        $this->actingAs($kt)->get(route('accountant.payroll.generate'))->assertOk();
+        $this->actingAs($kt)->put('/accountant/payroll/generate', ['month' => '2026-08'])->assertStatus(405);
+        $this->actingAs($kt)->patch('/accountant/payroll/generate', ['month' => '2026-08'])->assertStatus(405);
+        $this->actingAs($kt)->delete('/accountant/payroll/generate')->assertStatus(405);
+    }
+
+    public function test_recalculate_blocked_for_every_post_calculated_status(): void
+    {
+        ['accountant' => $kt, 'alice' => $alice] = $this->seedPeople();
+        $blocked = [
+            1 => PayrollPaymentWorkflowService::HR_CHECKED,
+            2 => PayrollPaymentWorkflowService::DIRECTOR_APPROVED,
+            3 => PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED,
+            4 => PayrollPaymentWorkflowService::PAID,
+        ];
+
+        foreach ($blocked as $month => $status) {
+            $payroll = Payroll::create([
+                'employee_id' => $alice->id,
+                'month' => $month,
+                'year' => 2026,
+                'base_salary' => 10000000,
+                'total_salary' => 10000000,
+                'status' => $status,
+            ]);
+
+            $this->actingAs($kt)->post(route('accountant.payroll.recalculate', $payroll))->assertRedirect();
+            $this->assertSame($status, $payroll->fresh()->status);
+        }
+    }
+
+    public function test_service_confirm_and_report_issue_bind_employee_from_logged_in_user(): void
+    {
+        ['alicePayroll' => $payroll, 'bobUser' => $bobUser] = $this->seedPeople();
+        $workflow = app(PayrollPaymentWorkflowService::class);
+
+        try {
+            $workflow->confirm($payroll, $bobUser);
+            $this->fail('Xác nhận phiếu người khác phải bị chặn ở service.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('chính mình', $e->getMessage());
+        }
+
+        try {
+            $workflow->reportIssue($payroll, 'Sai số công', $bobUser);
+            $this->fail('Báo sự cố phiếu người khác phải bị chặn ở service.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('chính mình', $e->getMessage());
+        }
+
+        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $payroll->fresh()->status);
+        $this->assertSame($payroll->employee_id, $payroll->fresh()->employee_id);
     }
 }

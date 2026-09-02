@@ -6,10 +6,10 @@
     <div class="page-head">
         <div>
             <h1>Phân quyền</h1>
-            <p class="muted">Gán đúng một vai trò hệ thống. Chức vụ trên hồ sơ nhân viên không cấp quyền đăng nhập. Admin ≠ Giám đốc.</p>
+            <p class="muted">Gán đúng một vai trò hệ thống. Chức vụ trên hồ sơ nhân viên không cấp quyền đăng nhập. Admin ≠ Giám đốc. Role Giám đốc chỉ đổi tại <a href="{{ route('director_succession.index') }}">Người giữ chức GĐ</a>.</p>
         </div>
-        <div>
-            <a class="btn link" href="{{ route('accounts.index') }}">Xem danh sách tài khoản</a>
+        <div class="page-actions">
+            <a class="btn" href="{{ route('accounts.index') }}">Xem danh sách tài khoản</a>
         </div>
     </div>
 
@@ -39,22 +39,25 @@
                             <td>{{ $user->is_hr ? 'Có' : 'Không' }}</td>
                             <td>{{ $user->is_accountant ? 'Có' : 'Không' }}</td>
                             <td>
-                                <form method="POST" action="{{ route('permissions.update', $user) }}" style="display:inline-flex; gap: 8px; align-items:center; flex-wrap:wrap;">
+                                <form method="POST" action="{{ route('permissions.update', $user) }}" class="table-actions">
                                     @csrf
                                     @method('PUT')
-                                    <label style="display:inline-flex; align-items:center; gap: 6px;">
+                                    <label class="check-row">
                                         <input type="checkbox" name="is_admin" value="1" {{ $user->is_admin ? 'checked' : '' }}>
                                         Admin
                                     </label>
-                                    <label style="display:inline-flex; align-items:center; gap: 6px;">
-                                        <input type="checkbox" name="is_director" value="1" {{ $user->is_director ? 'checked' : '' }}>
+                                    <label class="check-row" title="Role Giám đốc phải đi theo người đang giữ chức">
+                                        <input type="checkbox" name="is_director" value="1" {{ $user->is_director ? 'checked' : '' }} disabled>
                                         Giám đốc
                                     </label>
-                                    <label style="display:inline-flex; align-items:center; gap: 6px;">
+                                    @if($user->is_director)
+                                        <input type="hidden" name="is_director" value="1">
+                                    @endif
+                                    <label class="check-row">
                                         <input type="checkbox" name="is_hr" value="1" {{ $user->is_hr ? 'checked' : '' }}>
                                         HR
                                     </label>
-                                    <label style="display:inline-flex; align-items:center; gap: 6px;">
+                                    <label class="check-row">
                                         <input type="checkbox" name="is_accountant" value="1" {{ $user->is_accountant ? 'checked' : '' }}>
                                         Kế toán
                                     </label>

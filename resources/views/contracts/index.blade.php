@@ -43,28 +43,26 @@
                         $cBase = (float)($contract->base_salary ?? $contract->salary ?? 0);
                         $pBase = $latestPayroll ? (float)($latestPayroll->base_salary ?? 0) : null;
                         $hasMismatch = $pBase !== null && abs($pBase - $cBase) > 0;
+                        $alertLevel = $contract->alertLevel();
+                        $daysLeft = $contract->daysUntilExpiry();
 
                         $badge = match($contract->status) {
                             'waiting_employee_signature', 'waiting_director_signature',
-                            'waiting_employee', 'waiting_director' => 'warning',
-                            'active'    => 'success',
+                            'waiting_employee', 'waiting_director', 'pending_signature',
+                            'director_signed', 'employee_signed', 'draft' => 'warning',
+                            'signed', 'active' => 'success',
                             'expiring'  => 'info',
                             'expired'   => 'danger',
                             'rejected'  => 'dark',
                             'cancelled' => 'secondary',
                             default     => 'secondary',
                         };
-                        $label = match($contract->status) {
-                            'waiting_employee_signature' => 'Chờ NV ký',
-                            'waiting_director_signature' => 'Chờ GĐ ký',
-                            'waiting_employee'           => 'Chờ NV ký',
-                            'waiting_director'           => 'Chờ GĐ ký',
-                            'active'    => 'Có hiệu lực',
-                            'expiring'  => 'Sắp hết hạn',
-                            'expired'   => 'Hết hạn',
-                            'rejected'  => 'Từ chối',
-                            'cancelled' => 'Đã hủy',
-                            default     => 'Chờ xử lý',
+                        $label = $contract->statusLabel();
+                        $alertBadge = match($alertLevel) {
+                            'overdue', 'expired' => 'danger',
+                            'urgent' => 'danger',
+                            'expiring' => 'warning',
+                            default => null,
                         };
                     @endphp
                     <tr>
@@ -98,17 +96,38 @@
                         </td>
                         <td>{{ optional($contract->start_date)->format('d/m/Y') ?? '—' }}</td>
                         <td>{{ optional($contract->end_date)->format('d/m/Y') ?? 'Không XĐ' }}</td>
-                        <td><span class="badge bg-{{ $badge }}">{{ $label }}</span></td>
+                        <td>
+                            <span class="badge bg-{{ $badge }}">{{ $label }}</span>
+                            @if($alertBadge && $contract->isFullySigned())
+                                <div style="margin-top:6px;">
+                                    <span class="badge bg-{{ $alertBadge }}">
+                                        @if($alertLevel === 'expiring') ⚠️ Còn {{ $daysLeft }} ngày
+                                        @elseif($alertLevel === 'urgent') 🔴 Còn {{ $daysLeft }} ngày
+                                        @elseif($alertLevel === 'expired') 🔴 Đã hết hạn
+                                        @else 🚨 Quá hạn {{ abs((int) $daysLeft) }} ngày
+                                        @endif
+                                    </span>
+                                </div>
+                            @endif
+                            @if($contract->latestExpiryAction)
+                                <div style="font-size:11px;color:#64748b;margin-top:4px;">{{ $contract->latestExpiryAction->label() }}</div>
+                            @endif
+                        </td>
                         <td>
                             <div class="d-flex flex-wrap gap-1">
                                 <a class="btn btn-sm btn-outline-primary" href="{{ route('contracts.show', $contract) }}">Xem</a>
+                                @if(auth()->user()?->canManageHr() && $contract->needsExpiryHandling())
+                                    <button type="button" class="btn btn-sm btn-warning" onclick="document.getElementById('handle-contract-{{ $contract->id }}').showModal()">Xử lý</button>
+                                @endif
                                 @if(auth()->user()?->canManageHr())
+                                    @unless($contract->isContentLocked())
                                     <a class="btn btn-sm btn-outline-secondary" href="{{ route('contracts.edit', $contract) }}">Sửa</a>
+                                    @endunless
                                     <a class="btn btn-sm btn-outline-info" href="{{ route('contracts.renew', $contract) }}"
-                                       title="{{ in_array($contract->status, ['expired','expiring']) ? 'Gia hạn hợp đồng' : 'Tạo hợp đồng kế tiếp' }}">
+                                       title="Gia hạn thời hạn, giữ nguyên nội dung hợp đồng">
                                         🔄 Gia hạn
                                     </a>
-                                    @if($hasMismatch)
+                                    @if($hasMismatch && ! $contract->isContentLocked())
                                         <form action="{{ route('contracts.sync_salary', $contract) }}" method="POST" class="d-inline">
                                             @csrf
                                             <button type="submit" class="btn btn-sm btn-warning"
@@ -119,20 +138,24 @@
                                         </form>
                                     @endif
                                 @endif
-                                @if(optional($contract->employee)->email === auth()->user()?->email && ! $contract->employee_signed_at)
-                                    <form action="{{ route('contracts.sign', $contract) }}" method="POST" class="d-inline">
+                                @if(auth()->user()?->is_hr && $contract->isAwaitingHrSend())
+                                    <form action="{{ route('contracts.send_for_signature', $contract) }}" method="POST" class="d-inline">
                                         @csrf
-                                        <input type="hidden" name="party" value="employee">
-                                        <button class="btn btn-sm btn-outline-success" type="submit">✍️ NV ký</button>
+                                        <button class="btn btn-sm btn-warning" type="submit">Gửi ký</button>
                                     </form>
-                                @elseif(auth()->user()?->is_director && $contract->employee_signed_at && ! $contract->director_signed_at)
-                                    <form action="{{ route('contracts.sign', $contract) }}" method="POST" class="d-inline">
+                                @endif
+                                @if(auth()->user()?->is_director && $contract->isPendingDirectorEsign())
+                                    <form action="{{ route('contracts.sign', $contract) }}" method="POST" class="d-inline"
+                                          onsubmit="return confirm('Xác nhận ký {{ $contract->contract_code }} phía doanh nghiệp? Đây là mô phỏng, chưa phải chứng thư số pháp lý.');">
                                         @csrf
                                         <input type="hidden" name="party" value="director">
-                                        <button class="btn btn-sm btn-outline-success" type="submit">✍️ GĐ ký</button>
+                                        <button class="btn btn-sm btn-outline-success" type="submit">Ký (GĐ)</button>
                                     </form>
                                 @endif
                             </div>
+                            @if(auth()->user()?->canManageHr() && $contract->needsExpiryHandling())
+                                <x-contract_handle_dialog :contract="$contract" />
+                            @endif
                         </td>
                     </tr>
                 @endforeach

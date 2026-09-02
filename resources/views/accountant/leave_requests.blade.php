@@ -42,10 +42,9 @@
             <label>Loại phép nghỉ</label>
             <select name="type">
                 <option value="">-- Tất cả loại phép --</option>
-                <option value="annual" {{ request('type') === 'annual' ? 'selected' : '' }}>Nghỉ hàng năm</option>
-                <option value="sick" {{ request('type') === 'sick' ? 'selected' : '' }}>Nghỉ ốm đau</option>
-                <option value="unpaid" {{ request('type') === 'unpaid' ? 'selected' : '' }}>Nghỉ không lương</option>
-                <option value="maternity" {{ request('type') === 'maternity' ? 'selected' : '' }}>Nghỉ sinh con</option>
+                @foreach(\App\Support\LeaveTypes::all() as $value => $meta)
+                    <option value="{{ $value }}" {{ request('type') === $value ? 'selected' : '' }}>{{ $meta['label'] }}</option>
+                @endforeach
             </select>
         </div>
         <div style="display:flex; gap:10px;">
@@ -74,7 +73,7 @@
                 @foreach($leaveRequests as $leave)
                     <tr>
                         <td><strong>{{ optional($leave->employee)->name }}</strong></td>
-                        <td>{{ ucfirst(str_replace('_', ' ', $leave->type ?? 'N/A')) }}</td>
+                        <td>{{ $leave->type_label }}</td>
                         <td>{{ \Carbon\Carbon::parse($leave->start_date)->format('d/m/Y') }}</td>
                         <td>{{ \Carbon\Carbon::parse($leave->end_date)->format('d/m/Y') }}</td>
                         <td>

@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Attendance;
 use Carbon\Carbon;
-use Illuminate\Support\Collection;
 
 class AttendanceCalculationService
 {
@@ -51,9 +50,8 @@ class AttendanceCalculationService
         $workHours = $this->calculateWorkHours($attendance->check_in, $attendance->check_out);
         $lateMinutes = $this->calculateLateMinutes($attendance->check_in);
         $earlyLeaveMinutes = $this->calculateEarlyLeaveMinutes($attendance->check_out);
-        $overtimeHours = $this->calculateOvertimeHours($attendance->check_out);
 
-        $status = $this->determineStatus($lateMinutes, $earlyLeaveMinutes, $overtimeHours);
+        $status = $this->determineStatus($lateMinutes, $earlyLeaveMinutes, 0);
 
         return [
             'status' => $status,
@@ -61,7 +59,7 @@ class AttendanceCalculationService
             'late_minutes' => $lateMinutes,
             'late_penalty_fee' => $this->calculateLatePenaltyFee($lateMinutes),
             'early_leave_minutes' => $earlyLeaveMinutes,
-            'overtime_hours' => round($overtimeHours, 2),
+            'overtime_hours' => 0,
         ];
     }
 
@@ -182,32 +180,6 @@ class AttendanceCalculationService
         return $checkOut->diffInMinutes($standard);
     }
 
-    /**
-     * Calculate overtime hours
-     *
-     * Formula: overtime = check_out - standard_check_out
-     * If negative, return 0
-     * Example: check_out at 19:30, standard is 17:30 => overtime 2 hours
-     */
-    private function calculateOvertimeHours(Carbon $checkOut): float
-    {
-        $standardCheckOut = $checkOut->copy()
-            ->setTimeFromTimeString(self::STANDARD_CHECK_OUT);
-
-        if ($checkOut->lessThanOrEqualTo($standardCheckOut)) {
-            return 0;
-        }
-
-        return round(
-            $standardCheckOut->diffInMinutes($checkOut) / 60,
-            2
-        );
-    }
-
-    /**
-     * Determine attendance status based on metrics
-     * Status: present, late, leave_early, late_and_leave_early, overtime, absent
-     */
     private function determineStatus(int $lateMinutes, int $earlyLeaveMinutes, float $overtimeHours): string
 {
     if ($lateMinutes > 0) {
@@ -234,8 +206,13 @@ class AttendanceCalculationService
             'late_minutes' => $metrics['late_minutes'],
             'late_penalty_fee' => $metrics['late_penalty_fee'],
             'early_leave_minutes' => $metrics['early_leave_minutes'],
-            'overtime_hours' => $metrics['overtime_hours'],
+            'overtime_hours' => 0,
         ]);
+
+        $fresh = $attendance->fresh();
+        if ($fresh?->check_out) {
+            app(OvertimeRequestService::class)->applyFromAttendance($fresh);
+        }
 
         return $attendance->fresh();
     }

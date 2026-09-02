@@ -52,6 +52,19 @@
                     <span class="badge">{{ $workflow->statusLabel($payroll->status) }}</span>
                 </p>
             </div>
+            @if($payroll->director_approved_at || $payroll->director_approved_name)
+            <div style="margin-bottom:14px;">
+                <span style="color:#64748b;font-size:13px;">Giám đốc phê duyệt</span>
+                <p style="margin:4px 0 0;font-weight:600;">{{ $payroll->directorApproverLabel() }}</p>
+                <p class="muted" style="margin:4px 0 0;font-size:12px;">
+                    Tại thời điểm duyệt
+                    @if($payroll->director_approved_at)
+                        · {{ $payroll->director_approved_at->format('d/m/Y H:i') }}
+                    @endif
+                    — không đổi khi thay người giữ chức
+                </p>
+            </div>
+            @endif
             <div style="margin-bottom:14px;">
                 <span style="color:#64748b;font-size:13px;">Xác nhận NV</span>
                 <p style="margin:4px 0 0;">

@@ -1,5 +1,8 @@
+import * as bootstrap from 'bootstrap';
 import { createApp } from 'vue';
 import Dashboard from './components/Dashboard.vue';
+
+window.bootstrap = bootstrap;
 
 // Chỉ mount Vue khi trang có dashboard. Các trang Blade khác không biên dịch Vue → nhanh hơn.
 const dashEl = document.getElementById('vue-dashboard');

@@ -6,7 +6,9 @@
     $contractStatusLabel = function (?string $status): string {
         return match ($status) {
             'waiting_employee_signature', 'waiting_employee' => 'Chờ NV ký',
-            'waiting_director_signature', 'waiting_director' => 'Chờ GĐ ký',
+            'waiting_director_signature', 'waiting_director', 'pending_signature' => 'Chờ GĐ ký',
+            'director_signed' => 'Chờ NV ký',
+            'employee_signed', 'signed' => 'Đã ký',
             'active' => 'Có hiệu lực',
             'expired' => 'Hết hạn',
             'rejected' => 'Từ chối',
@@ -22,7 +24,8 @@
         <p class="muted">{{ $directorView ? 'Thông tin phục vụ quản lý và phê duyệt. Không gồm dữ liệu cá nhân nhạy cảm.' : 'Xem chi tiết hồ sơ nhân viên.' }}</p>
     </div>
     <div>
-        @if(auth()->user()?->canManageHr())
+        @if(auth()->user()?->canManageHr() && \App\Support\RequestApprover::hrMayManage(auth()->user(), $employee))
+            <a class="btn" href="{{ route('transfers.create', ['employee' => $employee->id]) }}">Điều chuyển phòng ban</a>
             <a class="btn" href="{{ route('employees.edit', $employee) }}">Sửa thông tin</a>
         @endif
         <a class="btn link" href="{{ route('employees.index') }}">Quay lại</a>
@@ -44,7 +47,7 @@
             @endunless
         </div>
         <div>
-            <div class="field"><label>Phòng ban</label><div>{{ optional($employee->department)->name ?? '—' }}</div></div>
+            <div class="field"><label>Phòng ban</label><div>{{ optional($employee->department)->name ?? 'Chưa xác định' }}</div></div>
             <div class="field"><label>Chức vụ</label><div>{{ $employee->position ?? '—' }}</div></div>
             <div class="field"><label>Ngày vào làm</label><div>{{ optional($employee->start_date)->format('d/m/Y') ?? '—' }}</div></div>
             @unless($directorView)
@@ -52,13 +55,42 @@
                 <div class="field"><label>Kinh nghiệm</label><div>{{ $employee->experience ?? '—' }}</div></div>
                 <div class="field"><label>Số ngày phép còn lại</label><div>{{ $employee->leave_balance ?? 0 }} ngày</div></div>
             @endunless
-            <div class="field"><label>Trạng thái</label><div>{{ $employee->status === 'active' ? 'Đang làm việc' : 'Ngừng hoạt động' }}</div></div>
+            <div class="field"><label>Trạng thái</label><div>{{ $employee->statusLabel() }}</div></div>
             @unless($directorView)
                 <div class="field"><label>Ngày tạo</label><div>{{ $employee->created_at->format('d/m/Y H:i') }}</div></div>
             @endunless
         </div>
     </div>
 </div>
+
+@if($employee->positionHistories->isNotEmpty())
+<div class="card" style="margin-top:16px;">
+    <h3 style="margin-top:0;">Lịch sử chức vụ / điều chuyển</h3>
+    <p class="muted" style="margin:0 0 12px;">Giữ nguyên nhiệm kỳ cũ khi thay người giữ chức. Điều chuyển phòng ban chỉ ghi nhận sau khi Giám đốc duyệt.</p>
+    <table>
+        <thead>
+            <tr>
+                <th>Chức vụ</th>
+                <th>Phòng ban</th>
+                <th>Thời gian</th>
+                <th>Trạng thái</th>
+                <th>Ghi chú</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($employee->positionHistories as $row)
+                <tr>
+                    <td>{{ $row->position_name }}</td>
+                    <td>{{ $row->department_name ?: '—' }}</td>
+                    <td>{{ $row->tenureLabel() }}</td>
+                    <td>{{ $row->statusLabel() }}</td>
+                    <td>{{ $row->note ?: ($row->decision_ref ?: '—') }}</td>
+                </tr>
+            @endforeach
+        </tbody>
+    </table>
+</div>
+@endif
 
 @if($directorView)
 <div class="card" style="margin-top:16px;">

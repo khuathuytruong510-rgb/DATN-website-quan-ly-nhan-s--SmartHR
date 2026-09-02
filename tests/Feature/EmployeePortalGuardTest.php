@@ -145,6 +145,10 @@ class EmployeePortalGuardTest extends TestCase
         $this->assertNotNull($fresh->applied_at);
         $this->assertStringContainsString('Đối chiếu camera', (string) $fresh->review_note);
         $this->assertSame('08:00:00', $row->fresh()->getRawOriginal('check_in'));
+        $this->assertDatabaseHas('notifications', [
+            'target' => 'employee',
+            'title' => 'Yêu cầu điều chỉnh chấm công đã được duyệt',
+        ]);
     }
 
     public function test_locked_period_adjustment_is_exception_and_does_not_rewrite_attendance(): void
@@ -345,7 +349,8 @@ class EmployeePortalGuardTest extends TestCase
             'end_date' => '2026-12-31',
             'salary' => 10000000,
             'base_salary' => 10000000,
-            'status' => Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE,
+            'status' => Contract::STATUS_DIRECTOR_SIGNED,
+            'director_signed_at' => now(),
         ]);
         $theirs = Contract::create([
             'employee_id' => $bob->id,
@@ -355,18 +360,19 @@ class EmployeePortalGuardTest extends TestCase
             'end_date' => '2026-12-31',
             'salary' => 10000000,
             'base_salary' => 10000000,
-            'status' => Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE,
+            'status' => Contract::STATUS_DIRECTOR_SIGNED,
+            'director_signed_at' => now(),
         ]);
 
         $this->actingAs($alice)->post(route('me.contracts.sign', $theirs))->assertForbidden();
         $this->actingAs($alice)->post(route('me.contracts.sign', $mine))->assertRedirect();
         $this->assertNotNull($mine->fresh()->employee_signed_at);
-        $this->assertSame(Contract::STATUS_WAITING_DIRECTOR_SIGNATURE, $mine->fresh()->status);
+        $this->assertContains($mine->fresh()->status, [Contract::STATUS_SIGNED, Contract::STATUS_ACTIVE]);
 
         $signedAt = $mine->fresh()->employee_signed_at;
         $this->actingAs($alice)->post(route('me.contracts.sign', $mine->fresh()))->assertRedirect();
         $this->assertEquals($signedAt?->timestamp, $mine->fresh()->employee_signed_at?->timestamp);
-        $this->assertSame(Contract::STATUS_WAITING_DIRECTOR_SIGNATURE, $mine->fresh()->status);
+        $this->assertContains($mine->fresh()->status, [Contract::STATUS_SIGNED, Contract::STATUS_ACTIVE]);
     }
 
     public function test_support_employee_cannot_resolve_or_see_others(): void
@@ -459,8 +465,8 @@ class EmployeePortalGuardTest extends TestCase
         $leave = $this->actingAs($alice)->get(route('me.leave_requests'));
         $dash->assertOk();
         $leave->assertOk();
-        $this->assertStringContainsString('1/2', $dash->getContent());
-        $this->assertStringContainsString('1/2', $leave->getContent());
+        $this->assertStringContainsString('1/12', $dash->getContent());
+        $this->assertStringContainsString('1/12', $leave->getContent());
     }
 
     public function test_me_get_routes_are_authenticated_linked_and_owner_scoped(): void
@@ -544,6 +550,19 @@ class EmployeePortalGuardTest extends TestCase
     {
         ['aliceUser' => $alice, 'alice' => $emp, 'bob' => $bob, 'hr' => $hr] = $this->seedPeople();
 
+        Contract::create([
+            'employee_id' => $emp->id,
+            'title' => 'HĐ Alice',
+            'contract_type' => 'fixed_term',
+            'start_date' => now()->startOfYear()->toDateString(),
+            'end_date' => now()->endOfYear()->toDateString(),
+            'salary' => 10000000,
+            'base_salary' => 10000000,
+            'status' => Contract::STATUS_ACTIVE,
+            'allowed_unpaid_leave_days_per_month' => 1,
+            'allowed_maternity_leave_days' => 180,
+        ]);
+
         $this->actingAs($alice)->post(route('me.leave_requests.store'), [
             'start_date' => now()->addDays(10)->toDateString(),
             'end_date' => now()->addDays(10)->toDateString(),
@@ -571,12 +590,18 @@ class EmployeePortalGuardTest extends TestCase
             'status' => 'approved',
             'approved_by' => $hr->id,
             'approved_at' => now()->toDateTimeString(),
+            'actual_minutes' => 300,
+            'actual_start' => '17:30',
+            'actual_end' => '22:30',
+            'status' => 'approved',
+            'approved_by' => $hr->id,
         ])->assertRedirect(route('me.overtime_requests'));
 
         $ot = OvertimeRequest::where('employee_id', $emp->id)->latest('id')->first();
         $this->assertNotNull($ot);
         $this->assertSame('pending', $ot->status);
         $this->assertNull($ot->approved_by);
+        $this->assertNull($ot->actual_minutes);
 
         $this->actingAs($alice)->post(route('me.support_requests.store'), [
             'subject' => 'Hỗ trợ',
@@ -681,7 +706,7 @@ class EmployeePortalGuardTest extends TestCase
         $this->assertSame('cancelled', $legacyLeave->fresh()->status);
 
         $dash = $this->actingAs($alice)->get(route('me.dashboard'));
-        $dash->assertOk()->assertSee('0/2');
+        $dash->assertOk()->assertSee('0/12');
     }
 
     public function test_payroll_ui_matches_backend_state(): void

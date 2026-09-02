@@ -1,8 +1,10 @@
 <?php
 
 use App\Http\Controllers\HR\PayrollController;
+use App\Http\Controllers\Web\DeletionRequestController;
 use App\Http\Controllers\Web\EmployeeAttendanceController;
 use App\Http\Controllers\Web\EmployeeController;
+use App\Http\Controllers\Web\HrSupportRequestController;
 use App\Http\Controllers\Web\NotificationController;
 use App\Http\Controllers\Web\SmartHrController;
 use Illuminate\Support\Facades\Auth;
@@ -53,8 +55,12 @@ Route::middleware('auth')->group(function () {
         Route::post('/accounts/{user}/impersonate', [SmartHrController::class, 'impersonate'])->name('accounts.impersonate');
         Route::get('/permissions', [SmartHrController::class, 'permissions'])->name('permissions.index');
         Route::put('/permissions/{user}', [SmartHrController::class, 'updatePermissions'])->name('permissions.update');
+        Route::get('/director-succession', [\App\Http\Controllers\Web\DirectorSuccessionController::class, 'index'])->name('director_succession.index');
+        Route::get('/director-succession/nguoi-moi', [\App\Http\Controllers\Web\DirectorSuccessionController::class, 'prepareNew'])->name('director_succession.prepare_new');
+        Route::post('/director-succession', [\App\Http\Controllers\Web\DirectorSuccessionController::class, 'store'])->name('director_succession.store');
         Route::get('/system-logs', [SmartHrController::class, 'systemLogs'])->name('system_logs.index');
         Route::get('/settings', [SmartHrController::class, 'settings'])->name('settings.index');
+        Route::get('/admin/notifications', [NotificationController::class, 'adminIndex'])->name('admin.notifications.index');
     });
 
     // Stop impersonation (any authenticated user can stop if impersonating)
@@ -82,6 +88,7 @@ Route::middleware('auth')->group(function () {
     Route::match(['put', 'patch', 'delete'], '/me/salary-histories/{salaryHistory}', fn () => abort(403, 'Không được sửa lịch sử lương.'))->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/contracts', [EmployeeController::class, 'contracts'])->name('me.contracts')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::post('/me/contracts/{contract}/sign', [EmployeeController::class, 'signContract'])->name('me.contracts.sign')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/contracts/{contract}/document', [\App\Http\Controllers\Web\ContractEsignController::class, 'document'])->name('me.contracts.document')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/payroll', [EmployeeController::class, 'payrolls'])->name('me.payrolls')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/payroll/{payroll}/history', [EmployeeController::class, 'payrollHistory'])->name('me.payroll.history')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/payroll/{payroll}', [EmployeeController::class, 'payrollShow'])->name('me.payroll.show')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
@@ -98,6 +105,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/me/leave-requests/{leaveRequest}/cancel', [EmployeeController::class, 'cancelLeave'])->name('me.leave_requests.cancel')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/notifications', [EmployeeController::class, 'notifications'])->name('me.notifications')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::post('/me/notifications/{notification}/read', [EmployeeController::class, 'markNotificationRead'])->name('me.notifications.read')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::post('/me/transfers/{deletionRequest}/feedback', [EmployeeController::class, 'submitTransferFeedback'])->name('me.transfers.feedback')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
 
     Route::get('/me/schedule', [EmployeeController::class, 'schedule'])->name('me.schedule')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
 
@@ -114,6 +122,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/me/support-requests', [\App\Http\Controllers\Web\SupportRequestController::class, 'store'])->name('me.support_requests.store')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/support-requests/{supportRequest}', [\App\Http\Controllers\Web\SupportRequestController::class, 'show'])->name('me.support_requests.show')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::post('/me/support-requests/{supportRequest}/follow-up', [\App\Http\Controllers\Web\SupportRequestController::class, 'followUp'])->name('me.support_requests.follow_up')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::post('/me/support-requests/{supportRequest}/feedback', [\App\Http\Controllers\Web\SupportRequestController::class, 'feedback'])->name('me.support_requests.feedback')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
 
     // Overtime requests
     Route::get('/me/overtime-requests', [\App\Http\Controllers\Web\OvertimeRequestController::class, 'index'])->name('me.overtime_requests')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
@@ -140,10 +149,23 @@ Route::middleware('auth')->group(function () {
         Route::get('/notifications/create', [NotificationController::class, 'create'])->name('notifications.create');
         Route::post('/notifications', [NotificationController::class, 'store'])->name('notifications.store');
 
+        Route::get('/transfers/create', [DeletionRequestController::class, 'createTransfer'])->name('transfers.create');
+        Route::post('/transfers', [DeletionRequestController::class, 'storeTransfer'])->name('transfers.store');
+
+        Route::get('/deletion-requests', [DeletionRequestController::class, 'index'])->name('deletion_requests.index');
+        Route::get('/deletion-requests/{deletionRequest}/document', [DeletionRequestController::class, 'document'])->name('deletion_requests.document');
+        Route::post('/deletion-requests/{deletionRequest}/approve', [DeletionRequestController::class, 'approve'])->name('deletion_requests.approve');
+        Route::post('/deletion-requests/{deletionRequest}/reject', [DeletionRequestController::class, 'reject'])->name('deletion_requests.reject');
+        Route::post('/deletion-requests/{deletionRequest}/feedback/{employee}/reply', [DeletionRequestController::class, 'replyTransferFeedback'])->name('deletion_requests.reply_feedback');
+        Route::get('/deletion-requests/{deletionRequest}', [DeletionRequestController::class, 'show'])->name('deletion_requests.show');
+
         Route::get('/departments', [SmartHrController::class, 'departments'])->name('departments.index');
         Route::get('/departments/create', [SmartHrController::class, 'createDepartment'])->name('departments.create');
         Route::post('/departments', [SmartHrController::class, 'storeDepartment'])->name('departments.store');
         Route::get('/departments/{department}/edit', [SmartHrController::class, 'editDepartment'])->name('departments.edit');
+        Route::get('/departments/{department}/deletion-request', [DeletionRequestController::class, 'createDepartment'])->name('deletion_requests.create_department');
+        Route::post('/departments/{department}/deletion-request', [DeletionRequestController::class, 'storeDepartment'])->name('deletion_requests.store_department');
+        Route::post('/departments/{department}/transfer-employees', [DeletionRequestController::class, 'transferEmployees'])->name('deletion_requests.transfer_employees');
         Route::get('/departments/{department}', [SmartHrController::class, 'showDepartment'])->name('departments.show');
         Route::put('/departments/{department}', [SmartHrController::class, 'updateDepartment'])->name('departments.update');
         Route::delete('/departments/{department}', [SmartHrController::class, 'destroyDepartment'])->name('departments.destroy');
@@ -152,6 +174,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/employees/create', [SmartHrController::class, 'createEmployee'])->name('employees.create');
         Route::post('/employees', [SmartHrController::class, 'storeEmployee'])->name('employees.store');
         Route::get('/employees/{employee}/edit', [SmartHrController::class, 'editEmployee'])->name('employees.edit');
+        Route::get('/employees/{employee}/deletion-request', [DeletionRequestController::class, 'createEmployee'])->name('deletion_requests.create_employee');
+        Route::post('/employees/{employee}/deletion-request', [DeletionRequestController::class, 'storeEmployee'])->name('deletion_requests.store_employee');
         Route::get('/employees/{employee}', [SmartHrController::class, 'showEmployee'])->name('employees.show');
         Route::put('/employees/{employee}', [SmartHrController::class, 'updateEmployee'])->name('employees.update');
         Route::delete('/employees/{employee}', [SmartHrController::class, 'destroyEmployee'])->name('employees.destroy');
@@ -165,6 +189,10 @@ Route::middleware('auth')->group(function () {
         Route::delete('/contracts/{contract}', [SmartHrController::class, 'destroyContract'])->name('contracts.destroy');
         Route::get('/contracts/{contract}/renew', [SmartHrController::class, 'renewContract'])->name('contracts.renew');
         Route::post('/contracts/{contract}/renew', [SmartHrController::class, 'storeRenewalContract'])->name('contracts.storeRenewal');
+        Route::post('/contracts/{contract}/handle-expiry', [SmartHrController::class, 'handleContractExpiry'])->name('contracts.handle_expiry');
+        Route::get('/contracts/{contract}/document', [\App\Http\Controllers\Web\ContractEsignController::class, 'document'])->name('contracts.document');
+        Route::post('/contracts/{contract}/send-for-signature', [\App\Http\Controllers\Web\ContractEsignController::class, 'sendForSignature'])->name('contracts.send_for_signature');
+        Route::post('/contracts/{contract}/reject-signature', [\App\Http\Controllers\Web\ContractEsignController::class, 'reject'])->name('contracts.reject_signature');
         Route::post('/contracts/{contract}/sign', [SmartHrController::class, 'signContract'])->name('contracts.sign');
         Route::post('/contracts/{contract}/sync-salary', [SmartHrController::class, 'syncContractSalary'])->name('contracts.sync_salary');
 
@@ -176,6 +204,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/attendance', [SmartHrController::class, 'storeAttendance'])->name('attendance.store');
         Route::post('/attendance/adjustments/{adjustment}/approve', [SmartHrController::class, 'approveAttendanceAdjustment'])->name('attendance.adjustments.approve');
         Route::post('/attendance/adjustments/{adjustment}/reject', [SmartHrController::class, 'rejectAttendanceAdjustment'])->name('attendance.adjustments.reject');
+        Route::post('/face-profiles/{faceProfile}/approve', [SmartHrController::class, 'approveFaceRegistration'])->name('face_profiles.approve');
+        Route::post('/face-profiles/{faceProfile}/reject', [SmartHrController::class, 'rejectFaceRegistration'])->name('face_profiles.reject');
         Route::get('/attendance/{attendance}/edit', [SmartHrController::class, 'editAttendance'])->name('attendance.edit');
         Route::put('/attendance/{attendance}', [SmartHrController::class, 'updateAttendance'])->name('attendance.update');
         Route::delete('/attendance/{attendance}', [SmartHrController::class, 'destroyAttendance'])->name('attendance.destroy');
@@ -284,6 +314,16 @@ Route::middleware('auth')->group(function () {
         Route::post('/leave-requests/{leaveRequest}/approve', [SmartHrController::class, 'approveLeaveRequest'])->name('leave_requests.approve');
         Route::post('/leave-requests/{leaveRequest}/reject', [SmartHrController::class, 'rejectLeaveRequest'])->name('leave_requests.reject');
         Route::delete('/leave-requests/{leaveRequest}', [SmartHrController::class, 'destroyLeaveRequest'])->name('leave_requests.destroy');
+        Route::get('/overtime-requests', [SmartHrController::class, 'overtimeRequests'])->name('overtime_requests.index');
+        Route::post('/overtime-requests/assign', [SmartHrController::class, 'assignOvertimeRequest'])->name('overtime_requests.assign');
+        Route::post('/overtime-requests/{overtimeRequest}/approve', [SmartHrController::class, 'approveOvertimeRequest'])->name('overtime_requests.approve');
+        Route::post('/overtime-requests/{overtimeRequest}/reject', [SmartHrController::class, 'rejectOvertimeRequest'])->name('overtime_requests.reject');
+        Route::post('/overtime-requests/{overtimeRequest}/verify', [SmartHrController::class, 'verifyOvertimeRequest'])->name('overtime_requests.verify');
+
+        Route::get('/support-requests', [HrSupportRequestController::class, 'index'])->name('support_requests.index');
+        Route::get('/support-requests/{supportRequest}', [HrSupportRequestController::class, 'show'])->name('support_requests.show');
+        Route::post('/support-requests/{supportRequest}/approve', [HrSupportRequestController::class, 'approve'])->name('support_requests.approve');
+        Route::post('/support-requests/{supportRequest}/resolve', [HrSupportRequestController::class, 'resolve'])->name('support_requests.resolve');
         
         // Salary history detail
         Route::get('/salary-histories/{salaryHistory}', [\App\Http\Controllers\Web\SalaryHistoryController::class, 'show'])->name('salary_histories.show');

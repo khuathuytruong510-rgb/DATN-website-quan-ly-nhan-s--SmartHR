@@ -14,6 +14,7 @@ class PayrollController extends Controller
     public function __construct(
         protected PayrollPaymentWorkflowService $workflow,
         protected PayrollPeriodLockService $periodLock,
+        protected PayrollCalculationService $calculator,
     ) {
     }
 
@@ -33,14 +34,20 @@ class PayrollController extends Controller
         }
 
         $payrolls = $query->orderByDesc('id')->get();
+        $tableRows = ($user?->is_hr && ! $paymentFocus)
+            ? $this->calculator->previewPeriod($month, $year)
+            : $payrolls;
 
         return view('hr.payroll.index', [
             'payrolls' => $payrolls,
+            'tableRows' => $tableRows,
             'month' => $month,
             'year' => $year,
+            'periodMeta' => $this->calculator->periodMeta($month, $year),
             'workflow' => $this->workflow,
             'periodLock' => $this->periodLock->find((int) $month, (int) $year),
             'paymentFocus' => $paymentFocus,
+            'hrWorkOnly' => (bool) ($user?->is_hr && ! $user->is_director && ! $paymentFocus),
         ]);
     }
 
@@ -68,7 +75,7 @@ class PayrollController extends Controller
     public function generate(Request $request, PayrollCalculationService $service)
     {
         if (! request()->user()?->is_accountant) {
-            abort(403, 'Chỉ kế toán được tính lương. HR kiểm tra dữ liệu sau khi kế toán đã tính.');
+            abort(403, 'Chỉ kế toán được tính lương.');
         }
 
         $month = (int) ($request->input('month') ?: now()->month);
@@ -94,7 +101,7 @@ class PayrollController extends Controller
 
     public function show(Payroll $payroll)
     {
-        $payroll->load(['employee', 'salaryPayment', 'paidByUser']);
+        $payroll->load(['employee', 'salaryPayment', 'paidByUser', 'directorApprovedBy']);
 
         return view('hr.payroll.show', [
             'payroll' => $payroll,
@@ -318,6 +325,7 @@ class PayrollController extends Controller
             'payrolls' => $payrolls,
             'month' => $month,
             'year' => $year,
+            'periodMeta' => $this->calculator->periodMeta($month, $year),
             'totals' => $totals,
             'printedAt' => now(),
             'printedBy' => $request->user(),
@@ -368,7 +376,7 @@ class PayrollController extends Controller
 
         return redirect()
             ->route('payroll.index', ['month' => $data['month'], 'year' => $data['year']])
-            ->with('success', sprintf('Đã chốt dữ liệu kỳ %02d/%d. Kế toán có thể tính lương. Không sửa chấm công/nghỉ phép của kỳ khi đang khóa.', $data['month'], $data['year']));
+            ->with('success', sprintf('HR đã kiểm tra và chốt kỳ %02d/%d. Đã gửi kế toán tính lương. Không sửa chấm công/nghỉ phép khi kỳ đang khóa.', $data['month'], $data['year']));
     }
 
     public function unlockPeriod(Request $request)

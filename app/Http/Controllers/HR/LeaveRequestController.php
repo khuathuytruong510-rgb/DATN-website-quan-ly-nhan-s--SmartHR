@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\HR;
 
 use App\Http\Controllers\ApiController;
+use App\Models\Employee;
 use App\Models\LeaveRequest;
+use App\Services\LeaveRequestService;
+use App\Support\LeaveTypes;
 use App\Traits\HasLeaveLimit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -47,7 +50,7 @@ class LeaveRequestController extends ApiController
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
             'half_day' => 'nullable|boolean',
-            'type' => 'required|in:sick,personal,annual,unpaid',
+            'type' => 'required|string',
             'reason' => 'nullable|string',
             'is_urgent' => 'nullable|boolean',
             'urgent_reason' => 'required_if:is_urgent,1|nullable|string|max:500',
@@ -57,44 +60,28 @@ class LeaveRequestController extends ApiController
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        $employee = Employee::findOrFail($validator->validated()['employee_id']);
+        $typeValidator = Validator::make($request->all(), [
+            'type' => 'required|'.LeaveTypes::validationRule($employee),
+        ]);
+        if ($typeValidator->fails()) {
+            return response()->json(['errors' => $typeValidator->errors()], 422);
+        }
+
         $data = $validator->validated();
         $data['is_urgent'] = filter_var($data['is_urgent'] ?? false, FILTER_VALIDATE_BOOLEAN);
         $data['half_day'] = filter_var($data['half_day'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
-        $limitCheck = $this->checkLeaveLimit(
-            $data['employee_id'],
-            $data['start_date'],
-            $data['end_date'],
-            $data['half_day']
-        );
-
-        if ($limitCheck['exceeded'] && empty($data['is_urgent'])) {
-            $msg = "Nhân viên đã sử dụng {$limitCheck['used_days']}/{$limitCheck['max_days']} ngày nghỉ phép trong tháng này. ";
-            if ($limitCheck['requests_exceeded']) {
-                $msg .= "Nhân viên đã hết {$limitCheck['max_requests']} lượt xin nghỉ trong tháng. ";
-            }
-            $msg .= "Vui lòng liên hệ bộ phận hỗ trợ nếu cần nghỉ thêm với lý do thuyết phục.";
-            return response()->json([
-                'errors' => [
-                    'leave_limit' => [$msg]
-                ]
-            ], 422);
-        }
-
-        $data['days'] = $this->calculateLeaveDays($data['start_date'], $data['end_date'], $data['half_day']);
-        $data['status'] = 'pending';
-
         try {
-            app(\App\Services\PayrollPeriodLockService::class)->assertWritableRange(
-                $data['start_date'],
-                $data['end_date'],
-                'đơn nghỉ phép'
+            $leave = app(LeaveRequestService::class)->submit(
+                $employee,
+                $request->user(),
+                $data
             );
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        $leave = LeaveRequest::create($data);
         return response()->json($leave, 201);
     }
 
@@ -112,7 +99,7 @@ class LeaveRequestController extends ApiController
             'start_date' => 'sometimes|required|date',
             'end_date' => 'sometimes|required|date|after_or_equal:start_date',
             'half_day' => 'nullable|boolean',
-            'type' => 'sometimes|required|in:sick,personal,annual,unpaid',
+            'type' => 'sometimes|required|string',
             'reason' => 'nullable|string',
         ]);
 
@@ -121,6 +108,17 @@ class LeaveRequestController extends ApiController
         }
 
         $data = $validator->validated();
+        $employee = isset($data['employee_id'])
+            ? Employee::findOrFail($data['employee_id'])
+            : $leave->employee;
+        if (array_key_exists('type', $data)) {
+            $typeValidator = Validator::make($data, [
+                'type' => 'required|'.LeaveTypes::validationRule($employee),
+            ]);
+            if ($typeValidator->fails()) {
+                return response()->json(['errors' => $typeValidator->errors()], 422);
+            }
+        }
         unset($data['status'], $data['approved_by'], $data['approved_at']);
         if (isset($data['half_day'])) {
             $data['half_day'] = filter_var($data['half_day'], FILTER_VALIDATE_BOOLEAN);

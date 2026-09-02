@@ -2,6 +2,7 @@
 
 @section('title', 'Tạo đơn nghỉ phép')
 
+@php $approver = \App\Support\RequestApprover::queueLabel($employee); @endphp
 @section('content')
 @section('breadcrumb')
 <li><a href="{{ route('me.dashboard') }}">Dashboard</a></li>
@@ -11,13 +12,17 @@
     <div class="page-head">
         <div>
             <h1>Tạo đơn nghỉ phép</h1>
-            <p class="muted">Điền thông tin chi tiết để gửi đơn nghỉ phép tới HR.</p>
+            <p class="muted">Chọn loại nghỉ trước. Hệ thống đối chiếu hợp đồng và Bộ luật Lao động rồi mới cho chọn ngày.</p>
         </div>
         <a class="btn link" href="{{ route('me.leave_requests') }}">Quay lại danh sách</a>
     </div>
 
+    @if(session('error'))
+        <div class="alert error">{{ session('error') }}</div>
+    @endif
+
     @if ($errors->any())
-        <div class="alert">
+        <div class="alert error">
             <ul>
                 @foreach ($errors->all() as $error)
                     <li>{{ $error }}</li>
@@ -26,79 +31,86 @@
         </div>
     @endif
 
-    <div class="alert alert-info" style="margin-bottom: 1rem; padding: 0.75rem 1rem; background: #e8f4fd; border-left: 4px solid #2196F3; border-radius: 4px;">
-        <strong>Quy định nghỉ phép:</strong> Mỗi nhân viên được phép nghỉ tối đa <strong>2 ngày/tháng</strong>.
-        Nếu cần nghỉ nhiều hơn, vui lòng đánh dấu là <strong>khẩn cấp</strong> và cung cấp lý do thuyết phục để bộ phận hỗ trợ xem xét.
-    </div>
+    @if(empty($contract))
+        <div class="callout warn">
+            <p class="callout-title">Chưa có hợp đồng hiệu lực</p>
+            <p>Không gửi được đơn nghỉ phép. Liên hệ HR để ký / kích hoạt hợp đồng.</p>
+        </div>
+    @endif
 
-    <form method="POST" action="{{ route('me.leave_requests.store') }}">
+    <form method="POST" action="{{ route('me.leave_requests.store') }}" onsubmit="return confirm('Xác nhận gửi đơn? Hệ thống sẽ kiểm tra điều kiện nghỉ phép trên hợp đồng và luật lao động. Nếu đủ điều kiện, đơn được gửi {{ $approver }} duyệt.');">
         @csrf
 
         <div class="field">
-            <label>Ngày bắt đầu</label>
-            <input type="date" name="start_date" value="{{ old('start_date') }}" required />
+            <label class="form-label" for="leave-type">Loại nghỉ phép</label>
+            @include('components.leave_type_select', ['leaveTypes' => $leaveTypes ?? null, 'selected' => $defaultType ?? null])
+            <p class="form-hint">Chọn loại trước để xem số ngày được phép theo hợp đồng và luật lao động.</p>
         </div>
 
-        <div class="field">
-            <label>Ngày kết thúc</label>
-            <input type="date" name="end_date" value="{{ old('end_date') }}" required />
-        </div>
+        @include('components.leave_quota_card', [
+            'guides' => $leaveLimit['types'] ?? [],
+            'initialType' => old('type', $defaultType ?? 'annual'),
+        ])
 
-        <div class="field">
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                <input type="checkbox" name="half_day" value="1" {{ old('half_day') ? 'checked' : '' }} id="half_day" />
-                <strong>Nghỉ 1/2 ngày</strong>
-            </label>
-            <p class="muted" style="margin: 0.25rem 0 0 1.5rem; font-size: 0.85em;">
-                Chỉ áp dụng khi ngày bắt đầu = ngày kết thúc.
-            </p>
-        </div>
-
-        <div class="field">
-            <label>Loại nghỉ phép</label>
-            <select name="type" required>
-                <option value="">-- Chọn loại nghỉ --</option>
-                <option value="annual" {{ old('type') === 'annual' ? 'selected' : '' }}>Nghỉ hàng năm</option>
-                <option value="sick" {{ old('type') === 'sick' ? 'selected' : '' }}>Nghỉ ốm</option>
-                <option value="personal" {{ old('type') === 'personal' ? 'selected' : '' }}>Nghỉ việc riêng</option>
-                <option value="unpaid" {{ old('type') === 'unpaid' ? 'selected' : '' }}>Không lương</option>
-            </select>
-        </div>
-
-        <div class="field">
-            <label>Lý do</label>
-            <textarea name="reason">{{ old('reason') }}</textarea>
-        </div>
-
-        <div class="field" style="border: 1px solid #ddd; padding: 1rem; border-radius: 4px; background: #fff8e1;">
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                <input type="checkbox" name="is_urgent" value="1" {{ old('is_urgent') ? 'checked' : '' }} id="is_urgent" />
-                <strong>Nghỉ phép khẩn cấp (vượt quá 2 ngày/tháng)</strong>
-            </label>
-            <p class="muted" style="margin: 0.5rem 0 0 1.5rem; font-size: 0.9em;">
-                Chỉ chọn khi thực sự cần thiết. Cần cung cấp lý do thuyết phục để bộ phận hỗ trợ xem xét.
-            </p>
-            <div id="urgent_reason_wrapper" style="margin-top: 0.75rem; display: {{ old('is_urgent') ? 'block' : 'none' }};">
-                <label for="urgent_reason">Lý do khẩn cấp <span style="color: red;">*</span></label>
-                <textarea name="urgent_reason" id="urgent_reason" rows="3" placeholder="Mô tả chi tiết lý do tại sao bạn cần nghỉ phép vượt quá quy định...">{{ old('urgent_reason') }}</textarea>
+        <div class="row g-3">
+            <div class="col-12 col-md-6">
+                <div class="field">
+                    <label class="form-label">Ngày bắt đầu</label>
+                    <input class="form-control" id="leave-start" type="date" name="start_date" value="{{ old('start_date') }}" required />
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <div class="field">
+                    <label class="form-label">Ngày kết thúc</label>
+                    <input class="form-control" id="leave-end" type="date" name="end_date" value="{{ old('end_date') }}" required />
+                </div>
             </div>
         </div>
 
-        <button class="btn primary" type="submit" style="margin-top: 1rem;">Gửi đơn nghỉ phép</button>
-    </form>
+        <div class="field">
+            <label class="check-row">
+                <input type="checkbox" name="half_day" value="1" {{ old('half_day') ? 'checked' : '' }} id="half_day" />
+                Nghỉ 1/2 ngày
+            </label>
+            <p class="form-hint">Chỉ áp dụng khi ngày bắt đầu = ngày kết thúc.</p>
+        </div>
 
-    <script>
-        document.getElementById('is_urgent').addEventListener('change', function() {
-            const wrapper = document.getElementById('urgent_reason_wrapper');
-            const textarea = document.getElementById('urgent_reason');
-            if (this.checked) {
-                wrapper.style.display = 'block';
-                textarea.required = true;
-            } else {
-                wrapper.style.display = 'none';
-                textarea.required = false;
-                textarea.value = '';
-            }
-        });
-    </script>
+        <div class="field">
+            <label class="form-label">Lý do</label>
+            <textarea class="form-control" name="reason">{{ old('reason') }}</textarea>
+        </div>
+
+        <div class="callout warn">
+            <label class="check-row">
+                <input type="checkbox" name="is_urgent" value="1" {{ old('is_urgent') ? 'checked' : '' }} id="is_urgent" />
+                Đánh dấu khẩn cấp ({{ $approver }} ưu tiên xem)
+            </label>
+            <p class="form-hint">Không bỏ qua điều kiện hợp đồng / luật. Chỉ để {{ $approver }} duyệt sớm hơn.</p>
+            <div id="urgent_reason_wrapper" style="margin-top: 12px; display: {{ old('is_urgent') ? 'block' : 'none' }};">
+                <label class="form-label" for="urgent_reason">Lý do khẩn cấp</label>
+                <textarea class="form-control" name="urgent_reason" id="urgent_reason" rows="3" placeholder="Mô tả lý do cần duyệt gấp...">{{ old('urgent_reason') }}</textarea>
+            </div>
+        </div>
+
+        <button class="btn primary" type="submit" @if(empty($contract)) disabled @endif>Xác nhận gửi</button>
+    </form>
 @endsection
+
+@push('scripts')
+<script>
+document.getElementById('is_urgent')?.addEventListener('change', function() {
+    const wrapper = document.getElementById('urgent_reason_wrapper');
+    const textarea = document.getElementById('urgent_reason');
+    if (!wrapper || !textarea) return;
+    wrapper.style.display = this.checked ? 'block' : 'none';
+    textarea.required = this.checked;
+    if (!this.checked) textarea.value = '';
+});
+window.SmartHrLeaveQuota?.bind({
+    typeSelect: document.getElementById('leave-type'),
+    startInput: document.getElementById('leave-start'),
+    endInput: document.getElementById('leave-end'),
+    halfDay: document.getElementById('half_day'),
+});
+</script>
+@endpush

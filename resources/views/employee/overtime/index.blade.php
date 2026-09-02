@@ -10,7 +10,7 @@
     <div class="page-head">
         <div>
             <h1>Đăng ký tăng ca</h1>
-            <p class="muted">Thời gian đăng ký tăng ca. Giờ đăng ký chưa phải giờ tính lương — HR/Kế toán đối soát theo chấm công thực tế.</p>
+            <p class="muted">Đăng ký hôm nay hoặc ngày mai. Giờ tính lương lấy từ chấm công thực tế trong khung HR đã duyệt/chỉ định — không nhập số giờ thực tế.</p>
         </div>
         <a class="btn primary" href="{{ route('me.overtime_requests.create') }}">Tạo yêu cầu</a>
     </div>
@@ -24,25 +24,23 @@
                     <thead class="table-light">
                         <tr>
                             <th>Ngày</th>
-                            <th>Giờ đăng ký</th>
+                            <th>Nguồn</th>
+                            <th>Đăng ký</th>
+                            <th>Được duyệt</th>
+                            <th>Thực tế</th>
                             <th>Trạng thái</th>
-                            <th>Hành động</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach($requests as $r)
                             <tr>
                                 <td>{{ optional($r->date)->format('d/m/Y') }}</td>
-                                <td>{{ $r->start_time }} – {{ $r->end_time }}</td>
-                                <td>
-                                    @if($r->status === 'pending')
-                                        <span class="badge bg-warning">Chờ duyệt</span>
-                                    @elseif($r->status === 'approved')
-                                        <span class="badge bg-success">Đã duyệt</span>
-                                    @else
-                                        <span class="badge bg-danger">Từ chối</span>
-                                    @endif
-                                </td>
+                                <td>{{ $r->sourceLabel() }}</td>
+                                <td>{{ $r->requestedWindowLabel() }}</td>
+                                <td>{{ $r->approvedWindowLabel() }}</td>
+                                <td>{{ $r->actualWindowLabel() }}</td>
+                                <td>{{ $r->statusLabel() }}</td>
                                 <td><a class="btn btn-sm btn-outline-primary" href="{{ route('me.overtime_requests.show', $r) }}">Xem</a></td>
                             </tr>
                         @endforeach

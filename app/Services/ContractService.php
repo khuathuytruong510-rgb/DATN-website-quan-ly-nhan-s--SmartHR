@@ -2,13 +2,17 @@
 
 namespace App\Services;
 
+use App\Contracts\DigitalSignatureProvider;
 use App\Models\Contract;
 use App\Models\ContractLog;
+use App\Models\ContractSignature;
 use App\Models\ContractTemplate;
 use App\Models\Employee;
+use App\Models\Notification;
 use App\Models\Position;
 use App\Models\User;
 use App\Support\ContractFixedTerms;
+use App\Support\HrApprovalNotifier;
 use Carbon\Carbon;
 use DateTimeInterface;
 use Illuminate\Http\UploadedFile;
@@ -33,6 +37,7 @@ class ContractService
     public function updateContract(User $actor, Contract $contract, array $data): Contract
     {
         return DB::transaction(function () use ($actor, $contract, $data): Contract {
+            $this->assertContentEditable($contract);
             $employee = $contract->employee ?? Employee::find($contract->employee_id);
             $payload = $this->buildPayload($actor, $employee, $data, $contract);
 
@@ -48,51 +53,57 @@ class ContractService
     public function renewContract(User $actor, Contract $parentContract, array $data): Contract
     {
         return DB::transaction(function () use ($actor, $parentContract, $data): Contract {
-            $employee = $parentContract->employee ?? Employee::find($parentContract->employee_id);
+            $parentContract = Contract::query()->whereKey($parentContract->id)->lockForUpdate()->firstOrFail();
 
-            // Ưu tiên lương từ bảng lương mới nhất nếu không có trong $data
-            if (empty($data['base_salary']) || (float) $data['base_salary'] === 0.0) {
-                $latestPayroll = $employee
-                    ? $employee->payrolls()->orderByDesc('year')->orderByDesc('month')->first()
-                    : null;
-                if ($latestPayroll && $latestPayroll->base_salary > 0) {
-                    $data['base_salary'] = $latestPayroll->base_salary;
-                    if (empty($data['allowance'])) {
-                        $data['allowance'] = $latestPayroll->allowance ?? $parentContract->allowance ?? 0;
-                    }
-                } else {
-                    // Kế thừa lương hợp đồng cũ
-                    $data['base_salary'] = $parentContract->base_salary ?? $parentContract->salary ?? 0;
-                    if (empty($data['allowance'])) {
-                        $data['allowance'] = $parentContract->allowance ?? 0;
-                    }
-                }
+            $startDate = $data['start_date'] ?? null;
+            if (! $startDate) {
+                throw new \InvalidArgumentException('Ngày bắt đầu hợp đồng gia hạn là bắt buộc.');
             }
 
-            // Luôn gán employee_id và parent_contract_id từ hợp đồng gốc
-            $data['employee_id']        = $parentContract->employee_id;
-            $data['parent_contract_id'] = $parentContract->id;
-
-            $contract = Contract::create($this->buildPayload($actor, $employee, $data, null));
-
-            // Đảm bảo parent_contract_id được lưu (buildPayload đã nhận, nhưng ghi lại cho chắc)
-            if ($contract->parent_contract_id !== $parentContract->id) {
-                $contract->parent_contract_id = $parentContract->id;
-                $contract->save();
-            }
-
-            $this->syncStatus($contract);
-
-            $this->log($contract, $actor, 'renewed', 'Gia hạn hợp đồng', [
-                'parent_contract_id' => $parentContract->id,
-                'parent_code'        => $parentContract->contract_code,
-                'new_base_salary'    => (float) $contract->base_salary,
-                'new_allowance'      => (float) $contract->allowance,
-                'new_start_date'     => $contract->start_date?->toDateString(),
-                'new_end_date'       => $contract->end_date?->toDateString(),
+            $renewed = $parentContract->replicate([
+                'contract_code',
+                'status',
+                'contract_status',
+                'employee_signed_at',
+                'director_signed_at',
+                'signed_employee_at',
+                'signed_director_at',
+                'content_locked_at',
+                'canonical_document_path',
+                'document_hash',
+                'start_date',
+                'end_date',
+                'sign_date',
+                'parent_contract_id',
+                'created_by',
+                'signer_id',
             ]);
 
-            return $contract->fresh();
+            $renewed->parent_contract_id = $parentContract->id;
+            $renewed->employee_id = $parentContract->employee_id;
+            $renewed->contract_code = $this->resolveContractCode(null, null);
+            $renewed->start_date = $startDate;
+            $renewed->end_date = $data['end_date'] ?? null;
+            $renewed->created_by = $actor->id;
+            $renewed->employee_signed_at = null;
+            $renewed->director_signed_at = null;
+            $renewed->signed_employee_at = null;
+            $renewed->signed_director_at = null;
+            $renewed->content_locked_at = null;
+            $renewed->canonical_document_path = null;
+            $renewed->document_hash = null;
+            $renewed->status = Contract::STATUS_DRAFT;
+            $renewed->contract_status = Contract::STATUS_DRAFT;
+            $renewed->save();
+
+            $this->log($renewed, $actor, 'renewed', 'Gia hạn hợp đồng (chỉ kéo dài thời hạn, giữ nguyên nội dung)', [
+                'parent_contract_id' => $parentContract->id,
+                'parent_code' => $parentContract->contract_code,
+                'new_start_date' => $renewed->start_date?->toDateString(),
+                'new_end_date' => $renewed->end_date?->toDateString(),
+            ]);
+
+            return $renewed->fresh();
         });
     }
 
@@ -113,63 +124,313 @@ class ContractService
             }
 
             if ($party === 'employee') {
-                $allowed = [Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE, 'waiting_employee', Contract::STATUS_DRAFT];
-                if (! in_array($contract->status, $allowed, true) && $contract->employee_signed_at) {
-                    throw new \RuntimeException('Nhân viên đã ký hợp đồng này.');
-                }
-                if (! in_array($contract->status, $allowed, true)) {
-                    throw new \RuntimeException('Nhân viên chỉ ký khi hợp đồng đang chờ chữ ký nhân viên.');
-                }
                 $employee = $contract->employee;
                 $owns = $employee && (
                     ((int) $employee->user_id === (int) $actor->id)
                     || strcasecmp((string) $employee->email, (string) $actor->email) === 0
                 );
                 if (! $owns) {
-                    throw new \RuntimeException('Chỉ nhân viên của hợp đồng này được ký ở bước nhân viên. HR không ký thay.');
+                    throw new \RuntimeException('Chỉ nhân viên của hợp đồng này được ký phía người lao động. HR không ký thay.');
                 }
                 if ($contract->employee_signed_at) {
                     throw new \RuntimeException('Nhân viên đã ký hợp đồng này. Không ký lại.');
                 }
-                $contract->employee_signed_at = now();
+                if (! $contract->director_signed_at) {
+                    throw new \RuntimeException('Nhân viên ký sau khi Giám đốc đã ký phía doanh nghiệp.');
+                }
+                if (! $contract->isPendingEmployeeEsign() && $contract->status !== Contract::STATUS_DIRECTOR_SIGNED) {
+                    throw new \RuntimeException('Nhân viên chỉ ký khi hợp đồng đang chờ chữ ký người lao động.');
+                }
+                $this->applyPartyEsign($actor, $contract, ContractSignature::ROLE_EMPLOYEE);
             } elseif ($party === 'director') {
                 if (! $actor->is_director) {
-                    throw new \RuntimeException('Chỉ Giám đốc được ký hợp đồng phía công ty.');
+                    throw new \RuntimeException('Chỉ Giám đốc được ký hợp đồng phía doanh nghiệp.');
                 }
-                if (! $contract->employee_signed_at) {
-                    throw new \RuntimeException('Giám đốc chỉ ký sau khi nhân viên đã ký.');
+                if ($actor->is_admin && ! $actor->is_director) {
+                    throw new \RuntimeException('Admin không được ký thay Giám đốc.');
                 }
                 if ($contract->director_signed_at) {
                     throw new \RuntimeException('Giám đốc đã ký hợp đồng này. Không ký lại.');
                 }
-                $waitingDirector = [Contract::STATUS_WAITING_DIRECTOR_SIGNATURE, 'waiting_director'];
-                if (! in_array($contract->status, $waitingDirector, true)) {
-                    throw new \RuntimeException('Giám đốc chỉ ký khi hợp đồng đang chờ chữ ký giám đốc.');
+                if (! $contract->isPendingDirectorEsign()) {
+                    throw new \RuntimeException('Giám đốc chỉ ký khi HR đã gửi hợp đồng sang trạng thái chờ ký.');
                 }
-                $contract->director_signed_at = now();
+                $this->applyPartyEsign($actor, $contract, ContractSignature::ROLE_DIRECTOR);
             } else {
                 throw new \InvalidArgumentException('Loại chữ ký không hợp lệ.');
             }
 
             $contract->save();
             $this->syncStatus($contract);
-            $this->log($contract, $actor, $party === 'employee' ? 'employee_signed' : 'director_signed', 'Ký hợp đồng', ['party' => $party]);
+            $this->log(
+                $contract,
+                $actor,
+                $party === 'employee' ? 'employee_signed' : 'director_signed',
+                $party === 'employee' ? 'Nhân viên ký hợp đồng (phía người lao động)' : 'Giám đốc ký hợp đồng (phía doanh nghiệp)',
+                ['party' => $party]
+            );
+
+            $fresh = $contract->fresh(['directorSignature', 'employeeSignature', 'employee']);
+            if ($fresh) {
+                $valid = $this->verifyPartySignature($fresh, $party === 'employee' ? ContractSignature::ROLE_EMPLOYEE : ContractSignature::ROLE_DIRECTOR);
+                $this->log(
+                    $fresh,
+                    $actor,
+                    'signature_verified',
+                    $valid
+                        ? 'Hệ thống xác thực chữ ký '.($party === 'employee' ? 'nhân viên' : 'Giám đốc').' — hợp lệ'
+                        : 'Hệ thống xác thực chữ ký — không khớp',
+                    ['valid' => $valid, 'party' => $party]
+                );
+
+                if ($party === 'director') {
+                    $this->notifyEmployeeNeedsToSign($fresh, $actor);
+                }
+
+                if ($fresh->isFullySigned()) {
+                    $this->log($fresh, $actor, 'status_signed', 'Đã đủ chữ ký hai bên — khóa hợp đồng, chuyển sang '.$fresh->statusLabel(), [
+                        'status' => $fresh->status,
+                    ]);
+                    $this->notifyContractFullySigned($fresh, $actor);
+                    if ($fresh->parent_contract_id && $fresh->status === Contract::STATUS_ACTIVE) {
+                        app(ContractExpiryAlertService::class)->notifyRenewalActivated($fresh, $actor);
+                    }
+                }
+            }
+
+            return $fresh;
+        });
+    }
+
+    public function sendForDirectorSignature(User $actor, Contract $contract): Contract
+    {
+        if (! $actor->is_hr) {
+            throw new \RuntimeException('Chỉ HR được gửi hợp đồng cho Giám đốc ký số.');
+        }
+
+        return DB::transaction(function () use ($actor, $contract): Contract {
+            $contract = Contract::query()->whereKey($contract->id)->lockForUpdate()->firstOrFail();
+            if ($contract->director_signed_at || $contract->isFullySigned()) {
+                throw new \RuntimeException('Hợp đồng đã có chữ ký. Không gửi lại. Hãy tạo hợp đồng/gia hạn mới nếu cần sửa.');
+            }
+            if ($contract->isPendingDirectorEsign() && $contract->content_locked_at) {
+                throw new \RuntimeException('Hợp đồng đã ở trạng thái chờ ký. Giám đốc có thể mở và ký.');
+            }
+            if (! $contract->isAwaitingHrSend() && $contract->status !== Contract::STATUS_DRAFT) {
+                throw new \RuntimeException('Chỉ gửi ký khi hợp đồng đang ở trạng thái nháp / HR đang kiểm tra.');
+            }
+
+            $frozen = app(ContractDocumentService::class)->freeze($contract);
+            $frozen->status = Contract::STATUS_PENDING_SIGNATURE;
+            $frozen->contract_status = Contract::STATUS_PENDING_SIGNATURE;
+            $frozen->save();
+
+            $this->log($frozen, $actor, 'sent_for_signature', 'HR kiểm tra và gửi yêu cầu ký (Giám đốc → nhân viên)', [
+                'document_hash' => $frozen->document_hash,
+            ]);
+
+            $this->notifyDirectorPendingSignature($frozen->fresh(['employee']), $actor);
+
+            return $frozen->fresh();
+        });
+    }
+
+    public function rejectDirectorSignature(User $actor, Contract $contract, string $reason): Contract
+    {
+        if (! $actor->is_director) {
+            throw new \RuntimeException('Chỉ Giám đốc được từ chối yêu cầu ký số.');
+        }
+
+        $reason = trim($reason);
+        if (mb_strlen($reason) < 8) {
+            throw new \RuntimeException('Cần lý do từ chối (tối thiểu 8 ký tự).');
+        }
+
+        return DB::transaction(function () use ($actor, $contract, $reason): Contract {
+            $contract = Contract::query()->whereKey($contract->id)->lockForUpdate()->firstOrFail();
+            if ($contract->director_signed_at) {
+                throw new \RuntimeException('Hợp đồng đã ký số. Không từ chối. Hãy tạo hợp đồng mới nếu cần sửa.');
+            }
+
+            $contract->status = Contract::STATUS_DRAFT;
+            $contract->contract_status = Contract::STATUS_DRAFT;
+            $contract->content_locked_at = null;
+            $contract->save();
+
+            ContractSignature::query()->create([
+                'contract_id' => $contract->id,
+                'signer_id' => $actor->id,
+                'signer_role' => ContractSignature::ROLE_DIRECTOR,
+                'document_hash' => (string) $contract->document_hash,
+                'status' => ContractSignature::STATUS_REJECTED,
+                'provider' => app(DigitalSignatureProvider::class)->name(),
+                'verify_note' => $reason,
+                'signed_at' => now(),
+            ]);
+
+            $this->log($contract, $actor, 'signature_rejected', 'Giám đốc từ chối ký số — trả HR chỉnh lại', ['reason' => $reason]);
+            $this->syncStatus($contract);
+            $this->notifyHrSignatureRejected($contract->fresh(['employee']), $actor, $reason);
 
             return $contract->fresh();
         });
     }
 
+    public function verifyDirectorSignature(Contract $contract): bool
+    {
+        return $this->verifyPartySignature($contract, ContractSignature::ROLE_DIRECTOR);
+    }
+
+    public function verifyEmployeeSignature(Contract $contract): bool
+    {
+        return $this->verifyPartySignature($contract, ContractSignature::ROLE_EMPLOYEE);
+    }
+
+    public function verifyAllSignatures(Contract $contract): bool
+    {
+        if ($contract->director_signed_at && ! $this->verifyDirectorSignature($contract)) {
+            return false;
+        }
+        if ($contract->employee_signed_at && ! $this->verifyEmployeeSignature($contract)) {
+            return false;
+        }
+
+        return $contract->isFullySigned();
+    }
+
+    public function verifyPartySignature(Contract $contract, string $role): bool
+    {
+        $signature = $role === ContractSignature::ROLE_EMPLOYEE
+            ? $contract->employeeSignature
+            : $contract->directorSignature;
+        if (! $signature || ! $signature->isSigned()) {
+            return false;
+        }
+
+        $documents = app(ContractDocumentService::class);
+        if (! $documents->matchesFrozenHash($contract)) {
+            return false;
+        }
+
+        $provider = app(DigitalSignatureProvider::class);
+
+        return $provider->verify($signature->document_hash, (string) $signature->signature_value, [
+            'signer_id' => (int) $signature->signer_id,
+            'signer_role' => (string) $signature->signer_role,
+            'contract_id' => (int) $contract->id,
+        ]);
+    }
+
+    public function assertContentEditable(Contract $contract): void
+    {
+        if ($contract->isContentLocked()) {
+            throw new \RuntimeException('Hợp đồng đã khóa tài liệu / đã ký số. Không sửa nội dung. Hãy tạo hợp đồng hoặc gia hạn mới rồi ký lại.');
+        }
+    }
+
+    protected function applyPartyEsign(User $actor, Contract $contract, string $role): void
+    {
+        $documents = app(ContractDocumentService::class);
+        if (! $contract->document_hash || ! $contract->content_locked_at) {
+            $documents->freeze($contract);
+            $contract->refresh();
+        } elseif (! $documents->matchesFrozenHash($contract)) {
+            throw new \RuntimeException('Nội dung hợp đồng đã đổi sau khi khóa. Hash không khớp. HR phải gửi ký lại.');
+        }
+
+        $provider = app(DigitalSignatureProvider::class);
+        $hash = (string) $contract->document_hash;
+        $meta = [
+            'signer_id' => (int) $actor->id,
+            'signer_role' => $role,
+            'contract_id' => (int) $contract->id,
+        ];
+        $value = $provider->sign($hash, $meta);
+        $transactionId = 'MOCK-'.strtoupper(substr($hash, 0, 8)).'-'.$role.'-'.$contract->id;
+
+        ContractSignature::query()->create([
+            'contract_id' => $contract->id,
+            'signer_id' => $actor->id,
+            'signer_role' => $role,
+            'document_hash' => $hash,
+            'signature_value' => $value,
+            'signed_document_path' => $contract->canonical_document_path,
+            'signed_at' => now(),
+            'status' => ContractSignature::STATUS_SIGNED,
+            'provider' => $provider->name(),
+            'provider_transaction_id' => $transactionId,
+            'verify_note' => config('esign.disclaimer'),
+        ]);
+
+        if ($role === ContractSignature::ROLE_DIRECTOR) {
+            $contract->director_signed_at = now();
+            $contract->signed_director_at = $contract->director_signed_at;
+            $contract->signer_id = $actor->id;
+            $contract->status = Contract::STATUS_DIRECTOR_SIGNED;
+            $contract->contract_status = Contract::STATUS_DIRECTOR_SIGNED;
+        } else {
+            $contract->employee_signed_at = now();
+            $contract->signed_employee_at = $contract->employee_signed_at;
+            $contract->status = Contract::STATUS_EMPLOYEE_SIGNED;
+            $contract->contract_status = Contract::STATUS_EMPLOYEE_SIGNED;
+        }
+    }
+
+    public function terminateForEmployeeDeletion(Employee $employee, User $actor, ?string $reason = null): int
+    {
+        $reasonNote = $reason ? ' Lý do: '.$reason : '';
+        $count = 0;
+
+        $contracts = Contract::query()
+            ->where('employee_id', $employee->id)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($contracts as $contract) {
+            if (in_array($contract->status, [Contract::STATUS_TERMINATED, Contract::STATUS_CANCELLED], true)) {
+                continue;
+            }
+
+            $previous = $contract->status;
+            $contract->status = Contract::STATUS_TERMINATED;
+            $contract->contract_status = Contract::STATUS_TERMINATED;
+            if ($contract->end_date && $contract->end_date->isFuture()) {
+                $contract->end_date = now()->toDateString();
+            }
+
+            $line = 'Chấm dứt do xóa hồ sơ nhân viên ('.$actor->name.', '.now()->format('d/m/Y H:i').').'.$reasonNote;
+            $contract->notes = trim((string) $contract->notes) === ''
+                ? $line
+                : rtrim((string) $contract->notes)."\n".$line;
+            $contract->save();
+
+            $this->log($contract, $actor, 'terminated', 'Chấm dứt hợp đồng do xóa nhân viên', [
+                'previous_status' => $previous,
+                'employee_id' => $employee->id,
+            ]);
+            $count++;
+        }
+
+        return $count;
+    }
+
     public function syncStatus(Contract $contract): Contract
     {
-        if ($contract->status === Contract::STATUS_CANCELLED) {
+        if (in_array($contract->status, [Contract::STATUS_CANCELLED, Contract::STATUS_TERMINATED, Contract::STATUS_REJECTED], true)) {
             return $contract;
         }
 
-        $nextStatus = Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE;
+        $nextStatus = Contract::STATUS_DRAFT;
         if ($contract->employee_signed_at && $contract->director_signed_at) {
-            $nextStatus = $this->resolveDateBasedStatus($contract->start_date, $contract->end_date);
-        } elseif ($contract->employee_signed_at) {
-            $nextStatus = Contract::STATUS_WAITING_DIRECTOR_SIGNATURE;
+            $dated = $this->resolveDateBasedStatus($contract->start_date, $contract->end_date);
+            $nextStatus = in_array($dated, [Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE, Contract::STATUS_DRAFT], true)
+                ? Contract::STATUS_SIGNED
+                : $dated;
+        } elseif ($contract->director_signed_at) {
+            $nextStatus = Contract::STATUS_DIRECTOR_SIGNED;
+        } elseif ($contract->content_locked_at) {
+            $nextStatus = Contract::STATUS_PENDING_SIGNATURE;
         }
 
         $contract->status = $nextStatus;
@@ -243,26 +504,9 @@ class ContractService
         $endDate = $data['end_date'] ?? null;
 
         $contractType = $data['contract_type'] ?? $contract?->contract_type ?? null;
-        $shouldUseTemplateContent = false;
-        $template = null;
+        $template = $this->defaultTemplateFor($contractType, $data['contract_template_id'] ?? null);
 
-        if (! empty($data['contract_template_id'])) {
-            $template = ContractTemplate::find($data['contract_template_id']);
-            $shouldUseTemplateContent = true;
-        } elseif ($contractType) {
-            $template = ContractTemplate::query()
-                ->where('status', 'active')
-                ->where('contract_type', $contractType)
-                ->where('is_default', true)
-                ->first();
-
-            if ($template) {
-                $shouldUseTemplateContent = true;
-            }
-        }
-
-        $fixedTerms = ContractFixedTerms::forType($contractType);
-        $contractContent = $data['contract_content'] ?? ($shouldUseTemplateContent ? ($template?->content ?? $fixedTerms) : ($contract?->contract_content ?? $contract?->terms ?? $fixedTerms));
+        $fixedTerms = $this->officialTerms($contractType);
         $payload = [
             'employee_id' => $data['employee_id'] ?? $contract?->employee_id,
             'title' => $data['title'] ?? $contract?->title ?? $this->resolveContractTitle($data['contract_type'] ?? $contract?->contract_type),
@@ -276,9 +520,9 @@ class ContractService
             'allowance' => (float) ($data['allowance'] ?? $contract?->allowance ?? 0),
             'bonus' => (float) ($data['bonus'] ?? $contract?->bonus ?? 0),
             'payment_method' => $data['payment_method'] ?? $contract?->payment_method,
-            'terms' => $shouldUseTemplateContent ? ($template?->content ?? $data['terms'] ?? $contract?->terms ?? $fixedTerms) : ($data['terms'] ?? $contract?->terms ?? $fixedTerms),
+            'terms' => $fixedTerms,
             'additional_terms' => $data['additional_terms'] ?? $contract?->additional_terms,
-            'contract_content' => $contractContent,
+            'contract_content' => $fixedTerms,
             'created_by' => $actor->id,
             'parent_contract_id' => $data['parent_contract_id'] ?? $contract?->parent_contract_id,
             'employee_signed_at' => $contract?->employee_signed_at,
@@ -290,8 +534,8 @@ class ContractService
             'allowed_unpaid_leave_days_per_month' => (int) ($data['allowed_unpaid_leave_days_per_month'] ?? $contract?->allowed_unpaid_leave_days_per_month ?? 1),
             'allowed_makeup_attendance_per_month' => (int) ($data['allowed_makeup_attendance_per_month'] ?? $contract?->allowed_makeup_attendance_per_month ?? 3),
             'allowed_maternity_leave_days' => (int) ($data['allowed_maternity_leave_days'] ?? $contract?->allowed_maternity_leave_days ?? 180),
-            'status' => $contract?->status ?? Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE,
-            'contract_status' => $contract?->contract_status ?? $contract?->status ?? Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE,
+            'status' => $contract?->status ?? Contract::STATUS_DRAFT,
+            'contract_status' => $contract?->contract_status ?? $contract?->status ?? Contract::STATUS_DRAFT,
         ];
 
         if (! empty($data['document']) && $data['document'] instanceof UploadedFile) {
@@ -308,6 +552,38 @@ class ContractService
         return $payload;
     }
 
+    public function officialTerms(?string $contractType, mixed $templateId = null): string
+    {
+        $template = $this->defaultTemplateFor($contractType, $templateId);
+        $fromTemplate = trim((string) ($template?->content ?? ''));
+        if ($fromTemplate !== '') {
+            return (string) $template->content;
+        }
+
+        return ContractFixedTerms::forType($contractType);
+    }
+
+    protected function defaultTemplateFor(?string $contractType, mixed $templateId = null): ?ContractTemplate
+    {
+        if (! empty($templateId)) {
+            $selected = ContractTemplate::query()->find($templateId);
+            if ($selected) {
+                return $selected;
+            }
+        }
+
+        if (! $contractType) {
+            return null;
+        }
+
+        return ContractTemplate::query()
+            ->active()
+            ->where('contract_type', $contractType)
+            ->where('is_default', true)
+            ->orderByDesc('id')
+            ->first();
+    }
+
     protected function resolveDateBasedStatus($startDate, $endDate): string
     {
         $today = Carbon::now()->startOfDay();
@@ -320,10 +596,6 @@ class ContractService
 
             if ($end->lt($today)) {
                 return Contract::STATUS_EXPIRED;
-            }
-
-            if ($end->diffInDays($today) <= 30 && $end->diffInDays($today) >= 0) {
-                return 'expiring';
             }
         }
 
@@ -364,7 +636,7 @@ class ContractService
         };
     }
 
-    protected function log(Contract $contract, User $actor, string $action, string $message, array $details = []): void
+    public function log(Contract $contract, User $actor, string $action, string $message, array $details = []): void
     {
         ContractLog::create([
             'contract_id' => $contract->id,
@@ -385,6 +657,10 @@ class ContractService
      */
     public function syncSalaryToContract(User $actor, Contract $contract, \App\Models\Payroll $payroll): Contract
     {
+        if ($contract->isContentLocked()) {
+            throw new \RuntimeException('Hợp đồng đã khóa tài liệu / đã ký số. Không đồng bộ lương vào bản đã ký. Tạo hợp đồng mới nếu cần điều chỉnh.');
+        }
+
         $oldBase      = (float) $contract->base_salary;
         $newBase      = (float) $payroll->base_salary;
         $oldAllowance = (float) $contract->allowance;
@@ -469,5 +745,97 @@ class ContractService
             'diff'          => $diff,
             'diff_pct'      => $contractBase > 0 ? round($diff / $contractBase * 100, 1) : 0,
         ];
+    }
+
+    protected function notifyDirectorPendingSignature(Contract $contract, User $actor): void
+    {
+        $name = optional($contract->employee)->name ?: 'nhân viên';
+        Notification::create([
+            'sender_id' => $actor->id,
+            'target' => 'director',
+            'title' => 'Hợp đồng chờ ký số',
+            'message' => sprintf(
+                'HR đã khóa tài liệu hợp đồng %s của %s. Vui lòng xem PDF, kiểm tra hash rồi ký số hoặc từ chối.',
+                $contract->contract_code,
+                $name
+            ),
+            'is_read' => false,
+            'data' => [
+                'type' => 'contract_esign',
+                'contract_id' => $contract->id,
+                'employee_id' => $contract->employee_id,
+            ],
+        ]);
+    }
+
+    protected function notifyHrSignatureRejected(Contract $contract, User $actor, string $reason): void
+    {
+        $name = optional($contract->employee)->name ?: 'nhân viên';
+        Notification::create([
+            'sender_id' => $actor->id,
+            'target' => 'hr',
+            'title' => 'Giám đốc từ chối ký số hợp đồng',
+            'message' => sprintf('Hợp đồng %s của %s bị từ chối. Lý do: %s. HR có thể sửa và gửi ký lại.', $contract->contract_code, $name, $reason),
+            'is_read' => false,
+            'data' => [
+                'type' => 'contract_esign',
+                'contract_id' => $contract->id,
+                'employee_id' => $contract->employee_id,
+            ],
+        ]);
+    }
+
+    protected function notifyEmployeeNeedsToSign(Contract $contract, User $actor): void
+    {
+        if (! $contract->employee_id) {
+            return;
+        }
+
+        HrApprovalNotifier::send(
+            (int) $contract->employee_id,
+            $actor,
+            'Hợp đồng cần bạn ký',
+            sprintf(
+                'Giám đốc đã ký hợp đồng %s phía doanh nghiệp. Hãy đăng nhập cổng nhân viên, xem nội dung rồi ký phía người lao động.',
+                $contract->contract_code
+            ),
+            [
+                'type' => 'contract_esign',
+                'contract_id' => $contract->id,
+            ]
+        );
+    }
+
+    protected function notifyContractFullySigned(Contract $contract, User $actor): void
+    {
+        $name = optional($contract->employee)->name ?: 'nhân viên';
+        Notification::create([
+            'sender_id' => $actor->id,
+            'target' => 'hr',
+            'title' => 'Hợp đồng đã đủ chữ ký hai bên',
+            'message' => sprintf('Hợp đồng %s của %s đã được Giám đốc và nhân viên ký. Tài liệu đã khóa.', $contract->contract_code, $name),
+            'is_read' => false,
+            'data' => [
+                'type' => 'contract_esign',
+                'contract_id' => $contract->id,
+                'employee_id' => $contract->employee_id,
+            ],
+        ]);
+
+        if ($contract->employee_id) {
+            HrApprovalNotifier::send(
+                (int) $contract->employee_id,
+                $actor,
+                'Hợp đồng đã hoàn tất ký',
+                sprintf(
+                    'Hợp đồng %s đã đủ chữ ký hai bên và được khóa. Bạn có thể xem/tải tài liệu đã ký (mô phỏng).',
+                    $contract->contract_code
+                ),
+                [
+                    'type' => 'contract_esign',
+                    'contract_id' => $contract->id,
+                ]
+            );
+        }
     }
 }

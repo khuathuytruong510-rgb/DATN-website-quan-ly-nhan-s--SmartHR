@@ -257,7 +257,7 @@ class HrDashboardController extends Controller
     {
         $total = Contract::count();
         $active = Contract::where('status', 'active')->count();
-        $expiringSoon = Contract::where('status', 'active')
+        $expiringSoon = Contract::whereIn('status', ['active', 'expiring'])
             ->where('end_date', '>=', now())
             ->where('end_date', '<=', now()->addDays(30))
             ->count();

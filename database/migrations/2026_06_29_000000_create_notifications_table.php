@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('notifications', function (Blueprint $table) {
             $table->id();
             $table->foreignId('sender_id')->constrained('users')->cascadeOnDelete();
-            $table->enum('target', ['employee', 'hr', 'all'])->default('employee');
+            $table->enum('target', ['employee', 'hr', 'director', 'admin', 'all'])->default('employee');
             $table->string('title');
             $table->text('message');
             $table->boolean('is_read')->default(false);

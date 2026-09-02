@@ -11,7 +11,7 @@
     <div class="page-head">
         <div>
             <h1>Tạo yêu cầu tăng ca</h1>
-            <p class="muted">Gửi đăng ký tăng ca. Thời gian đăng ký không nhất thiết là thời gian tính lương.</p>
+            <p class="muted">Gửi đăng ký tăng ca cho {{ isset($employee) ? \App\Support\RequestApprover::queueLabel($employee) : 'HR' }} duyệt. Check-out muộn không tự thành tăng ca — chỉ tính trong khung được duyệt.</p>
         </div>
         <div class="actions">
             <a class="btn" href="{{ route('me.overtime_requests') }}">Quay lại</a>
@@ -24,26 +24,31 @@
 
             <div class="field">
                 <label>Ngày</label>
-                <input type="date" name="date" value="{{ old('date') }}" required>
+                <input type="date" name="date" value="{{ old('date') }}" min="{{ now()->toDateString() }}" max="{{ now()->addDay()->toDateString() }}" required>
+                <p class="muted" style="margin:0.25rem 0 0;font-size:0.85em;">Chỉ hôm nay hoặc ngày mai. Không đăng ký quá khứ hoặc từ 2 ngày trở lên.</p>
                 @error('date')<div class="error">{{ $message }}</div>@enderror
             </div>
 
-            <div class="grid two-cols">
-                <div>
-                    <label>Giờ bắt đầu</label>
-                    <input type="time" name="start_time" value="{{ old('start_time') }}" required>
-                    @error('start_time')<div class="error">{{ $message }}</div>@enderror
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <div class="field">
+                        <label class="form-label">Giờ bắt đầu dự kiến</label>
+                        <input class="form-control" type="time" name="start_time" value="{{ old('start_time', '17:30') }}" required>
+                        @error('start_time')<div class="error">{{ $message }}</div>@enderror
+                    </div>
                 </div>
-                <div>
-                    <label>Giờ kết thúc</label>
-                    <input type="time" name="end_time" value="{{ old('end_time') }}" required>
-                    @error('end_time')<div class="error">{{ $message }}</div>@enderror
+                <div class="col-12 col-md-6">
+                    <div class="field">
+                        <label class="form-label">Giờ kết thúc dự kiến</label>
+                        <input class="form-control" type="time" name="end_time" value="{{ old('end_time', '20:00') }}" required>
+                        @error('end_time')<div class="error">{{ $message }}</div>@enderror
+                    </div>
                 </div>
             </div>
 
             <div class="field">
-                <label>Lý do</label>
-                <textarea name="reason">{{ old('reason') }}</textarea>
+                <label>Lý do / công việc</label>
+                <textarea name="reason" required>{{ old('reason') }}</textarea>
                 @error('reason')<div class="error">{{ $message }}</div>@enderror
             </div>
 
