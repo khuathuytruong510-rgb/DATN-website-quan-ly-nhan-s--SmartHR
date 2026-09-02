@@ -155,7 +155,7 @@ class PromotionRequestController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Đã duyệt đề xuất. HR sẽ thực hiện thay đổi.');
+        return back()->with('success', 'Đã duyệt đề xuất. Hệ thống đã cập nhật mức lương, ghi lịch sử và thông báo nhân viên.');
     }
 
     public function reject(Request $request, PromotionRequest $promotionRequest): RedirectResponse
@@ -236,6 +236,17 @@ class PromotionRequestController extends Controller
             $data['new_position'] = Position::find($data['new_position_id'] ?? 0)?->name;
             if (empty($data['new_position'])) {
                 abort(422, 'Vui lòng chọn chức vụ mới cho đề xuất thăng chức.');
+            }
+        }
+
+        $newPositionId = $data['new_position_id'] ?? null;
+        if ($newPositionId) {
+            $targetDeptId = $data['department_id'] ?? (int) Employee::whereKey($data['employee_id'])->value('department_id');
+            if ($targetDeptId) {
+                $posDeptId = (int) Position::whereKey($newPositionId)->value('department_id');
+                if ($posDeptId && $posDeptId !== (int) $targetDeptId) {
+                    abort(422, 'Chức vụ mới không thuộc phòng ban đã chọn (hoặc phòng ban hiện tại của nhân viên).');
+                }
             }
         }
 

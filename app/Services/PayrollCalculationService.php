@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ActivityLog;
 use App\Models\Attendance;
+use App\Models\Contract;
 use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Models\Payroll;
@@ -110,18 +111,51 @@ class PayrollCalculationService
         return compact('calculated', 'skipped', 'month', 'year');
     }
 
+    /**
+     * Lương cơ bản của nhân viên khi tính lương:
+     * - Theo chức vụ: lấy mức lương chuẩn của vị trí (positions.base_salary).
+     * - Không được thấp hơn lương cơ bản ghi trong hợp đồng đang hiệu lực.
+     * => lấy giá trị cao hơn giữa 2 mức.
+     */
+    protected function baseSalaryFor(Employee $employee): int
+    {
+        // 1) Lương theo chức vụ (chuẩn vị trí)
+        $positionSalary = 0;
+
+        if ($employee->positionDetail && (int) $employee->positionDetail->base_salary > 0) {
+            $positionSalary = (int) $employee->positionDetail->base_salary;
+        } else {
+            $positionSalary = match ($employee->position) {
+                'Giám Đốc' => 13000000,
+                'Trưởng Phòng Nhân Sự' => 10400000,
+                default => 7800000,
+            };
+        }
+
+        // 2) Lương cơ bản theo hợp đồng đang hiệu lực
+        $contractSalary = 0;
+        $contract = Contract::query()
+            ->where('employee_id', $employee->id)
+            ->where('status', Contract::STATUS_ACTIVE)
+            ->latest('id')
+            ->first();
+
+        if ($contract) {
+            $contractSalary = (int) ($contract->base_salary ?: $contract->salary ?: 0);
+        }
+
+        return max($positionSalary, $contractSalary);
+    }
+
     protected function persistCalculated(Employee $employee, int $month, int $year, ?Payroll $existing): Payroll
     {
         /*
         |--------------------------------------------------------------------------
-        | 1. Lương cơ bản theo chức vụ
+        | 1. Lương cơ bản: ưu tiên theo hợp đồng đang hiệu lực của nhân viên.
+        | Chỉ khi không có hợp đồng mới dùng lương mặc định theo chức vụ.
         |--------------------------------------------------------------------------
         */
-        $baseSalary = match ($employee->position) {
-            'Giám Đốc' => 13000000,
-            'Trưởng Phòng Nhân Sự' => 10400000,
-            default => 7800000,
-        };
+        $baseSalary = $this->baseSalaryFor($employee);
 
         /*
         |--------------------------------------------------------------------------

@@ -111,7 +111,7 @@
     <script>
         document.querySelector('.module-primary-btn').addEventListener('click', function(e) {
             e.preventDefault();
-            if (confirm('Bạn có chắc muốn gửi tất cả phiếu lương qua email?')) {
+            var sendAll = function () {
                 var form = document.createElement('form');
                 form.method = 'POST';
                 form.action = '{{ route("payroll.email.send_all") }}';
@@ -124,6 +124,11 @@
 
                 document.body.appendChild(form);
                 form.submit();
+            };
+            if (typeof window.SmartHrConfirm === 'function') {
+                SmartHrConfirm('Bạn có chắc muốn gửi tất cả phiếu lương qua email?', sendAll);
+            } else {
+                sendAll();
             }
         });
     </script>

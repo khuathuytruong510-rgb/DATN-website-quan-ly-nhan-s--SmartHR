@@ -38,17 +38,20 @@
                             <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Tên chức vụ</th>
                             <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Phòng ban</th>
                             <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Mô tả</th>
-                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Trạng thái</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach ($positions as $index => $position)
                             <tr>
                                 <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $index + 1 }}</td>
-                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $position['name'] }}</td>
-                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $position['department'] }}</td>
-                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $position['description'] }}</td>
-                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $position['status'] }}</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
+                                    <strong>{{ $position->name }}</strong>
+                                    @if ($position->level)
+                                        <br><span class="muted" style="font-size:12px;">Cấp bậc: {{ $position->level }}</span>
+                                    @endif
+                                </td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ optional($position->department)->name ?? '—' }}</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $position->description ?: '-' }}</td>
                             </tr>
                         @endforeach
                     </tbody>

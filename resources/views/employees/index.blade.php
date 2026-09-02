@@ -75,7 +75,7 @@
                                 <a href="{{ route('employees.show', $employee) }}" class="btn btn-sm btn-outline-primary">Xem</a>
                                 @if(auth()->user()?->canManageHr())
                                 <a href="{{ route('employees.edit', $employee) }}" class="btn btn-sm btn-outline-secondary">Sửa</a>
-                                <form method="POST" action="{{ route('employees.destroy', $employee) }}" style="display:inline;" onsubmit="return confirm('Bạn có chắc muốn xóa?')">
+                                <form method="POST" action="{{ route('employees.destroy', $employee) }}" style="display:inline;" data-confirm="Bạn có chắc muốn xóa?">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" class="btn btn-sm btn-outline-danger">Xóa</button>

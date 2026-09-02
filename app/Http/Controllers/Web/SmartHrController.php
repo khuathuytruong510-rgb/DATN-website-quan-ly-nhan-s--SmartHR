@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ContractFormRequest;
+use App\Models\ActivityLog;
 use App\Models\Attendance;
 use App\Models\Contract;
 use App\Models\Department;
@@ -378,92 +379,6 @@ class SmartHrController extends Controller
         ));
     }
 
-    protected function directorDashboard(): View
-    {
-        $now = now();
-        $month = $now->month;
-        $year = $now->year;
-        $monthStart = $now->copy()->startOfMonth()->toDateString();
-        $monthEnd = $now->copy()->endOfMonth()->toDateString();
-
-        $people = [
-            'total' => Employee::count(),
-            'active' => Employee::where('status', 'active')->count(),
-            'probation' => Employee::whereHas('contracts', fn ($q) => $q->where('contract_type', 'probation')->where('status', 'active'))->count(),
-            'inactive' => Employee::where('status', 'inactive')->count(),
-            'joinedThisMonth' => Employee::whereBetween('start_date', [$monthStart, $monthEnd])->count(),
-        ];
-
-        $waitingContractStatuses = [
-            Contract::STATUS_WAITING_EMPLOYEE_SIGNATURE,
-            Contract::STATUS_WAITING_DIRECTOR_SIGNATURE,
-            'waiting_employee',
-            'waiting_director',
-        ];
-
-        $contracts = [
-            'active' => Contract::where('status', 'active')->count(),
-            'waitingSign' => Contract::whereIn('status', $waitingContractStatuses)->count(),
-            'expiringSoon' => Contract::where('status', 'active')
-                ->whereNotNull('end_date')
-                ->whereBetween('end_date', [$now->toDateString(), $now->copy()->addDays(30)->toDateString()])
-                ->count(),
-        ];
-
-        $payrollQuery = Payroll::where('month', $month)->where('year', $year);
-        $approvedByDirector = array_values(array_unique(array_merge(
-            PayrollPaymentWorkflowService::directorApprovedStatuses(),
-            PayrollPaymentWorkflowService::payableStatuses(),
-            [PayrollPaymentWorkflowService::PAID]
-        )));
-        $payroll = [
-            'month' => $month,
-            'year' => $year,
-            'totalFund' => (clone $payrollQuery)->sum('total_salary'),
-            'awaitingDirector' => (clone $payrollQuery)->whereIn('status', PayrollPaymentWorkflowService::hrCheckedStatuses())->count(),
-            'approved' => (clone $payrollQuery)->whereIn('status', $approvedByDirector)->count(),
-            'awaitingEmployee' => (clone $payrollQuery)->whereIn('status', PayrollPaymentWorkflowService::directorApprovedStatuses())->count(),
-            'awaitingPayment' => (clone $payrollQuery)->whereIn('status', PayrollPaymentWorkflowService::payableStatuses())->count(),
-            'paid' => (clone $payrollQuery)->where('status', PayrollPaymentWorkflowService::PAID)->count(),
-            'issues' => (clone $payrollQuery)->where('status', PayrollPaymentWorkflowService::PAYROLL_ISSUE)->count(),
-        ];
-
-        $approvedLeaves = LeaveRequest::where('status', 'approved')
-            ->where(function ($q) use ($monthStart, $monthEnd) {
-                $q->whereBetween('start_date', [$monthStart, $monthEnd])
-                    ->orWhereBetween('end_date', [$monthStart, $monthEnd]);
-            });
-
-        $leave = [
-            'pending' => LeaveRequest::where('status', 'pending')->count(),
-            'days' => (clone $approvedLeaves)->sum('days'),
-            'paidDays' => (clone $approvedLeaves)->whereIn('type', ['annual', 'sick'])->sum('days'),
-            'unpaidDays' => (clone $approvedLeaves)->whereIn('type', ['unpaid', 'personal'])->sum('days'),
-        ];
-
-        $attendanceQuery = Attendance::whereBetween('date', [$monthStart, $monthEnd]);
-        $attendance = [
-            'full' => (clone $payrollQuery)->whereRaw('(COALESCE(working_days, 0) + COALESCE(paid_leave_days, 0)) >= COALESCE(required_working_days, 26)')->count(),
-            'short' => (clone $payrollQuery)->whereRaw('(COALESCE(working_days, 0) + COALESCE(paid_leave_days, 0)) < COALESCE(required_working_days, 26)')->count(),
-            'late' => (clone $attendanceQuery)->where(function ($q) {
-                $q->where('status', 'late')->orWhere('late_minutes', '>', 0);
-            })->count(),
-            'absent' => (clone $attendanceQuery)->where('status', 'absent')->count(),
-        ];
-
-        $expiringContracts = Contract::with(['employee.department'])
-            ->where('status', 'active')
-            ->whereNotNull('end_date')
-            ->whereBetween('end_date', [now()->toDateString(), now()->addDays(30)->toDateString()])
-            ->orderBy('end_date')
-            ->limit(8)
-            ->get();
-
-        return view('director.dashboard', compact(
-            'people', 'contracts', 'payroll', 'leave', 'attendance', 'expiringContracts'
-        ));
-    }
-
     public function positions(): View
     {
         $order = ['BGD', 'HR', 'TD', 'CB', 'DTPT', 'KTTC', 'KD', 'MKT', 'IT', 'VH', 'PC', 'HC'];
@@ -696,7 +611,7 @@ class SmartHrController extends Controller
     public function departments(): View
     {
         return view('departments.index', [
-            'departments' => Department::latest()->paginate(10),
+            'departments' => Department::withCount(['employees', 'positions'])->latest()->paginate(10),
         ]);
     }
 
@@ -835,7 +750,7 @@ class SmartHrController extends Controller
         ])->with('info', 'Xóa nhân viên phải qua Giám đốc duyệt. Vui lòng nhập lý do và gửi yêu cầu.');
     }
 
-    public function contracts(): View
+    public function contracts(Request $request): View
     {
         $user = Auth::user();
         $query = Contract::with('employee.department');
@@ -849,8 +764,22 @@ class SmartHrController extends Controller
             }
         }
 
+        if ($status = trim((string) $request->input('status'))) {
+            $query->where('status', $status);
+        }
+
+        $deptId = (int) $request->input('dept');
+        if ($deptId > 0) {
+            $query->whereHas('employee', fn ($q) => $q->where('department_id', $deptId));
+        }
+
         return view('contracts.index', [
-            'contracts' => $query->latest()->paginate(10),
+            'contracts' => $query->latest()->paginate(10)->withQueryString(),
+            'filters' => [
+                'status' => $status,
+                'dept' => $deptId > 0 ? $deptId : '',
+            ],
+            'departments' => Department::orderBy('name')->get(),
         ]);
     }
 
@@ -2073,9 +2002,13 @@ class SmartHrController extends Controller
             return back()->with('error', 'Nhân viên chưa có bảng lương nào để đồng bộ.');
         }
 
-        // Đồng bộ trực tiếp vào hợp đồng hiện tại (bất kể trạng thái),
-        // không chỉ active/expiring — vì user đang ở trang show của đúng hợp đồng đó
-        $updated = $contractService->syncSalaryToContract(Auth::user(), $contract, $payroll);
+        try {
+            // Đồng bộ trực tiếp vào hợp đồng hiện tại (bất kể trạng thái),
+            // không chỉ active/expiring — vì user đang ở trang show của đúng hợp đồng đó
+            $updated = $contractService->syncSalaryToContract(Auth::user(), $contract, $payroll);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return back()->with('success', sprintf(
             'Đã cập nhật lương hợp đồng [%s] theo bảng lương T%s/%s: lương CB %s₫, phụ cấp %s₫.',
@@ -2084,6 +2017,122 @@ class SmartHrController extends Controller
             $payroll->year,
             number_format($updated->base_salary, 0, ',', '.'),
             number_format($updated->allowance,   0, ',', '.')
+        ));
+    }
+
+    /** Đồng bộ lương toàn bộ hợp đồng theo bảng lương gần nhất của từng nhân viên (BL → HĐ) */
+    public function syncAllContractSalariesFromPayroll(ContractService $contractService): RedirectResponse
+    {
+        if (! $this->canManageContracts()) {
+            abort(403);
+        }
+
+        $updated = 0;
+        $skipped = 0;
+        $blocked = 0;
+
+        Contract::with('employee')->each(function (Contract $contract) use (&$updated, &$skipped, &$blocked, $contractService) {
+            $employee = $contract->employee;
+            if (! $employee) {
+                $skipped++;
+                return;
+            }
+
+            $payroll = $employee->payrolls()
+                ->orderByDesc('year')
+                ->orderByDesc('month')
+                ->first();
+
+            if (! $payroll) {
+                $skipped++;
+                return;
+            }
+
+            $newBase      = (float) $payroll->base_salary;
+            $newAllowance = (float) ($payroll->allowance ?? $contract->allowance ?? 0);
+            if ((float) $contract->base_salary === $newBase && (float) $contract->allowance === $newAllowance) {
+                $skipped++;
+                return;
+            }
+
+            try {
+                $contractService->syncSalaryToContract(Auth::user(), $contract, $payroll);
+                $updated++;
+            } catch (\RuntimeException $e) {
+                // Không được giảm xuống dưới mức lương cơ bản đang hiệu lực
+                $blocked++;
+            }
+        });
+
+        ActivityLog::create([
+            'user_id' => Auth::id(),
+            'action'  => 'contract_salary_synced_from_payroll_all',
+            'meta'    => sprintf('updated:%d;skipped:%d;blocked:%d', $updated, $skipped, $blocked),
+        ]);
+
+        return back()->with('success', sprintf(
+            'Đã đồng bộ %d hợp đồng theo bảng lương mới nhất. Bỏ qua %d không cần thay đổi, chặn %d hợp đồng có lương thấp hơn mức lương cơ bản hiện tại.',
+            $updated, $skipped, $blocked
+        ));
+    }
+
+    /** Đồng bộ lương từ hợp đồng đang hiệu lực vào phiếu lương chưa vào quy trình duyệt (HĐ → BL) */
+    public function syncAllPayrollSalariesFromContracts(): RedirectResponse
+    {
+        if (! $this->canManageContracts()) {
+            abort(403);
+        }
+
+        $recalculable = PayrollPaymentWorkflowService::recalculableStatuses();
+        $updated      = 0;
+        $skipped      = 0;
+
+        Contract::where('status', Contract::STATUS_ACTIVE)
+            ->with('employee')
+            ->latest('id')
+            ->get()
+            ->unique('employee_id')
+            ->each(function (Contract $contract) use (&$updated, &$skipped, $recalculable) {
+                $base      = (float) ($contract->base_salary ?: $contract->salary ?: 0);
+                $allowance = (float) ($contract->allowance ?? 0);
+
+                if ($base <= 0) {
+                    $skipped++;
+                    return;
+                }
+
+                $payrolls = Payroll::where('employee_id', $contract->employee_id)
+                    ->whereIn('status', $recalculable)
+                    ->get();
+
+                $changed = false;
+                foreach ($payrolls as $payroll) {
+                    if ((float) $payroll->base_salary === $base && (float) ($payroll->allowance ?? 0) === $allowance) {
+                        continue;
+                    }
+
+                    $payroll->base_salary = $base;
+                    $payroll->allowance   = $allowance;
+                    $payroll->save();
+
+                    $changed = true;
+                    $updated++;
+                }
+
+                if (! $changed) {
+                    $skipped++;
+                }
+            });
+
+        ActivityLog::create([
+            'user_id' => Auth::id(),
+            'action'  => 'payroll_salary_synced_from_contracts_all',
+            'meta'    => sprintf('updated:%d;skipped:%d', $updated, $skipped),
+        ]);
+
+        return back()->with('success', sprintf(
+            'Đã đồng bộ %d phiếu lương theo lương hợp đồng đang hiệu lực (bỏ qua %d không có thay đổi).',
+            $updated, $skipped
         ));
     }
 

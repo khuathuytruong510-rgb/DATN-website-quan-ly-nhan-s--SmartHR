@@ -181,6 +181,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/contracts/{contract}/renew', [SmartHrController::class, 'storeRenewalContract'])->name('contracts.storeRenewal');
         Route::post('/contracts/{contract}/sign', [SmartHrController::class, 'signContract'])->name('contracts.sign');
         Route::post('/contracts/{contract}/sync-salary', [SmartHrController::class, 'syncContractSalary'])->name('contracts.sync_salary');
+        Route::post('/contracts/sync-salary/from-payroll', [\App\Http\Controllers\Web\SmartHrController::class, 'syncAllContractSalariesFromPayroll'])->name('contracts.sync_salary_from_payroll');
+        Route::post('/contracts/sync-salary/from-contract', [\App\Http\Controllers\Web\SmartHrController::class, 'syncAllPayrollSalariesFromContracts'])->name('contracts.sync_salary_from_contract');
 
         Route::get('/contract-templates/content', [\App\Http\Controllers\Web\ContractTemplateController::class, 'templateContent'])->name('contract-templates.content');
         Route::resource('contract-templates', \App\Http\Controllers\Web\ContractTemplateController::class)->names('contract-templates');
@@ -299,16 +301,6 @@ Route::middleware('auth')->group(function () {
         Route::post('/leave-requests/{leaveRequest}/reject', [SmartHrController::class, 'rejectLeaveRequest'])->name('leave_requests.reject');
         Route::delete('/leave-requests/{leaveRequest}', [SmartHrController::class, 'destroyLeaveRequest'])->name('leave_requests.destroy');
         
-        // Đề xuất thăng chức / tăng lương
-        Route::get('/promotion-requests', [PromotionRequestController::class, 'index'])->name('promotion_requests.index');
-        Route::get('/promotion-requests/create', [PromotionRequestController::class, 'create'])->name('promotion_requests.create');
-        Route::post('/promotion-requests', [PromotionRequestController::class, 'store'])->name('promotion_requests.store');
-        Route::get('/promotion-requests/{promotionRequest}', [PromotionRequestController::class, 'show'])->name('promotion_requests.show');
-        Route::post('/promotion-requests/{promotionRequest}/approve', [PromotionRequestController::class, 'approve'])->name('promotion_requests.approve');
-        Route::post('/promotion-requests/{promotionRequest}/reject', [PromotionRequestController::class, 'reject'])->name('promotion_requests.reject');
-        Route::post('/promotion-requests/{promotionRequest}/apply', [PromotionRequestController::class, 'apply'])->name('promotion_requests.apply');
-        Route::post('/promotion-requests/{promotionRequest}/cancel', [PromotionRequestController::class, 'cancel'])->name('promotion_requests.cancel');
-
         // Salary history detail
         Route::get('/salary-histories/{salaryHistory}', [\App\Http\Controllers\Web\SalaryHistoryController::class, 'show'])->name('salary_histories.show');
         // Route to view salary history by payroll
@@ -349,6 +341,17 @@ Route::middleware('auth')->group(function () {
         Route::get('/hr-dashboard', [\App\Http\Controllers\Web\HrDashboardController::class, 'index'])->name('hr-dashboard.index');
         Route::get('/hr-dashboard/export', [\App\Http\Controllers\Web\HrDashboardController::class, 'export'])->name('hr-dashboard.export');
     });
+
+    // Đề xuất thăng chức / tăng lương — HR tạo, Giám đốc duyệt/từ chối
+    // (ngoài EnsureAdminOrHr để Giám đốc truy cập; controller tự kiểm tra vai trò)
+    Route::get('/promotion-requests', [PromotionRequestController::class, 'index'])->name('promotion_requests.index');
+    Route::get('/promotion-requests/create', [PromotionRequestController::class, 'create'])->name('promotion_requests.create');
+    Route::post('/promotion-requests', [PromotionRequestController::class, 'store'])->name('promotion_requests.store');
+    Route::get('/promotion-requests/{promotionRequest}', [PromotionRequestController::class, 'show'])->name('promotion_requests.show');
+    Route::post('/promotion-requests/{promotionRequest}/approve', [PromotionRequestController::class, 'approve'])->name('promotion_requests.approve');
+    Route::post('/promotion-requests/{promotionRequest}/reject', [PromotionRequestController::class, 'reject'])->name('promotion_requests.reject');
+    Route::post('/promotion-requests/{promotionRequest}/apply', [PromotionRequestController::class, 'apply'])->name('promotion_requests.apply');
+    Route::post('/promotion-requests/{promotionRequest}/cancel', [PromotionRequestController::class, 'cancel'])->name('promotion_requests.cancel');
 
     // Accountant portal (only for accountant role)
     Route::middleware(\App\Http\Middleware\EnsureAccountant::class)->group(function () {

@@ -121,8 +121,8 @@ class PromotionRequest extends Model
 
     public function hasSalaryChange(): bool
     {
-        return (float) $this->new_base_salary >= 0
-            && in_array($this->change_type, [self::CHANGE_SALARY_RAISE, self::CHANGE_BOTH], true);
+        return (float) $this->new_base_salary > 0
+            && in_array($this->change_type, [self::CHANGE_PROMOTION, self::CHANGE_SALARY_RAISE, self::CHANGE_BOTH], true);
     }
 
     public function changeTypeLabel(): string
@@ -139,7 +139,7 @@ class PromotionRequest extends Model
     {
         return match ($this->status) {
             self::STATUS_PENDING => 'Chờ Giám đốc duyệt',
-            self::STATUS_APPROVED => 'Đã duyệt — chờ HR thực hiện',
+            self::STATUS_APPROVED => 'Đã duyệt — tự động cập nhật',
             self::STATUS_APPLIED => 'Đã áp dụng',
             self::STATUS_REJECTED => 'Bị từ chối',
             self::STATUS_CANCELLED => 'Đã hủy',

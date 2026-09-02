@@ -9,7 +9,7 @@
                 <div class="btn-group">
                     <a href="{{ route('attendance.index') }}" class="btn btn-light">Quay lại</a>
                     <a href="{{ route('attendance.edit', $attendance) }}" class="btn btn-primary">Sửa</a>
-                    <form action="{{ route('attendance.destroy', $attendance) }}" method="POST" onsubmit="return confirm('Bạn có chắc muốn xóa?');" style="display:inline">
+                    <form action="{{ route('attendance.destroy', $attendance) }}" method="POST" data-confirm="Bạn có chắc muốn xóa?" style="display:inline">
                         @csrf
                         @method('DELETE')
                         <button class="btn btn-danger">Xóa</button>

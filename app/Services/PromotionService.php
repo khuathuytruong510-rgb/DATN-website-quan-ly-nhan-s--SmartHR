@@ -33,6 +33,18 @@ class PromotionService
                 throw new RuntimeException('Nhân viên này đang có đề xuất thăng chức/tăng lương chờ duyệt. Hãy xử lý đề xuất cũ trước.');
             }
 
+            // Thăng chức: mức lương cơ bản mới bắt buộc theo lương chuẩn chức vụ mới (server ép).
+            if (in_array($data['change_type'] ?? null, [PromotionRequest::CHANGE_PROMOTION, PromotionRequest::CHANGE_BOTH], true)
+                && ! empty($data['new_position_id'])) {
+                $position = Position::find($data['new_position_id']);
+                if ($position) {
+                    $base = self::suggestSalaryFromPosition($position, (float) ($data['new_base_salary'] ?? 0));
+                    if ($base > 0) {
+                        $data['new_base_salary'] = $base;
+                    }
+                }
+            }
+
             $this->assertGteThanCurrent($employee, $data);
 
             try {
@@ -97,11 +109,15 @@ class PromotionService
             $this->notify(
                 $actor,
                 'Đề xuất thăng chức / tăng lương đã được duyệt',
-                'Đề xuất của '.($request->employee->name ?? 'nhân viên').' đã được Giám đốc phê duyệt. HR thực hiện thay đổi.',
+                'Đề xuất của '.($request->employee->name ?? 'nhân viên').' đã được Giám đốc phê duyệt. Hệ thống đã tự động cập nhật mức lương và ghi lịch sử.',
                 ['promotion_request_id' => $request->id, 'employee_id' => $request->employee_id, 'type' => 'promotion_approved']
             );
 
-            return $request->fresh(['employee', 'submittedBy', 'reviewedBy']);
+            // Giám đốc duyệt => tự động áp dụng: cập nhật lương/chức vụ, ghi lịch sử
+            // và thông báo cho nhân viên (Duyệt → Cập nhật mức lương → Thông báo NV).
+            $this->apply($actor, $request->fresh());
+
+            return $request->fresh(['employee', 'submittedBy', 'reviewedBy', 'appliedBy', 'newPosition']);
         });
     }
 
@@ -176,6 +192,8 @@ class PromotionService
             if (! $employee) {
                 throw new RuntimeException('Không tìm thấy nhân viên của đề xuất.');
             }
+
+            $this->enforcePositionSalary($request);
 
             $this->updateEmployee($request, $employee);
             $this->updateActiveContract($actor, $request, $employee);
@@ -317,6 +335,29 @@ class PromotionService
             'status' => SalaryHistory::STATUS_APPLIED,
             'updated_by' => $actor->id,
         ]);
+    }
+
+    /**
+     * Thăng chức: ghi đè lương cơ bản mới theo lương chuẩn chức vụ mới (server ép).
+     */
+    protected function enforcePositionSalary(PromotionRequest $request): void
+    {
+        if (! $request->hasPositionChange()) {
+            return;
+        }
+
+        $position = $request->newPosition
+            ?? (filled($request->new_position_id) ? Position::find($request->new_position_id) : null);
+
+        if (! $position) {
+            return;
+        }
+
+        $base = self::suggestSalaryFromPosition($position, (float) $request->new_base_salary);
+
+        if ($base > 0) {
+            $request->new_base_salary = $base;
+        }
     }
 
     protected function lockPending(PromotionRequest $request): PromotionRequest

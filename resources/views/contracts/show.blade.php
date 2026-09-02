@@ -279,7 +279,7 @@
                     <form method="POST" action="{{ route('contracts.sync_salary', $contract) }}" class="mb-2">
                         @csrf
                         <button type="submit" class="btn btn-warning w-100"
-                            onclick="return confirm('Cập nhật lương hợp đồng theo bảng lương tháng {{ $payroll->month }}/{{ $payroll->year }}?')">
+                            data-confirm="Cập nhật lương hợp đồng theo bảng lương tháng {{ $payroll->month }}/{{ $payroll->year }}?">
                             🔄 Đồng bộ lương hợp đồng
                         </button>
                     </form>

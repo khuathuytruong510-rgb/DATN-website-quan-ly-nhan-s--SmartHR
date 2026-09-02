@@ -16,6 +16,54 @@
     <div class="alert alert-danger mb-3">{{ session('error') }}</div>
 @endif
 
+@if(auth()->user()?->canManageHr())
+<div class="mb-3 d-flex flex-wrap gap-2">
+    <form action="{{ route('contracts.sync_salary_from_contract') }}" method="POST" class="d-inline">
+        @csrf
+        <button type="submit" class="btn btn-sm btn-primary"
+            data-confirm="Đồng bộ toàn bộ mức lương từ hợp đồng đang hiệu lực vào các phiếu lương (chỉ áp dụng cho phiếu chưa vào quy trình duyệt)?">
+            🔄 Đồng bộ HĐ → Bảng lương (tất cả)
+        </button>
+    </form>
+    <form action="{{ route('contracts.sync_salary_from_payroll') }}" method="POST" class="d-inline">
+        @csrf
+        <button type="submit" class="btn btn-sm btn-outline-primary"
+            data-confirm="Đồng bộ toàn bộ lương từ bảng lương gần nhất vào các hợp đồng đang lệch?">
+            💰 Đồng bộ Bảng lương → HĐ (tất cả)
+        </button>
+    </form>
+</div>
+@endif
+
+<div class="card p-3 mb-3">
+    <form method="GET" action="{{ route('contracts.index') }}" class="d-flex flex-wrap gap-2 align-items-end">
+        <div>
+            <label class="form-label" for="st">Trạng thái</label>
+            <select name="status" id="st" class="form-control" style="min-width:200px;">
+                <option value="">Tất cả trạng thái</option>
+                <option value="waiting_employee_signature" {{ ($filters['status'] ?? '') === 'waiting_employee_signature' ? 'selected' : '' }}>Chờ NV ký</option>
+                <option value="waiting_director_signature" {{ ($filters['status'] ?? '') === 'waiting_director_signature' ? 'selected' : '' }}>Chờ GĐ ký</option>
+                <option value="active" {{ ($filters['status'] ?? '') === 'active' ? 'selected' : '' }}>Có hiệu lực</option>
+                <option value="expiring" {{ ($filters['status'] ?? '') === 'expiring' ? 'selected' : '' }}>Sắp hết hạn</option>
+                <option value="expired" {{ ($filters['status'] ?? '') === 'expired' ? 'selected' : '' }}>Hết hạn</option>
+                <option value="rejected" {{ ($filters['status'] ?? '') === 'rejected' ? 'selected' : '' }}>Từ chối</option>
+                <option value="cancelled" {{ ($filters['status'] ?? '') === 'cancelled' ? 'selected' : '' }}>Đã hủy</option>
+            </select>
+        </div>
+        <div>
+            <label class="form-label" for="dp">Phòng ban</label>
+            <select name="dept" id="dp" class="form-control" style="min-width:200px;">
+                <option value="">Tất cả phòng ban</option>
+                @foreach($departments as $d)
+                    <option value="{{ $d->id }}" {{ (string)($filters['dept'] ?? '') === (string) $d->id ? 'selected' : '' }}>{{ $d->name }}</option>
+                @endforeach
+            </select>
+        </div>
+        <button type="submit" class="btn btn-sm btn-primary">Lọc</button>
+        <a class="btn btn-sm" href="{{ route('contracts.index') }}">Bỏ lọc</a>
+    </form>
+</div>
+
 <div class="card p-3">
     @if($contracts->count())
         <div style="overflow-x: auto;">
@@ -112,7 +160,7 @@
                                         <form action="{{ route('contracts.sync_salary', $contract) }}" method="POST" class="d-inline">
                                             @csrf
                                             <button type="submit" class="btn btn-sm btn-warning"
-                                                onclick="return confirm('Cập nhật lương hợp đồng [{{ $contract->contract_code }}] theo bảng lương T{{ $latestPayroll->month }}/{{ $latestPayroll->year }}?')"
+                                                data-confirm="Cập nhật lương hợp đồng [{{ $contract->contract_code }}] theo bảng lương T{{ $latestPayroll->month }}/{{ $latestPayroll->year }}?"
                                                 title="Đồng bộ lương từ bảng lương">
                                                 💰 Đồng bộ lương
                                             </button>

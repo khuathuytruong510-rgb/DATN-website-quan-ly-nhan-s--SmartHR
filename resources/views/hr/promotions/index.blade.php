@@ -12,7 +12,7 @@
     <div class="page-head">
         <div>
             <h1>Thăng chức / Tăng lương</h1>
-            <p class="muted">Đề xuất thay đổi chức vụ, mức lương theo quy trình: HR tạo → Giám đốc duyệt → HR áp dụng.</p>
+            <p class="muted">Đề xuất thay đổi chức vụ, mức lương theo quy trình: HR tạo → Giám đốc duyệt → tự động cập nhật lương & thông báo nhân viên.</p>
         </div>
         <div class="actions">
             @if($isManager)
@@ -32,7 +32,7 @@
                 <select id="status" name="status" class="form-control">
                     <option value="">Tất cả</option>
                     <option value="pending" {{ ($filters['status'] ?? '') === 'pending' ? 'selected' : '' }}>Chờ Giám đốc duyệt</option>
-                    <option value="approved" {{ ($filters['status'] ?? '') === 'approved' ? 'selected' : '' }}>Đã duyệt — chờ áp dụng</option>
+                    <option value="approved" {{ ($filters['status'] ?? '') === 'approved' ? 'selected' : '' }}>Đã duyệt</option>
                     <option value="applied" {{ ($filters['status'] ?? '') === 'applied' ? 'selected' : '' }}>Đã áp dụng</option>
                     <option value="rejected" {{ ($filters['status'] ?? '') === 'rejected' ? 'selected' : '' }}>Từ chối</option>
                     <option value="cancelled" {{ ($filters['status'] ?? '') === 'cancelled' ? 'selected' : '' }}>Đã hủy</option>
@@ -99,22 +99,22 @@
                                 @if($promo->isPending() && $isDirector)
                                     <form method="POST" action="{{ route('promotion_requests.approve', $promo) }}">
                                         @csrf
-                                        <button class="btn primary" type="submit" onclick="return confirm('Duyệt đề xuất này?')">Duyệt</button>
+                                        <button class="btn primary" type="submit" data-confirm="Duyệt đề xuất này? Hệ thống sẽ cập nhật mức lương ngay, ghi lịch sử và báo cho nhân viên.">Duyệt</button>
                                     </form>
                                     <form method="POST" action="{{ route('promotion_requests.reject', $promo) }}">
                                         @csrf
                                         <input type="hidden" name="review_note" value="Không phù hợp tại thời điểm này">
-                                        <button class="btn danger" type="submit" onclick="return confirm('Từ chối đề xuất này?')">Từ chối</button>
+                                        <button class="btn danger" type="submit" data-confirm="Từ chối đề xuất này?">Từ chối</button>
                                     </form>
                                 @elseif($promo->isApproved() && $isManager)
                                     <form method="POST" action="{{ route('promotion_requests.apply', $promo) }}">
                                         @csrf
-                                        <button class="btn primary" type="submit" onclick="return confirm('Áp dụng đề xuất: cập nhật chức vụ, hợp đồng và lịch sử lương?')">Áp dụng</button>
+                                        <button class="btn primary" type="submit" data-confirm="Áp dụng đề xuất: cập nhật chức vụ, hợp đồng và lịch sử lương?">Áp dụng</button>
                                     </form>
                                     <form method="POST" action="{{ route('promotion_requests.cancel', $promo) }}">
                                         @csrf
                                         <input type="hidden" name="cancellation_note" value="Hủy đề xuất">
-                                        <button class="btn link" type="submit" onclick="return confirm('Hủy đề xuất này?')">Hủy</button>
+                                        <button class="btn link" type="submit" data-confirm="Hủy đề xuất này?">Hủy</button>
                                     </form>
                                 @endif
                                 <a class="btn link" href="{{ route('promotion_requests.show', $promo) }}">Xem</a>

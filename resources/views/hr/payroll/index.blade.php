@@ -75,7 +75,7 @@
                     @if($user->is_hr)
                         @if($periodLocked)
                             <form method="POST" action="{{ route('payroll.period.unlock') }}"
-                                  onsubmit="return confirm('Mở khóa kỳ {{ sprintf('%02d/%d', $month, $year) }}? Sau đó có thể sửa chấm công/nghỉ phép. Phải chốt lại trước khi Kế toán tính.');">
+                                  data-confirm="Mở khóa kỳ {{ sprintf('%02d/%d', $month, $year) }}? Sau đó có thể sửa chấm công/nghỉ phép. Phải chốt lại trước khi Kế toán tính.">
                                 @csrf
                                 <input type="hidden" name="month" value="{{ $month }}">
                                 <input type="hidden" name="year" value="{{ $year }}">
@@ -96,7 +96,7 @@
                             </form>
                         @else
                             <form method="POST" action="{{ route('payroll.period.lock') }}"
-                                  onsubmit="return confirm('Chốt dữ liệu kỳ {{ sprintf('%02d/%d', $month, $year) }}? Sau khi chốt, không sửa chấm công/nghỉ phép của kỳ; Kế toán mới được tính lương.');">
+                                  data-confirm="Chốt dữ liệu kỳ {{ sprintf('%02d/%d', $month, $year) }}? Sau khi chốt, không sửa chấm công/nghỉ phép của kỳ; Kế toán mới được tính lương.">
                                 @csrf
                                 <input type="hidden" name="month" value="{{ $month }}">
                                 <input type="hidden" name="year" value="{{ $year }}">
@@ -119,7 +119,7 @@
 
                     @if($canBulkHrReview)
                         <form method="POST" action="{{ route('payroll.review_all') }}"
-                              onsubmit="return confirm('Xác nhận đã kiểm tra dữ liệu nhân sự trên {{ $pendingHrCount }} bảng lương tháng {{ sprintf('%02d/%d', $month, $year) }}? Sau bước này Giám đốc sẽ phê duyệt cuối.');">
+                              data-confirm="Xác nhận đã kiểm tra dữ liệu nhân sự trên {{ $pendingHrCount }} bảng lương tháng {{ sprintf('%02d/%d', $month, $year) }}? Sau bước này Giám đốc sẽ phê duyệt cuối.">
                             @csrf
                             <input type="hidden" name="month" value="{{ $month }}">
                             <input type="hidden" name="year" value="{{ $year }}">
@@ -137,7 +137,7 @@
 
                     @if($canBulkFinalApprove)
                         <form method="POST" action="{{ route('payroll.approve_all') }}"
-                              onsubmit="return confirm('Bạn đang phê duyệt {{ $pendingDirectorCount }} phiếu lương của tháng {{ sprintf('%02d/%d', $month, $year) }}. Sau khi phê duyệt, các phiếu sẽ chuyển sang chờ nhân viên xác nhận.\n\nBạn có chắc chắn tiếp tục?');">
+                              data-confirm="Bạn đang phê duyệt {{ $pendingDirectorCount }} phiếu lương của tháng {{ sprintf('%02d/%d', $month, $year) }}. Sau khi phê duyệt, các phiếu sẽ chuyển sang chờ nhân viên xác nhận.&#10;&#10;Bạn có chắc chắn tiếp tục?">
                             @csrf
                             <input type="hidden" name="month" value="{{ $month }}">
                             <input type="hidden" name="year" value="{{ $year }}">
@@ -377,14 +377,14 @@
                                     @if($canHrReview)
                                         <form method="POST" action="{{ route('payroll.review', $payroll) }}" class="d-inline">
                                             @csrf
-                                            <button type="submit" class="btn btn-sm btn-success" title="Kiểm tra dữ liệu" onclick="return confirm('Xác nhận đã kiểm tra dữ liệu nhân sự trên bảng lương của {{ optional($payroll->employee)->name }}?')">
+                                            <button type="submit" class="btn btn-sm btn-success" title="Kiểm tra dữ liệu" data-confirm="Xác nhận đã kiểm tra dữ liệu nhân sự trên bảng lương của {{ optional($payroll->employee)->name }}?">
                                                 Kiểm tra dữ liệu
                                             </button>
                                         </form>
                                     @elseif($canFinalApprove)
                                         <form method="POST" action="{{ route('payroll.approve', $payroll) }}" class="d-inline">
                                             @csrf
-                                            <button type="submit" class="btn btn-sm btn-success" title="Phê duyệt cuối" onclick="return confirm('Phê duyệt cuối bảng lương của {{ optional($payroll->employee)->name }}?')">
+                                            <button type="submit" class="btn btn-sm btn-success" title="Phê duyệt cuối" data-confirm="Phê duyệt cuối bảng lương của {{ optional($payroll->employee)->name }}?">
                                                 Phê duyệt cuối
                                             </button>
                                         </form>

@@ -85,7 +85,7 @@
                                             <button type="submit" class="btn" style="padding: 6px 10px; font-size: 12px;">Duyệt</button>
                                         </form>
                                     @endif
-                                    <form method="POST" action="{{ route('benefits.destroy', $benefit) }}" style="display: inline;" onsubmit="return confirm('Bạn có chắc muốn xóa phúc lợi này?');">
+                                    <form method="POST" action="{{ route('benefits.destroy', $benefit) }}" style="display: inline;" data-confirm="Bạn có chắc muốn xóa phúc lợi này?">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="btn danger" style="padding: 6px 10px; font-size: 12px;">Xóa</button>
