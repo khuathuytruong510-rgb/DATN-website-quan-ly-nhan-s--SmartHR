@@ -162,7 +162,10 @@ export default {
       window.location.href = `/employees/${emp.id}`;
     },
     async deleteEmployee(id) {
-      if (!confirm('Bạn chắc chắn muốn xóa?')) {
+      const ok = window.smarthrConfirm
+        ? await window.smarthrConfirm('Bạn chắc chắn muốn xóa?', 'danger')
+        : window.confirm('Bạn chắc chắn muốn xóa?');
+      if (!ok) {
         return;
       }
 

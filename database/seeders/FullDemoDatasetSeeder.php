@@ -372,23 +372,10 @@ class FullDemoDatasetSeeder extends Seeder
             ]
         );
 
-        // T9/2026: bình thường — chấm công đến hôm nay, phiếu calculated (chưa TT)
-        $this->seedMonthAttendance($employees, 9, 2026, $hr, untilDay: min(2, max(1, (int) now()->day)));
-        foreach ($payrollStaff as $employee) {
-            $existing = Payroll::query()
-                ->where('employee_id', $employee->id)
-                ->where('month', 9)
-                ->where('year', 2026)
-                ->first();
-            $payroll = $this->forceCalculatePayroll($calc, $employee, 9, 2026, $existing);
-            if ($payroll) {
-                $payroll->forceFill([
-                    'status' => W::CALCULATED,
-                    'paid_at' => null,
-                    'paid_by' => null,
-                ])->save();
-            }
-        }
+        // T9/2026: tháng hiện tại — chỉ chấm công, chưa tính lương
+        $this->seedMonthAttendance($employees, 9, 2026, $hr, untilDay: (int) now()->day);
+        Payroll::query()->where('month', 9)->where('year', 2026)->delete();
+        \App\Models\PayrollPeriodLock::query()->where('month', 9)->where('year', 2026)->delete();
     }
 
     /**

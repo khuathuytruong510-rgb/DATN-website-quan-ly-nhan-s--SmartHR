@@ -33,7 +33,7 @@
                             <td>
                                 <div class="d-flex gap-2">
                                     <a class="btn btn-sm btn-outline-secondary" href="{{ route('contract-templates.edit', $template) }}">Sửa</a>
-                                    <form action="{{ route('contract-templates.destroy', $template) }}" method="POST" onsubmit="return confirm('Xóa mẫu này?');">
+                                    <form action="{{ route('contract-templates.destroy', $template) }}" method="POST" data-confirm="Xóa mẫu này?" data-confirm-variant="danger">
                                         @csrf
                                         @method('DELETE')
                                         <button class="btn btn-sm btn-outline-danger" type="submit">Xóa</button>

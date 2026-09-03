@@ -109,24 +109,10 @@
     <div class="page-head" style="margin-bottom:12px;">
         <div>
             <h3 style="margin:0;">Bảng số liệu kỳ {{ $periodLabel }}</h3>
-            <p class="muted" style="margin-top:6px;">
-                @if($periodReady)
-                    Kỳ đã chốt và HR đã xác nhận. Dòng nền xanh sẽ được ghi khi bấm Tính lương.
-                    @if($recalculableCount < $rows->count())
-                        Dòng xám ({{ $rows->count() - $recalculableCount }} phiếu) đã vào vòng duyệt — không tính lại.
-                    @endif
-                @elseif($unlockPending)
-                    Đang chờ Giám đốc duyệt mở khóa kỳ {{ $periodLabel }}.
-                @elseif($periodLocked)
-                    Kỳ đã chốt — chờ HR xác nhận kiểm tra nguồn trước khi tính lương.
-                @else
-                    Kỳ {{ $periodLabel }} chưa chốt. Hệ thống tự chốt sau ngày cuối tháng; có thể xem trước nhưng chưa tính lương.
-                @endif
-            </p>
         </div>
         @if($periodReady && $recalculableCount > 0)
             <form method="POST" action="{{ route('accountant.payroll.generate_post') }}"
-                  onsubmit="return confirm('Xác nhận tính lương kỳ {{ $periodLabel }} cho {{ $recalculableCount }} nhân viên?\nSố liệu đang hiển thị sẽ được ghi vào phiếu.');">
+                  data-confirm="Xác nhận tính lương kỳ {{ $periodLabel }} cho {{ $recalculableCount }} nhân viên?&#10;Số liệu đang hiển thị sẽ được ghi vào phiếu.">
                 @csrf
                 <input type="hidden" name="month" value="{{ $periodValue }}">
                 <button class="btn primary" type="submit">Tính lương kỳ {{ $periodLabel }}</button>
@@ -255,7 +241,7 @@
     @if($periodLocked && $recalculableCount > 0 && $rows->count() > 0)
         <div style="margin-top:16px;display:flex;justify-content:flex-end;">
             <form method="POST" action="{{ route('accountant.payroll.generate_post') }}"
-                  onsubmit="return confirm('Xác nhận tính lương kỳ {{ $periodLabel }} cho {{ $recalculableCount }} nhân viên?\nSố liệu đang hiển thị sẽ được ghi vào phiếu.');">
+                  data-confirm="Xác nhận tính lương kỳ {{ $periodLabel }} cho {{ $recalculableCount }} nhân viên?&#10;Số liệu đang hiển thị sẽ được ghi vào phiếu.">
                 @csrf
                 <input type="hidden" name="month" value="{{ $periodValue }}">
                 <button class="btn primary" type="submit">Tính lương kỳ {{ $periodLabel }}</button>

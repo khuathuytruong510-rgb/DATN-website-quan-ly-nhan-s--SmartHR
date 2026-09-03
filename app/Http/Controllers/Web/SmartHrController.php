@@ -423,8 +423,39 @@ class SmartHrController extends Controller
         return view('notifications.index');
     }
 
-    public function accounts(): View
+    public function accounts(Request $request): View
     {
+        $filters = [
+            'q' => trim((string) $request->query('q', '')),
+            'employee_code' => trim((string) $request->query('employee_code', '')),
+            'status' => (string) $request->query('status', ''),
+        ];
+
+        $query = User::query()->with('employee')->latest();
+
+        if ($filters['q'] !== '') {
+            $term = $filters['q'];
+            $query->where(function ($builder) use ($term) {
+                $builder->where('name', 'like', "%{$term}%")
+                    ->orWhere('email', 'like', "%{$term}%");
+            });
+        }
+
+        if ($filters['employee_code'] !== '') {
+            $code = $filters['employee_code'];
+            $query->whereHas('employee', function ($builder) use ($code) {
+                $builder->where('employee_code', 'like', "%{$code}%");
+            });
+        }
+
+        if ($filters['status'] === 'active') {
+            $query->where(function ($builder) {
+                $builder->where('is_locked', false)->orWhereNull('is_locked');
+            });
+        } elseif ($filters['status'] === 'locked') {
+            $query->where('is_locked', true);
+        }
+
         $pendingAccountIds = DeletionRequest::query()
             ->where('status', DeletionRequest::APPROVED)
             ->whereNotNull('account_user_id')
@@ -432,8 +463,9 @@ class SmartHrController extends Controller
             ->pluck('subject_label', 'account_user_id');
 
         return view('accounts.index', [
-            'users' => User::latest()->paginate(10),
+            'users' => $query->paginate(10)->withQueryString(),
             'pendingAccountIds' => $pendingAccountIds,
+            'filters' => $filters,
         ]);
     }
 
@@ -759,7 +791,10 @@ class SmartHrController extends Controller
             ->pluck('id', 'subject_id');
 
         return view('departments.index', [
-            'departments' => Department::withCount('employees')->latest()->paginate(10),
+            'departments' => Department::query()
+                ->withCount(['employees', 'positions'])
+                ->orderBy('name')
+                ->paginate(12),
             'pendingDepartmentDeletions' => $pendingDepartmentDeletions,
         ]);
     }
@@ -808,6 +843,7 @@ class SmartHrController extends Controller
         if ($request->expectsJson()) {
             $employees = Employee::query()
                 ->withoutBoardAndDirector()
+                ->notTerminated()
                 ->with('department')
                 ->latest()
                 ->get();
@@ -1210,7 +1246,7 @@ class SmartHrController extends Controller
                 'status' => 'present',
                 'date' => now()->toDateString(),
             ]),
-            'employees' => Employee::orderBy('name')->get(),
+            'employees' => Employee::query()->selectable()->get(),
         ]);
     }
 
@@ -1233,7 +1269,7 @@ class SmartHrController extends Controller
     {
         return view('hr.attendance.form', [
             'attendance' => $attendance,
-            'employees' => Employee::orderBy('name')->get(),
+            'employees' => Employee::query()->selectable()->get(),
         ]);
     }
 
@@ -1284,7 +1320,7 @@ class SmartHrController extends Controller
     {
         return view('hr.payroll.form', [
             'payroll' => new Payroll(['status' => 'calculated']),
-            'employees' => Employee::orderBy('name')->get(),
+            'employees' => Employee::query()->selectable()->get(),
         ]);
     }
 
@@ -1352,7 +1388,7 @@ class SmartHrController extends Controller
         }
         return view('hr.evaluations.form', [
             'evaluation'   => new EmployeeEvaluation(),
-            'employees'    => Employee::orderBy('name')->get(),
+            'employees'    => Employee::query()->selectable()->get(),
             'month'        => $month,
             'monthlyStats' => $monthlyStats,
             'suggested'    => $suggested,
@@ -1393,7 +1429,7 @@ class SmartHrController extends Controller
         $suggested    = $svc->suggestScores($evaluation->employee_id, $evaluation->month);
         return view('hr.evaluations.form', [
             'evaluation'   => $evaluation,
-            'employees'    => Employee::orderBy('name')->get(),
+            'employees'    => Employee::query()->selectable()->get(),
             'month'        => $evaluation->month,
             'monthlyStats' => $monthlyStats,
             'suggested'    => $suggested,
@@ -1552,7 +1588,7 @@ class SmartHrController extends Controller
     {
         return view('hr.benefits.form', [
             'benefit' => new Benefit(),
-            'employees' => Employee::orderBy('name')->get(),
+            'employees' => Employee::query()->selectable()->get(),
             'types' => ['allowance' => 'Phụ cấp', 'insurance' => 'Bảo hiểm', 'bonus' => 'Thưởng', 'other' => 'Khác'],
             'applicationStatuses' => ['active' => 'Đang áp dụng', 'inactive' => 'Không áp dụng'],
             'approvalStatuses' => ['pending' => 'Chờ phê duyệt', 'approved' => 'Đã phê duyệt', 'rejected' => 'Từ chối'],
@@ -1598,7 +1634,7 @@ class SmartHrController extends Controller
     {
         return view('hr.benefits.form', [
             'benefit' => $benefit,
-            'employees' => Employee::orderBy('name')->get(),
+            'employees' => Employee::query()->selectable()->get(),
             'types' => ['allowance' => 'Phụ cấp', 'insurance' => 'Bảo hiểm', 'bonus' => 'Thưởng', 'other' => 'Khác'],
             'applicationStatuses' => ['active' => 'Đang áp dụng', 'inactive' => 'Không áp dụng'],
             'approvalStatuses' => ['pending' => 'Chờ phê duyệt', 'approved' => 'Đã phê duyệt', 'rejected' => 'Từ chối'],
@@ -1671,7 +1707,7 @@ class SmartHrController extends Controller
     {
         return view('hr.benefits.assignments.form', [
             'assignment' => new EmployeeBenefit(),
-            'employees' => Employee::orderBy('name')->get(),
+            'employees' => Employee::query()->selectable()->get(),
             'benefits' => Benefit::orderBy('title')->get(),
             'statuses' => ['active' => 'Đang áp dụng', 'received' => 'Đã nhận', 'unused' => 'Chưa sử dụng'],
         ]);
@@ -1696,7 +1732,7 @@ class SmartHrController extends Controller
     {
         return view('hr.benefits.assignments.form', [
             'assignment' => $assignment,
-            'employees' => Employee::orderBy('name')->get(),
+            'employees' => Employee::query()->selectable()->get(),
             'benefits' => Benefit::orderBy('title')->get(),
             'statuses' => ['active' => 'Đang áp dụng', 'received' => 'Đã nhận', 'unused' => 'Chưa sử dụng'],
         ]);
@@ -1790,7 +1826,7 @@ class SmartHrController extends Controller
     {
         return view('hr.payroll.form', [
             'payroll' => $payroll,
-            'employees' => Employee::orderBy('name')->get(),
+            'employees' => Employee::query()->selectable()->get(),
         ]);
     }
 
@@ -1826,6 +1862,7 @@ class SmartHrController extends Controller
     {
         $actor = Auth::user();
         $employees = Employee::query()
+            ->notTerminated()
             ->orderBy('name')
             ->get()
             ->filter(fn (Employee $employee) => RequestApprover::hrMayManage($actor, $employee)
@@ -1864,7 +1901,7 @@ class SmartHrController extends Controller
     public function createLeaveRequest(): View
     {
         $eligibility = app(LeaveEligibilityService::class);
-        $employees = Employee::orderBy('name')->get();
+        $employees = Employee::query()->selectable()->get();
         $employeeGuides = $employees->mapWithKeys(
             fn (Employee $employee) => [$employee->id => $eligibility->quotaSummary($employee)['types'] ?? []]
         );
@@ -1897,6 +1934,9 @@ class SmartHrController extends Controller
         ]);
 
         $employee = Employee::findOrFail($data['employee_id']);
+        if ($employee->isTerminated()) {
+            return back()->withInput()->with('error', 'Không tạo đơn cho nhân viên đã nghỉ việc.');
+        }
         $data = array_merge($data, $request->validate([
             'type' => ['required', LeaveTypes::validationRule($employee)],
         ]));
@@ -2556,7 +2596,10 @@ class SmartHrController extends Controller
     private function resolveEmployeeToLink(Request $request): ?Employee
     {
         if ($request->filled('employee_id')) {
-            $employee = Employee::query()->whereNull('user_id')->find($request->integer('employee_id'));
+            $employee = Employee::query()
+                ->notTerminated()
+                ->whereNull('user_id')
+                ->find($request->integer('employee_id'));
             if ($employee) {
                 return $employee;
             }
@@ -2567,7 +2610,11 @@ class SmartHrController extends Controller
             return null;
         }
 
-        return Employee::query()->where('email', $email)->whereNull('user_id')->first();
+        return Employee::query()
+            ->notTerminated()
+            ->where('email', $email)
+            ->whereNull('user_id')
+            ->first();
     }
 
     private function roleFlags(string $role): array

@@ -4,7 +4,7 @@
 <div class="contract-page">
 @include('components.module_header', [
     'title' => 'Hợp đồng',
-    'subtitle' => 'Danh sách hợp đồng lao động và trạng thái ký kết.',
+    'subtitle' => '',
     'buttonText' => auth()->user()?->canManageHr() ? 'Tạo hợp đồng' : null,
     'buttonRoute' => auth()->user()?->canManageHr() ? route('contracts.create') : null,
 ])
@@ -138,7 +138,7 @@
                                         <form action="{{ route('contracts.sync_salary', $contract) }}" method="POST" class="d-inline">
                                             @csrf
                                             <button type="submit" class="btn btn-sm btn-warning"
-                                                onclick="return confirm('Cập nhật lương hợp đồng [{{ $contract->contract_code }}] theo bảng lương T{{ $latestPayroll->month }}/{{ $latestPayroll->year }}?')"
+                                                data-confirm="Cập nhật lương hợp đồng [{{ $contract->contract_code }}] theo bảng lương T{{ $latestPayroll->month }}/{{ $latestPayroll->year }}?"
                                                 title="Đồng bộ lương từ bảng lương">
                                                 💰 Đồng bộ lương
                                             </button>
@@ -153,7 +153,7 @@
                                 @endif
                                 @if(auth()->user()?->is_director && $contract->isPendingDirectorEsign())
                                     <form action="{{ route('contracts.sign', $contract) }}" method="POST" class="d-inline"
-                                          onsubmit="return confirm('Xác nhận ký {{ $contract->contract_code }} phía doanh nghiệp? Đây là mô phỏng, chưa phải chứng thư số pháp lý.');">
+                                          data-confirm="Xác nhận ký {{ $contract->contract_code }} phía doanh nghiệp? Đây là mô phỏng, chưa phải chứng thư số pháp lý.">
                                         @csrf
                                         <input type="hidden" name="party" value="director">
                                         <button class="btn btn-sm btn-outline-success" type="submit">Ký (GĐ)</button>

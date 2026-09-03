@@ -116,7 +116,7 @@
                     <input id="transfer-document" class="form-control" type="file" name="document" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
                 </div>
                 <div class="actions" style="margin-top:12px;">
-                    <button class="btn primary" type="submit" onclick="return confirm('Gửi yêu cầu điều chuyển? Hồ sơ nhân viên chưa đổi phòng cho đến khi Giám đốc duyệt.')">Gửi Giám đốc duyệt</button>
+                    <button class="btn primary" type="submit" data-confirm="Gửi yêu cầu điều chuyển? Hồ sơ nhân viên chưa đổi phòng cho đến khi Giám đốc duyệt.">Gửi Giám đốc duyệt</button>
                 </div>
             </form>
         </div>

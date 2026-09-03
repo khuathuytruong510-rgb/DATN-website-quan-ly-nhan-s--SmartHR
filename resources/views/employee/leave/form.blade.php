@@ -37,7 +37,7 @@
         </div>
     @endif
 
-    <form method="POST" action="{{ route('me.leave_requests.store') }}" onsubmit="return confirm('Xác nhận gửi đơn? Hệ thống sẽ kiểm tra điều kiện nghỉ phép trên hợp đồng và luật lao động. Nếu đủ điều kiện, đơn được gửi {{ $approver }} duyệt.');">
+    <form method="POST" action="{{ route('me.leave_requests.store') }}" data-confirm="Xác nhận gửi đơn? Hệ thống sẽ kiểm tra điều kiện nghỉ phép trên hợp đồng và luật lao động. Nếu đủ điều kiện, đơn được gửi {{ $approver }} duyệt.">
         @csrf
 
         <div class="field">

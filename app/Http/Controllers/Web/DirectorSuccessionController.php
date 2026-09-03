@@ -30,7 +30,10 @@ class DirectorSuccessionController extends Controller
         $candidates = User::query()
             ->where('is_admin', false)
             ->where('is_director', false)
-            ->whereHas('employee')
+            ->where(function ($query) {
+                $query->where('is_locked', false)->orWhereNull('is_locked');
+            })
+            ->whereHas('employee', fn ($query) => $query->notTerminated())
             ->with('employee.department')
             ->orderBy('name')
             ->get();

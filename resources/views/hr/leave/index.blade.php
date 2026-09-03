@@ -140,7 +140,7 @@
                                         <span class="muted">Chờ Giám đốc duyệt</span>
                                     @endif
                                     @if($currentUser?->is_hr && $leave->status === 'pending')
-                                        <form method="POST" action="{{ route('leave_requests.destroy', $leave) }}" style="display:inline" onsubmit="return confirm('Xóa đơn nghỉ phép đang chờ duyệt?')">
+                                        <form method="POST" action="{{ route('leave_requests.destroy', $leave) }}" style="display:inline" data-confirm="Xóa đơn nghỉ phép đang chờ duyệt?" data-confirm-variant="danger">
                                             @csrf
                                             @method('DELETE')
                                             <button class="btn btn-sm danger" type="submit">Xóa</button>

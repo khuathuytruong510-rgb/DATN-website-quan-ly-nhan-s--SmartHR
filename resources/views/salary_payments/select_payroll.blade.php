@@ -9,9 +9,6 @@
                 <h3 class="fw-bold mb-1">
                     <i class="bi bi-file-earmark-plus"></i> Tạo phiếu thanh toán
                 </h3>
-                <p class="text-muted mb-0">
-                    Chọn bảng lương để tạo phiếu thanh toán cho nhân viên.
-                </p>
             </div>
         </div>
     </div>

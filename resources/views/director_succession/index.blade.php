@@ -11,22 +11,11 @@
 
     <div class="page-head">
         <div>
-            <p class="eyebrow">Quản trị chức vụ</p>
             <h1>Cập nhật người giữ chức Giám đốc</h1>
         </div>
         <div class="page-actions">
             <a class="btn" href="{{ route('accounts.index') }}">Quản lý tài khoản</a>
         </div>
-    </div>
-
-    <div class="callout info">
-        <p class="callout-title">Phạm vi hệ thống</p>
-        <ul>
-            <li>Quyết định thay Giám đốc / bổ nhiệm Giám đốc mới: <strong>ngoài SmartHR</strong>.</li>
-            <li>Admin cập nhật: hồ sơ người giữ chức, tài khoản, role Director, trạng thái, lịch sử nhiệm kỳ.</li>
-            <li>Tại một thời điểm chỉ có <strong>01 người</strong> giữ chức Giám đốc. Quyền đi theo người đang giữ chức.</li>
-            <li>Không xóa dữ liệu Giám đốc cũ. Bảng lương / nghiệp vụ đã duyệt giữ nguyên người duyệt tại thời điểm đó.</li>
-        </ul>
     </div>
 
     @if($currentDirectors->count() > 1)
@@ -92,15 +81,9 @@
                 <h2 class="card-title">Cập nhật theo quyết định</h2>
             </div>
 
-            <div class="case-grid">
-                <div class="case-item"><strong>Trường hợp A</strong> — người đã có trong SmartHR: chọn trong ô bên dưới. Hệ thống đổi chức vụ / role và lưu nhiệm kỳ.</div>
-                <div class="case-item"><strong>Trường hợp B</strong> — người hoàn toàn mới: chưa có bản ghi thì không chọn được. HR tạo hồ sơ, Admin kết nối tài khoản, rồi quay lại chọn.</div>
-            </div>
-
             @if(($unlinkedEmployees ?? collect())->isNotEmpty())
                 <div class="callout warn">
                     <p class="callout-title">Hồ sơ đã có, chưa có tài khoản</p>
-                    <p>HR đã tạo nhân sự. Admin tạo tài khoản rồi người đó mới xuất hiện trong danh sách.</p>
                     <ul>
                         @foreach($unlinkedEmployees as $unlinked)
                             <li>
@@ -206,7 +189,7 @@
                 </div>
 
                 <div class="actions">
-                    <button class="btn primary" type="submit" onclick="return confirm('Xác nhận: thu hồi quyền Giám đốc của người cũ, cấp quyền cho người mới, giữ nguyên lịch sử phê duyệt?')">Cập nhật người giữ chức</button>
+                    <button class="btn primary" type="submit" data-confirm="Xác nhận: thu hồi quyền Giám đốc của người cũ, cấp quyền cho người mới, giữ nguyên lịch sử phê duyệt?">Cập nhật người giữ chức</button>
                 </div>
             </form>
         </div>
@@ -244,32 +227,6 @@
                 </tbody>
             </table>
         @endif
-    </div>
-
-    <div class="card">
-        <div class="card-head">
-            <h2 class="card-title">Quy tắc khi thay Giám đốc</h2>
-        </div>
-        <table>
-            <thead>
-                <tr>
-                    <th>Nội dung</th>
-                    <th>Thực hiện ở đâu?</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr><td>Quyết định thay Giám đốc</td><td>Ngoài SmartHR</td></tr>
-                <tr><td>Bổ nhiệm Giám đốc mới</td><td>Ngoài SmartHR</td></tr>
-                <tr><td>Cập nhật thông tin người giữ chức vụ</td><td>SmartHR</td></tr>
-                <tr><td>Cập nhật tài khoản</td><td>SmartHR</td></tr>
-                <tr><td>Cấp quyền Director cho người mới</td><td>SmartHR</td></tr>
-                <tr><td>Thu hồi quyền Director của người cũ</td><td>SmartHR</td></tr>
-                <tr><td>Lưu lịch sử chức vụ</td><td>SmartHR</td></tr>
-                <tr><td>Lưu lịch sử phê duyệt cũ</td><td>SmartHR</td></tr>
-                <tr><td>Xóa dữ liệu Giám đốc cũ</td><td>Không</td></tr>
-                <tr><td>Sửa người duyệt của nghiệp vụ cũ</td><td>Không</td></tr>
-            </tbody>
-        </table>
     </div>
 
     <div class="card">

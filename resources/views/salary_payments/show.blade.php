@@ -119,21 +119,21 @@
                         <input type="hidden" name="account_number" value="{{ old('account_number', $salaryPayment->account_number) }}">
                         <input type="hidden" name="transaction_code" value="{{ old('transaction_code', $salaryPayment->transaction_code) }}">
                         <input type="hidden" name="cash_payer" value="{{ old('cash_payer', $salaryPayment->cash_payer) }}">
-                        <button type="submit" class="btn btn-success" onclick="return confirm('Xác nhận thanh toán lương?')">
+                        <button type="submit" class="btn btn-success" data-confirm="Xác nhận thanh toán lương?">
                             <i class="bi bi-check-circle"></i> Thanh toán
                         </button>
                     </form>
                     <form method="POST" action="{{ route('salary_payments.destroy', $salaryPayment) }}" style="display:inline;">
                         @csrf
                         @method('DELETE')
-                        <button type="submit" class="btn btn-danger" onclick="return confirm('Xác nhận xóa phiếu thanh toán?')">
+                        <button type="submit" class="btn btn-danger" data-confirm="Xác nhận xóa phiếu thanh toán?" data-confirm-variant="danger">
                             <i class="bi bi-trash"></i> Xóa
                         </button>
                     </form>
                 @elseif($salaryPayment->status === 'paid')
                     <form method="POST" action="{{ route('salary_payments.send_email', $salaryPayment) }}" style="display:inline;">
                         @csrf
-                        <button type="submit" class="btn btn-info" onclick="return confirm('Gửi phiếu lương đến email nhân viên?')">
+                        <button type="submit" class="btn btn-info" data-confirm="Gửi phiếu lương đến email nhân viên?">
                             <i class="bi bi-envelope"></i> Gửi phiếu qua email
                         </button>
                     </form>
@@ -191,7 +191,6 @@
                                     <p class="mb-1 text-muted">Người thực hiện: <strong>{{ $log->user->name }}</strong></p>
                                 @endif
                                 @if($log->notes)
-                                    <p class="mb-0 text-muted"><em>{{ $log->notes }}</em></p>
                                 @endif
                             </div>
                         </div>

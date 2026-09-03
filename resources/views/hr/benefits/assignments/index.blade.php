@@ -81,7 +81,7 @@
                             <td>
                                 <div class="table-actions">
                                     <a href="{{ route('benefits.assignments.edit', $assignment) }}" class="btn btn-sm">Sửa</a>
-                                    <form method="POST" action="{{ route('benefits.assignments.destroy', $assignment) }}" onsubmit="return confirm('Bạn có chắc muốn xóa gán phúc lợi này?');">
+                                    <form method="POST" action="{{ route('benefits.assignments.destroy', $assignment) }}" data-confirm="Bạn có chắc muốn xóa gán phúc lợi này?" data-confirm-variant="danger">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="btn btn-sm danger">Xóa</button>

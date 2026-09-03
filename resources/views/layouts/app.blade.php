@@ -47,10 +47,10 @@
         body { margin: 0; font-family: "Segoe UI", Inter, system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; overflow: hidden; }
         body:has(> .auth-page) { overflow: auto; height: auto; }
         a { color: inherit; }
-        a:where(.content a, .card a):not(.btn):not(.emp-kpi):not(.emp-action):not(.emp-chip) {
+        a:where(.content a, .card a):not(.btn):not(.emp-kpi):not(.emp-action):not(.emp-chip):not(.dept-act) {
             color: var(--primary); font-weight: 650; text-decoration: none;
         }
-        a:where(.content a, .card a):not(.btn):not(.emp-kpi):not(.emp-action):not(.emp-chip):hover { text-decoration: underline; }
+        a:where(.content a, .card a):not(.btn):not(.emp-kpi):not(.emp-action):not(.emp-chip):not(.dept-act):hover { text-decoration: underline; }
         .auth-page {
             min-height: 100vh; display: grid; place-items: center; padding: var(--space-5);
             background: linear-gradient(160deg, #0f172a 0%, #1e1b4b 48%, #312e81 100%);
@@ -768,6 +768,7 @@
             @yield('content')
         </main>
     @endauth
+    <x-confirm-modal />
     @stack('scripts')
 </body>
 </html>

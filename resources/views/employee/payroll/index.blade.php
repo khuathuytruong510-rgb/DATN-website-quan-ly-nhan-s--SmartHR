@@ -11,7 +11,6 @@
 <div class="max-w-4xl">
     <div class="mb-6">
         <h1 class="text-3xl font-bold text-gray-900">Bảng lương của tôi</h1>
-        <p class="text-gray-500 mt-1">Xem, xác nhận phiếu lương và lịch sử thanh toán</p>
     </div>
 
     @if(session('success'))
@@ -25,7 +24,6 @@
     <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm mb-6">
         <h2 class="text-lg font-bold text-gray-900 mb-1">Tài khoản nhận lương</h2>
         @php $emp = optional($payrolls->first())->employee ?? auth()->user()?->linkedEmployee(); @endphp
-        <p class="text-sm text-gray-500 mb-4">Không sửa trực tiếp. Gửi yêu cầu để {{ \App\Support\RequestApprover::queueLabel($emp) }} duyệt trước khi cập nhật.</p>
 
         @if($emp)
             @php

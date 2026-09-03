@@ -77,12 +77,12 @@
                         <td>{{ optional($leave->created_at)->format('d/m/Y H:i') }}</td>
                         <td>
                             @if(($leave->status ?: 'pending') === 'pending')
-                                <form method="POST" action="{{ route('me.leave_requests.cancel', $leave) }}" onsubmit="return confirm('Hủy đơn này? Lịch sử đơn vẫn được giữ.')">
+                                <form method="POST" action="{{ route('me.leave_requests.cancel', $leave) }}" data-confirm="Hủy đơn này? Lịch sử đơn vẫn được giữ.">
                                     @csrf
                                     <button class="btn" type="submit">Hủy đơn</button>
                                 </form>
                             @elseif($leave->status === 'approved' && optional($leave->start_date)->toDateString() > now()->toDateString())
-                                <form method="POST" action="{{ route('me.leave_requests.cancel', $leave) }}" onsubmit="return confirm('Hủy đơn đã duyệt trước ngày nghỉ?')">
+                                <form method="POST" action="{{ route('me.leave_requests.cancel', $leave) }}" data-confirm="Hủy đơn đã duyệt trước ngày nghỉ?">
                                     @csrf
                                     <input type="text" name="cancel_reason" required placeholder="Lý do hủy" style="max-width:160px;">
                                     <button class="btn" type="submit">Hủy đơn</button>

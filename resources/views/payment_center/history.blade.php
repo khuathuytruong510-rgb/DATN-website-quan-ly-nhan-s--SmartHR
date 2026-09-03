@@ -5,7 +5,7 @@
 @section('content')
     @include('components.module_header', [
         'title' => 'Lịch sử thanh toán',
-        'subtitle' => 'Danh sách các khoản thanh toán lương đã thực hiện.',
+        'subtitle' => '',
     ])
 
     @php

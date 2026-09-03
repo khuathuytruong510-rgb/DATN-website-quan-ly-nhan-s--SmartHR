@@ -104,7 +104,7 @@
                                             <button type="submit" class="btn btn-sm success">Duyệt</button>
                                         </form>
                                     @endif
-                                    <form method="POST" action="{{ route('benefits.destroy', $benefit) }}" onsubmit="return confirm('Bạn có chắc muốn xóa phúc lợi này?');">
+                                    <form method="POST" action="{{ route('benefits.destroy', $benefit) }}" data-confirm="Bạn có chắc muốn xóa phúc lợi này?" data-confirm-variant="danger">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="btn btn-sm danger">Xóa</button>

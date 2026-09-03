@@ -72,6 +72,21 @@ class Employee extends Model
         return in_array($this->status, self::terminatedStatuses(), true);
     }
 
+    /** Còn trong hệ thống — không gồm đã nghỉ việc / inactive. */
+    public function scopeNotTerminated($query)
+    {
+        return $query->where(function ($builder) {
+            $builder->whereNull('status')
+                ->orWhereNotIn('status', self::terminatedStatuses());
+        });
+    }
+
+    /** Danh sách chọn nhân sự (dropdown / gán việc). */
+    public function scopeSelectable($query)
+    {
+        return $query->notTerminated()->orderBy('name');
+    }
+
     public function isPendingTermination(): bool
     {
         return $this->status === self::STATUS_PENDING_TERMINATION;

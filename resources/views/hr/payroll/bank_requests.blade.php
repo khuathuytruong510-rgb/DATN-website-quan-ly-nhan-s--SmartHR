@@ -57,7 +57,7 @@
                                     <form method="POST" action="{{ route('payroll.bank_requests.reject', $req) }}">
                                         @csrf
                                         <input type="hidden" name="review_note" value="Từ chối yêu cầu">
-                                        <button class="btn danger" type="submit" onclick="return confirm('Từ chối yêu cầu này?')">Từ chối</button>
+                                        <button class="btn danger" type="submit" data-confirm="Từ chối yêu cầu này?" data-confirm-variant="danger">Từ chối</button>
                                     </form>
                                     @elseif(\App\Support\RequestApprover::needsDirector($req->employee))
                                         <span class="muted">Chờ Giám đốc duyệt</span>

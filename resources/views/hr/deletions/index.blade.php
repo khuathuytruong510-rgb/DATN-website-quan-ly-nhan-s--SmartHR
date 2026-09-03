@@ -64,7 +64,7 @@
                             @if($canReview && $req->isPending())
                                 <form method="POST" action="{{ route('deletion_requests.approve', $req) }}">
                                     @csrf
-                                    <button class="btn primary" type="submit" onclick="return confirm('{{ $req->isTransfer() ? 'Duyệt và chuyển nhân viên ngay?' : ($req->isEmployee() ? 'Duyệt nghỉ việc? Hồ sơ được giữ lại, hợp đồng chấm dứt, tài khoản khóa đăng nhập.' : 'Duyệt và xóa phòng ban? Dữ liệu sẽ được lưu vào lịch sử.') }}')">{{ $req->approveActionLabel() }}</button>
+                                    <button class="btn primary" type="submit" data-confirm="{{ $req->isTransfer() ? 'Duyệt và chuyển nhân viên ngay?' : ($req->isEmployee() ? 'Duyệt nghỉ việc? Hồ sơ được giữ lại, hợp đồng chấm dứt, tài khoản khóa đăng nhập.' : 'Duyệt và xóa phòng ban? Dữ liệu sẽ được lưu vào lịch sử.') }}">{{ $req->approveActionLabel() }}</button>
                                 </form>
                             @endif
                         </div>

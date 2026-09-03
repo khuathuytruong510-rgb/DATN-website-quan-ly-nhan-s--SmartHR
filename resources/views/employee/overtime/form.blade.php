@@ -24,7 +24,6 @@
             <div class="field">
                 <label>Ngày</label>
                 <input type="date" name="date" value="{{ old('date') }}" min="{{ now()->toDateString() }}" max="{{ now()->addDay()->toDateString() }}" required>
-                <p class="muted" style="margin:0.25rem 0 0;font-size:0.85em;">Chỉ hôm nay hoặc ngày mai. Không đăng ký quá khứ hoặc từ 2 ngày trở lên.</p>
                 @error('date')<div class="error">{{ $message }}</div>@enderror
             </div>
 

@@ -18,15 +18,14 @@
                 Kết nối hồ sơ <strong>{{ $linkEmployee->name }}</strong>
                 @if($linkEmployee->employee_code) (<code>{{ $linkEmployee->employee_code }}</code>) @endif
                 — {{ $linkEmployee->position ?: '—' }}
-                @if($linkEmployee->department) · {{ $linkEmployee->department->name }} @endif.
-                Không tạo thêm hồ sơ mới.
+                @if($linkEmployee->department) · {{ $linkEmployee->department->name }} @endif
             </div>
         @endif
         @if(!empty($contract))
             <div class="callout warning" style="margin-bottom:16px;">
-                Tạo tài khoản để nhân viên ký hợp đồng <strong>{{ $contract->contract_code }}</strong>.
-                Email đăng nhập: <strong>{{ $linkEmployee->email ?? $user->email }}</strong>.
-                Mật khẩu mặc định: <strong>123456</strong>. Sau khi lưu, hệ thống gửi email cho nhân viên.
+                Hợp đồng <strong>{{ $contract->contract_code }}</strong>
+                · Email: <strong>{{ $linkEmployee->email ?? $user->email }}</strong>
+                · MK mặc định: <strong>123456</strong>
             </div>
         @endif
         <form method="POST" action="{{ isset($user) && $user->id ? route('accounts.update', $user) : route('accounts.store') }}">

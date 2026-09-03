@@ -82,6 +82,7 @@ class DirectorSuccessionService
     public function unlinkedIncomingProfiles()
     {
         return Employee::query()
+            ->notTerminated()
             ->where(function ($query) {
                 $query->whereNull('user_id')
                     ->orWhereDoesntHave('user');
@@ -153,6 +154,12 @@ class DirectorSuccessionService
         $incomingEmployee = $incoming->linkedEmployee();
         if (! $incomingEmployee) {
             throw new RuntimeException('Người được bổ nhiệm phải đã có hồ sơ nhân viên. Không đổi tên tài khoản Giám đốc cũ.');
+        }
+        if ($incomingEmployee->isTerminated()) {
+            throw new RuntimeException('Không bổ nhiệm nhân viên đã nghỉ việc.');
+        }
+        if ($incoming->is_locked) {
+            throw new RuntimeException('Không bổ nhiệm tài khoản đang bị khóa.');
         }
 
         $outgoingDirectors = $this->currentDirectors()->reject(fn (User $user) => $user->id === $incoming->id);

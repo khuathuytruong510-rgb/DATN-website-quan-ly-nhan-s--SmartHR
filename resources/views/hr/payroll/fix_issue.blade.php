@@ -126,7 +126,7 @@
         </div>
 
         <div class="actions" style="margin-top:20px;">
-            <button type="submit" class="btn primary" onclick="return confirm('Lưu chỉnh sửa? Phiếu sẽ được tính lại và chờ HR kiểm tra, rồi Giám đốc phê duyệt lại.')">
+            <button type="submit" class="btn primary" data-confirm="Lưu chỉnh sửa? Phiếu sẽ được tính lại và chờ HR kiểm tra, rồi Giám đốc phê duyệt lại.">
                 Lưu & tính lại — chờ HR kiểm tra
             </button>
             <a href="{{ route('payroll.issues.index') }}" class="btn">Hủy</a>

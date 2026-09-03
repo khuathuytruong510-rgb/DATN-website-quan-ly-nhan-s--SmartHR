@@ -5,7 +5,6 @@
 @section('content')
     <div class="page-head">
         <div>
-            <p class="eyebrow">Quản trị chức vụ</p>
             <h1>Người mới chưa có trong SmartHR</h1>
         </div>
         <div class="page-actions">
@@ -13,21 +12,14 @@
         </div>
     </div>
 
-    <div class="callout info">
-        <p class="callout-title">Hai bước trước khi chọn trong danh sách</p>
-        <ol>
-            <li><strong>HR</strong> tạo hồ sơ nhân sự (chức vụ Giám đốc, Ban Giám đốc, đang làm việc). Chưa cấp quyền Director.</li>
-            <li><strong>Admin</strong> tạo / kết nối tài khoản đăng nhập (role Nhân viên trước). Không đổi tên tài khoản Giám đốc cũ.</li>
-            <li>Quay lại <a href="{{ route('director_succession.index') }}">Người giữ chức Giám đốc</a>, chọn người mới, kết thúc nhiệm kỳ người cũ.</li>
-        </ol>
-    </div>
-
     <div class="grid two-cols">
         <div class="card">
             <div class="card-head">
                 <h2 class="card-title">Bước 1 — HR tạo hồ sơ</h2>
             </div>
-            <p class="code-box"><code>{{ $hrCreateUrl }}</code></p>
+            <div class="actions">
+                <a class="btn primary" href="{{ $hrCreateUrl }}">Tạo hồ sơ nhân viên</a>
+            </div>
         </div>
         <div class="card">
             <div class="card-head">

@@ -139,8 +139,8 @@
                         </tbody>
                     </table>
                     <div class="actions" style="margin-top:12px;">
-                        <button class="btn" type="submit" onclick="return confirm('Gửi Giám đốc duyệt chuyển nhân viên đã chọn? Nhân viên chưa đổi phòng.')">Gửi GĐ duyệt chuyển đã chọn</button>
-                        <button class="btn primary" type="submit" name="transfer_all" value="1" onclick="return confirm('Gửi Giám đốc duyệt chuyển toàn bộ nhân viên? Nhân viên chưa đổi phòng.')">Gửi GĐ duyệt chuyển tất cả</button>
+                        <button class="btn" type="submit" data-confirm="Gửi Giám đốc duyệt chuyển nhân viên đã chọn? Nhân viên chưa đổi phòng.">Gửi GĐ duyệt chuyển đã chọn</button>
+                        <button class="btn primary" type="submit" name="transfer_all" value="1" data-confirm="Gửi Giám đốc duyệt chuyển toàn bộ nhân viên? Nhân viên chưa đổi phòng.">Gửi GĐ duyệt chuyển tất cả</button>
                     </div>
                 </form>
             @endif
@@ -169,7 +169,7 @@
             <input type="file" name="document" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
         </div>
         <div class="actions">
-            <button class="btn primary" type="submit" onclick="return confirm('{{ $isEmployee ? 'Gửi đề nghị nghỉ việc cho Giám đốc? Hồ sơ lịch sử sẽ được giữ lại.' : 'Gửi đề nghị xóa phòng ban cho Giám đốc? Hồ sơ chưa bị xóa.' }}')">{{ $isEmployee ? 'Gửi Giám đốc duyệt nghỉ việc' : 'Gửi Giám đốc duyệt xóa' }}</button>
+            <button class="btn primary" type="submit" data-confirm="{{ $isEmployee ? 'Gửi đề nghị nghỉ việc cho Giám đốc? Hồ sơ lịch sử sẽ được giữ lại.' : 'Gửi đề nghị xóa phòng ban cho Giám đốc? Hồ sơ chưa bị xóa.' }}">{{ $isEmployee ? 'Gửi Giám đốc duyệt nghỉ việc' : 'Gửi Giám đốc duyệt xóa' }}</button>
         </div>
     </form>
 </div>

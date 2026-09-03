@@ -84,7 +84,7 @@
     @if($workflow->canPay($payroll))
         <div class="card" style="margin-top:16px;">
             <h3 style="margin-top:0;">Xác nhận thanh toán</h3>
-            <form method="POST" action="{{ route('payroll.payment.confirm', $payroll) }}" id="payForm">
+            <form method="POST" action="{{ route('payroll.payment.confirm', $payroll) }}" id="payForm" data-confirm="Xác nhận đã thanh toán lương?">
                 @csrf
                 <div class="grid two-cols">
                     <div class="field">
@@ -184,15 +184,10 @@ document.addEventListener('DOMContentLoaded', function () {
     methodEl.addEventListener('input', syncPaymentMethod);
 
     if (payForm) {
-        payForm.addEventListener('submit', function (e) {
+        payForm.addEventListener('submit', function () {
             syncPaymentMethod();
             if (methodEl.value === 'cash') {
                 txnInput.disabled = true;
-            }
-            if (!confirm('Xác nhận đã thanh toán lương?')) {
-                e.preventDefault();
-                txnInput.disabled = false;
-                syncPaymentMethod();
             }
         });
     }
