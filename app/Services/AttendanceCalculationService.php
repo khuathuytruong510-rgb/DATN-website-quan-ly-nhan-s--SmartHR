@@ -34,10 +34,11 @@ class AttendanceCalculationService
         }
 
         if (!$attendance->check_out) {
-            // Only checked in, not checked out yet
+            // Chỉ mới check-in: vẫn tính muộn/phạt ngay, chờ check-out mới có giờ công.
             $lateMinutes = $this->calculateLateMinutes($attendance->check_in);
+
             return [
-                'status' => 'present', // Will be updated when checking out
+                'status' => $this->determineStatus($lateMinutes, 0, 0),
                 'work_hours' => 0,
                 'late_minutes' => $lateMinutes,
                 'late_penalty_fee' => $this->calculateLatePenaltyFee($lateMinutes),

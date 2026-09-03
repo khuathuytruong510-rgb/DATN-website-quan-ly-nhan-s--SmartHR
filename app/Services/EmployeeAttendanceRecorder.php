@@ -71,22 +71,27 @@ class EmployeeAttendanceRecorder
                     'check_in_location_missing' => false,
                     'attendance_method' => $method,
                     'attendance_status' => 'check_in',
-                    'status' => $this->checkInStatus(),
                 ]);
+
+                // Tính muộn / phạt ngay lúc vào (không chờ check-out).
+                $fresh = $this->calculation->updateAttendanceMetrics($attendance->fresh());
 
                 ActivityLog::create([
                     'user_id' => $user->id,
                     'action' => 'attendance_check_in',
-                    'meta' => $attendance->check_in?->format('H:i'),
+                    'meta' => $fresh->check_in?->format('H:i'),
                 ]);
-
-                $fresh = $attendance->fresh();
 
                 return [
                     'action' => 'check_in',
                     'message' => 'Chấm công vào lúc '.$fresh->check_in->format('H:i:s').' thành công.',
                     'attendance' => $fresh,
                     'distance' => $geo['distance'],
+                    'metrics' => [
+                        'late_minutes' => $fresh->late_minutes,
+                        'late_penalty_fee' => $fresh->late_penalty_fee,
+                        'status' => $fresh->status_label,
+                    ],
                 ];
             }
 
@@ -134,10 +139,4 @@ class EmployeeAttendanceRecorder
         });
     }
 
-    private function checkInStatus(): string
-    {
-        return Carbon::now()->greaterThan(Carbon::createFromTime(8, 0, 0))
-            ? 'late'
-            : 'present';
-    }
 }

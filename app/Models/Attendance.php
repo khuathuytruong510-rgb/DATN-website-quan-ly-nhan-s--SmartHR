@@ -44,6 +44,7 @@ class Attendance extends Model
 
     protected $casts = [
         'date' => 'date',
+        'approved_at' => 'datetime',
         'check_in_latitude' => 'float',
         'check_in_longitude' => 'float',
         'check_out_latitude' => 'float',
