@@ -11,7 +11,6 @@
 <div class="page-head">
     <div>
         <h1>Nhật ký hoạt động</h1>
-        <p class="muted">Lịch sử tính lương, chốt kỳ và thanh toán — hiển thị bằng ngôn ngữ dễ đọc.</p>
     </div>
     <div class="actions">
         <a class="btn" href="{{ route('accountant.dashboard') }}">Quay lại</a>

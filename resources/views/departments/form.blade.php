@@ -4,7 +4,6 @@
 <div class="page-head">
     <div>
         <h1>{{ $department->exists ? 'Chỉnh sửa phòng ban' : 'Tạo phòng ban' }}</h1>
-        <p class="muted">Nhập thông tin phòng ban và quản lý trưởng phòng.</p>
     </div>
     <a class="btn link" href="{{ route('departments.index') }}">Quay lại</a>
 </div>

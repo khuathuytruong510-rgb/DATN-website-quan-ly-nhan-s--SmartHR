@@ -126,7 +126,7 @@
                     <form method="POST" action="{{ route('salary_payments.destroy', $salaryPayment) }}" style="display:inline;">
                         @csrf
                         @method('DELETE')
-                        <button type="submit" class="btn btn-danger" data-confirm="Xác nhận xóa phiếu thanh toán?">
+                        <button type="submit" class="btn btn-danger" data-confirm="Xác nhận xóa phiếu thanh toán?" data-confirm-variant="danger">
                             <i class="bi bi-trash"></i> Xóa
                         </button>
                     </form>
@@ -151,7 +151,6 @@
                 <div class="card-body text-center">
                     <h6 class="text-muted mb-2">Thực lĩnh</h6>
                     <h2 class="text-success mb-0">{{ number_format($salaryPayment->net, 0) }}</h2>
-                    <small class="text-muted">VNĐ</small>
                 </div>
             </div>
 
@@ -187,13 +186,11 @@
                             <div class="timeline-content ms-3">
                                 <p class="mb-1">
                                     <strong>{{ $log->action }}</strong>
-                                    <small class="text-muted">{{ $log->created_at->format('d/m/Y H:i:s') }}</small>
                                 </p>
                                 @if($log->user)
                                     <p class="mb-1 text-muted">Người thực hiện: <strong>{{ $log->user->name }}</strong></p>
                                 @endif
                                 @if($log->notes)
-                                    <p class="mb-0 text-muted"><em>{{ $log->notes }}</em></p>
                                 @endif
                             </div>
                         </div>

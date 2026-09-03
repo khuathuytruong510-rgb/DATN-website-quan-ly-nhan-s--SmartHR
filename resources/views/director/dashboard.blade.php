@@ -8,9 +8,7 @@
 
 <div class="emp-hero">
     <div>
-        <p class="eyebrow" style="color:#c7d2fe;">Cổng giám đốc</p>
         <h1>Dashboard Giám đốc</h1>
-        <p>Số liệu phục vụ phê duyệt và ra quyết định · kỳ {{ $monthLabel }}</p>
     </div>
     <div class="emp-hero-meta">
         <a class="emp-chip" href="{{ route('payroll.index', ['month' => $payroll['month'], 'year' => $payroll['year']]) }}"><i class="bi bi-check2-square"></i> Phê duyệt bảng lương</a>
@@ -231,7 +229,6 @@
     <div class="card">
         <div class="card-head">
             <h2 class="card-title">Hợp đồng sắp hết hạn</h2>
-            <p class="card-lead">Hợp đồng hết hạn trong 30 ngày tới — cần theo dõi gia hạn hoặc thanh lý.</p>
         </div>
         @if($expiringContracts->isEmpty())
             <div class="empty">Không có hợp đồng hết hạn trong 30 ngày tới.</div>

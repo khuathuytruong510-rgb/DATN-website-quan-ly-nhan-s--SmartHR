@@ -7,7 +7,6 @@
 <div class="page-head">
     <div>
         <h1>{{ $evaluation->exists ? 'Cập nhật đánh giá' : 'Tạo đánh giá mới' }}</h1>
-        <p class="muted">Hệ thống tự động tải dữ liệu thực tế và đề xuất điểm khi bạn chọn nhân viên + tháng</p>
     </div>
     <a href="{{ route('evaluations.index') }}" class="btn">← Quay lại</a>
 </div>

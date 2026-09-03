@@ -18,8 +18,7 @@
             <p id="leave-quota-remaining" style="margin:0;font-size:22px;font-weight:800;">—</p>
         </div>
     </div>
-    <p class="muted" id="leave-quota-basis" style="margin:12px 0 0;"></p>
-    <p class="form-hint" id="leave-quota-request" style="margin:8px 0 0;"></p>
+    <p class="muted" id="leave-quota-basis" style="margin:12px 0 0;display:none;"></p>
 </div>
 @once
 @push('scripts')

@@ -26,7 +26,6 @@
 <div class="page-head">
     <div>
         <h1>Phúc lợi của tôi</h1>
-        <p class="muted">Danh sách phúc lợi và trợ cấp bạn có thể sử dụng.</p>
     </div>
 </div>
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\Notification;
+use App\Models\NotificationRead;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -21,14 +22,23 @@ class NotificationController extends Controller
 
                 if ($user->is_director && ! $user->is_hr) {
                     $query->orWhere('target', 'director');
-                } elseif ($user->is_hr) {
+                }
+                if ($user->is_hr) {
                     $query->orWhere('target', 'hr');
-                } elseif ($user->is_admin) {
+                }
+                if ($user->is_admin) {
                     $query->orWhere('target', 'admin');
                 }
             })
             ->latest()
             ->paginate(10);
+
+        foreach ($notifications as $notification) {
+            NotificationRead::firstOrCreate([
+                'notification_id' => $notification->id,
+                'user_id' => $user->id,
+            ]);
+        }
 
         return view('notifications.index', compact('notifications', 'user'));
     }

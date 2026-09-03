@@ -7,7 +7,6 @@
 <div class="page-head">
     <div>
         <h1>Đánh giá nhân viên</h1>
-        <p class="muted">Quản lý và theo dõi hiệu suất nhân viên theo tháng</p>
     </div>
     <a href="{{ route('evaluations.create') }}" class="btn primary">+ Tạo đánh giá</a>
 </div>
@@ -185,7 +184,7 @@
                     </form>
                     @endif
                     <form method="POST" action="{{ route('evaluations.destroy', $ev) }}" style="display:inline;"
-                          data-confirm="Xóa đánh giá tháng {{ $ev->month }} của {{ optional($ev->employee)->name }}?">
+                          data-confirm="Xóa đánh giá tháng {{ $ev->month }} của {{ optional($ev->employee)->name }}?" data-confirm-variant="danger">
                         @csrf @method('DELETE')
                         <button type="submit" class="btn danger" style="padding:5px 10px;font-size:12px;">Xóa</button>
                     </form>

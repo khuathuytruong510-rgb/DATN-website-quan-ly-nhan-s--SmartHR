@@ -11,23 +11,11 @@
 
     <div class="page-head">
         <div>
-            <p class="eyebrow">Quản trị chức vụ</p>
             <h1>Cập nhật người giữ chức Giám đốc</h1>
-            <p class="page-lead muted">Bổ nhiệm/miễn nhiệm do doanh nghiệp quyết định ngoài SmartHR. Admin chỉ cập nhật người đang giữ chức, tài khoản và role — không đổi tên tài khoản cũ, không xóa lịch sử phê duyệt.</p>
         </div>
         <div class="page-actions">
             <a class="btn" href="{{ route('accounts.index') }}">Quản lý tài khoản</a>
         </div>
-    </div>
-
-    <div class="callout info">
-        <p class="callout-title">Phạm vi hệ thống</p>
-        <ul>
-            <li>Quyết định thay Giám đốc / bổ nhiệm Giám đốc mới: <strong>ngoài SmartHR</strong>.</li>
-            <li>Admin cập nhật: hồ sơ người giữ chức, tài khoản, role Director, trạng thái, lịch sử nhiệm kỳ.</li>
-            <li>Tại một thời điểm chỉ có <strong>01 người</strong> giữ chức Giám đốc. Quyền đi theo người đang giữ chức.</li>
-            <li>Không xóa dữ liệu Giám đốc cũ. Bảng lương / nghiệp vụ đã duyệt giữ nguyên người duyệt tại thời điểm đó.</li>
-        </ul>
     </div>
 
     @if($currentDirectors->count() > 1)
@@ -84,7 +72,6 @@
             <div class="card">
                 <div class="card-head">
                     <h2 class="card-title">Chưa có Giám đốc</h2>
-                    <p class="card-lead">Chưa có tài khoản nào đang có role Director. Có thể bổ nhiệm Giám đốc đầu tiên từ form bên cạnh.</p>
                 </div>
             </div>
         @endforelse
@@ -92,18 +79,11 @@
         <div class="card">
             <div class="card-head">
                 <h2 class="card-title">Cập nhật theo quyết định</h2>
-                <p class="card-lead">Người trong công ty: chọn trong danh sách. Người từ bên ngoài: HR tạo hồ sơ trước, Admin tạo tài khoản, rồi mới chọn ở đây. Không đổi tên tài khoản Giám đốc cũ.</p>
-            </div>
-
-            <div class="case-grid">
-                <div class="case-item"><strong>Trường hợp A</strong> — người đã có trong SmartHR: chọn trong ô bên dưới. Hệ thống đổi chức vụ / role và lưu nhiệm kỳ.</div>
-                <div class="case-item"><strong>Trường hợp B</strong> — người hoàn toàn mới: chưa có bản ghi thì không chọn được. HR tạo hồ sơ, Admin kết nối tài khoản, rồi quay lại chọn.</div>
             </div>
 
             @if(($unlinkedEmployees ?? collect())->isNotEmpty())
                 <div class="callout warn">
                     <p class="callout-title">Hồ sơ đã có, chưa có tài khoản</p>
-                    <p>HR đã tạo nhân sự. Admin tạo tài khoản rồi người đó mới xuất hiện trong danh sách.</p>
                     <ul>
                         @foreach($unlinkedEmployees as $unlinked)
                             <li>
@@ -138,13 +118,8 @@
                             </option>
                         @endforeach
                     </select>
-                    <p class="form-hint">
-                        Chưa có trong danh sách?
-                        <a href="{{ route('director_succession.prepare_new') }}">Tạo hồ sơ nhân sự mới</a>
-                    </p>
                     @error('incoming_user_id')<span class="error">{{ $message }}</span>@enderror
                     @if($candidates->isEmpty())
-                        <p class="form-hint">Chưa có nhân sự đã gắn tài khoản để chọn. Dùng “Tạo hồ sơ nhân sự mới” nếu người được bổ nhiệm đến từ bên ngoài.</p>
                     @endif
                 </div>
 
@@ -154,7 +129,6 @@
                             <label class="form-label" for="effective_on">Ngày hiệu lực</label>
                             <input id="effective_on" class="form-control" name="effective_on" type="date" value="{{ $defaultEffective }}" @if($minEffectiveOn) min="{{ $minEffectiveOn }}" @endif required>
                             @if($minEffectiveOn)
-                                <p class="form-hint">Không được sớm hơn nhiệm kỳ hiện tại. Ngày sớm nhất: {{ \Carbon\Carbon::parse($minEffectiveOn)->format('d/m/Y') }}.</p>
                             @endif
                             @error('effective_on')<span class="error">{{ $message }}</span>@enderror
                         </div>
@@ -178,7 +152,6 @@
                                 <option value="hr" {{ old('outgoing_role') === 'hr' ? 'selected' : '' }}>HR</option>
                                 <option value="accountant" {{ old('outgoing_role') === 'accountant' ? 'selected' : '' }}>Kế toán</option>
                             </select>
-                            <p class="form-hint">Đây là role <strong>sau</strong> ngày hiệu lực, không phải role hiện tại. Người cũ sẽ mất quyền Giám đốc ngay khi chuyển giao.</p>
                             @error('outgoing_role')<span class="error">{{ $message }}</span>@enderror
                         </div>
                     </div>
@@ -203,7 +176,6 @@
                             <option value="{{ $position->name }}"></option>
                         @endforeach
                     </datalist>
-                    <p class="form-hint">Chỉ nhập khi người cũ còn làm việc sau khi thôi chức Giám đốc.</p>
                     @error('outgoing_position')<span class="error">{{ $message }}</span>@enderror
                 </div>
                 @else
@@ -226,7 +198,6 @@
     <div class="card">
         <div class="card-head">
             <h2 class="card-title">Lịch sử nhiệm kỳ Giám đốc</h2>
-            <p class="card-lead">Mỗi dòng là một nhiệm kỳ. Người đã thôi chức vẫn giữ nguyên các nghiệp vụ đã phê duyệt khi còn quyền Giám đốc — hệ thống không chuyển người duyệt sang Giám đốc mới.</p>
         </div>
         @if($histories->isEmpty())
             <div class="empty">Chưa có lịch sử nhiệm kỳ.</div>

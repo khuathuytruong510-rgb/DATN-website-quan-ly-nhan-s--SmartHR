@@ -11,7 +11,6 @@
 <div class="page-head">
     <div>
         <h1>Phản hồi / sự cố lương</h1>
-        <p class="muted">Danh sách phản hồi sự cố từ nhân viên về phiếu lương</p>
     </div>
     <div class="actions">
         <a class="btn" href="{{ route('accountant.payroll.index') }}">Quay lại</a>

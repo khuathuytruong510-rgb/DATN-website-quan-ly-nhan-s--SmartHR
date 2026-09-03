@@ -11,7 +11,6 @@
 <div class="page-head">
     <div>
         <h1>Tăng ca</h1>
-        <p class="muted">HR duyệt đăng ký hoặc chủ động chỉ định. Giờ tính lương = thời gian thực tế trong khung đã duyệt, sau khi HR xác nhận — không lấy từ số giờ nhân viên nhập.</p>
     </div>
 </div>
 
@@ -27,7 +26,6 @@
 @if($currentUser?->is_hr)
 <div class="ot-card">
     <h2>Chỉ định tăng ca</h2>
-    <p class="muted">Chọn nhân viên, ngày (từ hôm nay trở đi), khung giờ và lý do. Bản ghi được duyệt ngay — nhân viên không cần đăng ký lại.</p>
     <form method="POST" action="{{ route('overtime_requests.assign') }}">
         @csrf
         <div class="ot-grid">
@@ -120,7 +118,6 @@
 
 <div class="ot-card">
     <h2>Chờ xác nhận giờ thực tế</h2>
-    <p class="muted">Hệ thống đã đối chiếu checkout với khung OT đã duyệt. Xác nhận xong mới đưa vào lương.</p>
     @if($completedRequests->isEmpty())
         <div class="empty">Không có bản ghi chờ xác nhận.</div>
     @else

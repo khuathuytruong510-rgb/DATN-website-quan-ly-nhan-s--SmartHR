@@ -20,13 +20,6 @@
     <div class="page-head">
         <div>
             <h1>Chi tiết lịch sử lương</h1>
-            <p class="muted">
-                {{ optional($employee)->name ?? '—' }}
-                · Kỳ {{ $salaryHistory->period ?? '—' }}
-                @if(!empty($isPayment))
-                    · Đã thanh toán
-                @endif
-            </p>
         </div>
         <div class="actions">
             <a class="btn" href="{{ $backUrl }}">← Danh sách</a>

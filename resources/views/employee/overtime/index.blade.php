@@ -10,7 +10,6 @@
     <div class="page-head">
         <div>
             <h1>Đăng ký tăng ca</h1>
-            <p class="muted">Đăng ký hôm nay hoặc ngày mai. Giờ tính lương lấy từ chấm công thực tế trong khung HR đã duyệt/chỉ định — không nhập số giờ thực tế.</p>
         </div>
         <a class="btn primary" href="{{ route('me.overtime_requests.create') }}">Tạo yêu cầu</a>
     </div>

@@ -20,7 +20,6 @@
 <div class="page-head">
     <div>
         <h1>Nghỉ phép</h1>
-        <p class="muted">Xem đơn nghỉ phép đã duyệt để đối chiếu khi tính lương. Tạo và duyệt đơn thuộc HR — kế toán không duyệt nghỉ phép.</p>
     </div>
     <div class="actions">
         <a class="btn" href="{{ route('accountant.dashboard') }}">Quay lại</a>

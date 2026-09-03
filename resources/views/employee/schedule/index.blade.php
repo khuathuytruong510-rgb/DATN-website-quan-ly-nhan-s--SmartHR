@@ -33,7 +33,6 @@
     <div class="page-head">
         <div>
             <h1>Lịch làm việc</h1>
-            <p class="muted">Lịch tuần theo hợp đồng đang áp dụng.</p>
         </div>
     </div>
 

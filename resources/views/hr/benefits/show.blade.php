@@ -27,7 +27,6 @@
     <div class="page-head">
         <div>
             <h1>Chi tiết phúc lợi</h1>
-            <p class="muted">Thông tin chi tiết gói phúc lợi cho nhân viên.</p>
         </div>
         <div class="page-actions">
             <a class="btn" href="{{ route('benefits.index') }}">Quay lại</a>

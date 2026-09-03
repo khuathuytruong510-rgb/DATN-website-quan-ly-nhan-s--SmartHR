@@ -6,7 +6,6 @@
     <div class="page-head">
         <div>
             <h1>Thông báo</h1>
-            <p class="muted">Các thông báo hiện tại sẽ xuất hiện tại đây.</p>
         </div>
         @if (auth()->user()->is_hr || auth()->user()->is_director)
             <a href="{{ route('notifications.create') }}" class="btn primary">Tạo thông báo</a>
@@ -78,6 +77,11 @@
                                 <a href="{{ route('support_requests.show', data_get($notification->data, 'support_request_id')) }}" class="btn primary">{{ data_get($notification->data, 'type') === 'support_feedback' ? 'Xem phản hồi hỗ trợ' : 'Mở yêu cầu hỗ trợ' }}</a>
                             </div>
                         @endif
+                        @if(in_array(data_get($notification->data, 'type'), ['payroll_period_unlock_request', 'payroll_period_unlock_approved', 'payroll_period_unlock_rejected'], true))
+                            <div class="actions" style="margin-top:10px;">
+                                <a href="{{ route('payroll.index', ['month' => data_get($notification->data, 'month'), 'year' => data_get($notification->data, 'year')]) }}" class="btn primary">Mở bảng lương kỳ</a>
+                            </div>
+                        @endif
                         @if(data_get($notification->data, 'type') === 'attendance_adjustment')
                             <div class="actions" style="margin-top:10px;">
                                 <a href="{{ route('attendance.index') }}" class="btn primary">Mở chấm công</a>
@@ -85,12 +89,25 @@
                         @endif
                         @if((data_get($notification->data, 'type') === 'deletion_request' || data_get($notification->data, 'type') === 'transfer_request' || data_get($notification->data, 'type') === 'transfer_feedback') && data_get($notification->data, 'deletion_request_id') && (auth()->user()->is_hr || auth()->user()->is_director))
                             <div class="actions" style="margin-top:10px;">
-                                <a href="{{ route('deletion_requests.show', data_get($notification->data, 'deletion_request_id')) }}" class="btn primary">{{ data_get($notification->data, 'type') === 'transfer_feedback' ? 'Xem phản hồi điều chuyển' : (data_get($notification->data, 'type') === 'transfer_request' ? 'Mở yêu cầu chuyển' : 'Mở yêu cầu xóa') }}</a>
+                                <a href="{{ route('deletion_requests.show', data_get($notification->data, 'deletion_request_id')) }}" class="btn primary">{{ data_get($notification->data, 'type') === 'transfer_feedback' ? 'Xem phản hồi điều chuyển' : (data_get($notification->data, 'type') === 'transfer_request' ? 'Mở yêu cầu chuyển' : 'Mở đề nghị nghỉ việc') }}</a>
                             </div>
                         @endif
                         @if(data_get($notification->data, 'type') === 'account_deletion' && auth()->user()->is_admin)
                             <div class="actions" style="margin-top:10px;">
                                 <a href="{{ route('accounts.index') }}" class="btn primary">Mở quản lý tài khoản</a>
+                            </div>
+                        @endif
+                        @if(data_get($notification->data, 'type') === 'contract_create_account' && auth()->user()?->is_admin)
+                            @php
+                                $createEmpId = data_get($notification->data, 'employee_id');
+                                $createContractId = data_get($notification->data, 'contract_id');
+                                $createEmail = data_get($notification->data, 'employee_email');
+                            @endphp
+                            <div class="actions" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                                <span class="muted" style="font-size:13px;">Email: <strong>{{ $createEmail ?: '—' }}</strong> · MK mặc định: <code>123456</code></span>
+                                @if($createEmpId && $createContractId)
+                                    <a href="{{ route('accounts.create', ['employee' => $createEmpId, 'contract' => $createContractId]) }}" class="btn primary">Tạo tài khoản &amp; gửi email</a>
+                                @endif
                             </div>
                         @endif
                         @php

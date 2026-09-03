@@ -12,7 +12,6 @@
     <div>
 @php $handler = \App\Support\RequestApprover::queueLabel($employee ?? auth()->user()?->linkedEmployee()); @endphp
         <h1>Tạo yêu cầu hỗ trợ</h1>
-        <p class="muted">Yêu cầu được gửi đến {{ $handler }} để duyệt và xử lý.</p>
     </div>
     <div class="actions">
         <a class="btn" href="{{ route('me.support_requests') }}">Quay lại</a>

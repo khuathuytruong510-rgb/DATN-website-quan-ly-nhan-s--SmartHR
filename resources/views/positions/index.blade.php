@@ -6,7 +6,6 @@
     <div class="page-head">
         <div>
             <h1>Chức vụ</h1>
-            <p class="muted">Danh sách chức vụ tiêu biểu theo phòng ban. Kích vào một phòng ban để xem chức vụ của phòng đó.</p>
         </div>
     </div>
 

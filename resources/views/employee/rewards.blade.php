@@ -6,7 +6,6 @@
     <div class="page-head">
         <div>
             <h1>Thưởng / Kỷ luật</h1>
-            <p class="muted">Xem thông tin thưởng và kỷ luật của bạn (nếu có).</p>
         </div>
     </div>
 

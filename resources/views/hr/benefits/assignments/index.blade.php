@@ -26,7 +26,6 @@
 <div class="page-head">
     <div>
         <h1>Gán phúc lợi</h1>
-        <p class="muted">Quản lý danh sách phúc lợi đã gán cho nhân viên.</p>
     </div>
     <div class="page-actions">
         <a class="btn primary" href="{{ route('benefits.assignments.create') }}">Gán phúc lợi mới</a>
@@ -80,9 +79,9 @@
                             <td><span class="badge {{ $statusClass($assignment->status) }}">{{ $statusLabel($assignment->status) }}</span></td>
                             <td>{{ Illuminate\Support\Str::limit($assignment->notes, 100) }}</td>
                             <td>
-                                <div class="actions" style="gap: 6px;">
-                                    <a href="{{ route('benefits.assignments.edit', $assignment) }}" class="btn" style="padding: 6px 10px; font-size: 12px;">Sửa</a>
-                                    <form method="POST" action="{{ route('benefits.assignments.destroy', $assignment) }}" style="display: inline;" data-confirm="Bạn có chắc muốn xóa gán phúc lợi này?">
+                                <div class="table-actions">
+                                    <a href="{{ route('benefits.assignments.edit', $assignment) }}" class="btn btn-sm">Sửa</a>
+                                    <form method="POST" action="{{ route('benefits.assignments.destroy', $assignment) }}" data-confirm="Bạn có chắc muốn xóa gán phúc lợi này?" data-confirm-variant="danger">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="btn btn-sm danger">Xóa</button>

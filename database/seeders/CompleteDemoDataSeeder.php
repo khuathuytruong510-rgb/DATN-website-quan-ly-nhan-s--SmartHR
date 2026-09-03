@@ -79,6 +79,8 @@ class CompleteDemoDataSeeder extends Seeder
         $this->fillWorkingMonth(8, 2026, $hr);
         $this->rebuildPayrollAmounts();
 
+        $this->call(FullDemoDatasetSeeder::class);
+
         $this->command?->info('CompleteDemoDataSeeder: đã điền hồ sơ và danh mục demo.');
     }
 
@@ -116,10 +118,12 @@ class CompleteDemoDataSeeder extends Seeder
     {
         $managers = [
             'BGD' => 'Phạm Thị Dung',
+            'HR' => 'Trần Thị Bích',
             'HCNS' => 'Trần Thị Bích',
             'KTTC' => 'Lê Thị Mai',
             'KD' => 'Lê Văn Cường',
             'MKT' => 'Hoàng Văn Nam',
+            'IT' => 'Nguyễn Văn An',
             'CNTT' => 'Nguyễn Văn An',
             'CSKH' => 'Nguyễn Thị Lan',
             'MH' => 'Phạm Văn Hùng',
@@ -146,7 +150,7 @@ class CompleteDemoDataSeeder extends Seeder
 
     private function ensureStaffEmployees(?User $hr, ?User $kt): void
     {
-        $hcns = Department::where('code', 'HCNS')->first();
+        $hcns = Department::whereIn('code', ['HR', 'HCNS'])->first();
         $kttc = Department::where('code', 'KTTC')->first();
 
         if ($hr && $hcns) {

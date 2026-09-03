@@ -19,22 +19,18 @@
                     <div class="mb-4">
                         <div class="row mb-3">
                             <div class="col-6">
-                                <small class="text-muted">Họ và Tên</small>
                                 <h5 id="employeeName">{{ $employee->name }}</h5>
                             </div>
                             <div class="col-6">
-                                <small class="text-muted">Mã Nhân Viên</small>
                                 <h5 id="employeeId">{{ $employee->id }}</h5>
                             </div>
                         </div>
                         <hr>
                         <div class="row">
                             <div class="col-6">
-                                <small class="text-muted">Ngày</small>
                                 <p class="mb-0"><strong>{{ $today->format('d/m/Y') }}</strong></p>
                             </div>
                             <div class="col-6">
-                                <small class="text-muted">Giờ Hiện Tại</small>
                                 <p class="mb-0"><strong id="currentTime">--:--:--</strong></p>
                             </div>
                         </div>
@@ -45,7 +41,6 @@
                     <!-- Attendance Status -->
                     <div class="mb-5">
                         <div class="text-center">
-                            <small class="text-muted d-block mb-2">TRẠNG THÁI HÔM NAY</small>
                             <div id="statusContainer" class="mb-3">
                                 <h6 class="text-muted">Chưa chấm công</h6>
                             </div>
@@ -53,11 +48,9 @@
                             <!-- Check-in Time -->
                             <div class="row mb-3">
                                 <div class="col-6">
-                                    <small class="text-muted">Giờ Vào</small>
                                     <p id="checkInTime" class="text-success font-weight-bold mb-0">--</p>
                                 </div>
                                 <div class="col-6">
-                                    <small class="text-muted">Giờ Ra</small>
                                     <p id="checkOutTime" class="text-danger font-weight-bold mb-0">--</p>
                                 </div>
                             </div>

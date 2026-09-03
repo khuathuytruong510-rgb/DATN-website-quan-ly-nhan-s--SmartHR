@@ -6,7 +6,6 @@
 <div class="page-head">
     <div>
         <h1>Tài khoản chưa được liên kết với hồ sơ nhân viên</h1>
-        <p class="muted">Vui lòng liên hệ bộ phận Nhân sự để được hỗ trợ.</p>
     </div>
 </div>
 

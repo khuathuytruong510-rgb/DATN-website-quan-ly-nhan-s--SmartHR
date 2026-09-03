@@ -6,7 +6,6 @@
 <div class="page-head">
     <div>
         <h1>Lịch sử lương của tôi</h1>
-        <p class="muted">Các kỳ lương đã được thanh toán</p>
     </div>
     <div class="actions">
         <a class="btn" href="{{ route('me.payrolls') }}">Bảng lương của tôi</a>

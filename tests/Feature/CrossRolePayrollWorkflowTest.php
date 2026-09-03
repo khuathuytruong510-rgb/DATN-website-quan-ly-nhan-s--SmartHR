@@ -120,6 +120,13 @@ class CrossRolePayrollWorkflowTest extends TestCase
             'action' => 'payroll_period_locked',
         ]);
 
+        // Chưa HR xác nhận → KT chưa tính được
+        $this->actingAs($kt)->post(route('accountant.payroll.generate_post'), ['month' => '2026-08'])
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->actingAs($hr)->post(route('payroll.period.verify'), ['month' => 8, 'year' => 2026])->assertRedirect();
+
         // 2. Chỉ KT tính; client không được gửi total_salary / status
         $this->actingAs($aliceUser)->post(route('accountant.payroll.generate_post'), ['month' => '2026-08'])->assertForbidden();
         $this->actingAs($hr)->post(route('payroll.generate'), ['month' => 8, 'year' => 2026])->assertForbidden();
@@ -292,6 +299,7 @@ class CrossRolePayrollWorkflowTest extends TestCase
         ] = $this->seedPeople();
 
         $this->actingAs($hr)->post(route('payroll.period.lock'), ['month' => 7, 'year' => 2026])->assertRedirect();
+        $this->actingAs($hr)->post(route('payroll.period.verify'), ['month' => 7, 'year' => 2026])->assertRedirect();
         $this->actingAs($kt)->post(route('accountant.payroll.generate_post'), ['month' => '2026-07'])->assertRedirect();
 
         $payroll = $this->aliceSlip($alice, 7);

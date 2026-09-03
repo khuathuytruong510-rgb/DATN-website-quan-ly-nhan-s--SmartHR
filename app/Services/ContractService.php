@@ -26,7 +26,12 @@ class ContractService
     {
         return DB::transaction(function () use ($actor, $data): Contract {
             $employee = Employee::findOrFail($data['employee_id']);
-            $this->assertSalaryAboveFloor($employee, (float) ($data['base_salary'] ?? 0));
+            $this->syncEmployeeEmail($employee, $data['employee_email'] ?? null);
+            $this->assertNoDateOverlap(
+                (int) $employee->id,
+                $data['start_date'] ?? null,
+                $data['end_date'] ?? null
+            );
             $contract = Contract::create($this->buildPayload($actor, $employee, $data, null));
             $this->syncStatus($contract);
             $this->log($contract, $actor, 'created', 'Tạo hợp đồng', ['contract_code' => $contract->contract_code]);
@@ -40,29 +45,21 @@ class ContractService
         return DB::transaction(function () use ($actor, $contract, $data): Contract {
             $this->assertContentEditable($contract);
             $employee = $contract->employee ?? Employee::find($contract->employee_id);
-            $oldBase      = (float) $contract->base_salary;
-            $oldAllowance = (float) $contract->allowance;
-
+            if ($employee) {
+                $this->syncEmployeeEmail($employee, $data['employee_email'] ?? null);
+            }
             $payload = $this->buildPayload($actor, $employee, $data, $contract);
-            $this->assertSalaryAboveFloor($employee, (float) $payload['base_salary'], $contract);
+            $this->assertNoDateOverlap(
+                (int) $contract->employee_id,
+                $payload['start_date'] ?? null,
+                $payload['end_date'] ?? null,
+                (int) $contract->id
+            );
 
             $contract->fill($payload);
             $contract->save();
             $this->syncStatus($contract);
             $this->log($contract, $actor, 'updated', 'Cập nhật hợp đồng', ['contract_code' => $contract->contract_code]);
-
-            $newBase      = (float) $contract->base_salary;
-            $newAllowance = (float) $contract->allowance;
-            if ($oldBase !== $newBase || $oldAllowance !== $newAllowance) {
-                $details = [
-                    'old_base_salary' => $oldBase,
-                    'new_base_salary' => $newBase,
-                    'old_allowance'   => $oldAllowance,
-                    'new_allowance'   => $newAllowance,
-                ];
-                $this->log($contract, $actor, 'salary_updated', 'Cập nhật mức lương trên hợp đồng', $details);
-                $this->notifyEmployeeSalaryChanged($actor, $contract, $details);
-            }
 
             return $contract->fresh();
         });
@@ -73,14 +70,9 @@ class ContractService
         return DB::transaction(function () use ($actor, $parentContract, $data): Contract {
             $parentContract = Contract::query()->whereKey($parentContract->id)->lockForUpdate()->firstOrFail();
 
-            $this->assertSalaryAboveFloor($employee, (float) ($data['base_salary'] ?? 0));
-
-            $contract = Contract::create($this->buildPayload($actor, $employee, $data, null));
-
-            // Đảm bảo parent_contract_id được lưu (buildPayload đã nhận, nhưng ghi lại cho chắc)
-            if ($contract->parent_contract_id !== $parentContract->id) {
-                $contract->parent_contract_id = $parentContract->id;
-                $contract->save();
+            $startDate = $data['start_date'] ?? null;
+            if (! $startDate) {
+                throw new \InvalidArgumentException('Ngày bắt đầu hợp đồng gia hạn là bắt buộc.');
             }
 
             $renewed = $parentContract->replicate([
@@ -107,6 +99,12 @@ class ContractService
             $renewed->contract_code = $this->resolveContractCode(null, null);
             $renewed->start_date = $startDate;
             $renewed->end_date = $data['end_date'] ?? null;
+
+            $this->assertNoDateOverlap(
+                (int) $parentContract->employee_id,
+                $renewed->start_date,
+                $renewed->end_date
+            );
             $renewed->created_by = $actor->id;
             $renewed->employee_signed_at = null;
             $renewed->director_signed_at = null;
@@ -207,7 +205,7 @@ class ContractService
                 );
 
                 if ($party === 'director') {
-                    $this->notifyEmployeeNeedsToSign($fresh, $actor);
+                    $this->notifyAfterDirectorSigned($fresh, $actor);
                 }
 
                 if ($fresh->isFullySigned()) {
@@ -399,10 +397,18 @@ class ContractService
         }
     }
 
-    public function terminateForEmployeeDeletion(Employee $employee, User $actor, ?string $reason = null): int
+    public function terminateForEmployeeDeletion(Employee $employee, User $actor, ?string $reason = null, ?string $lastWorkingDay = null): int
     {
         $reasonNote = $reason ? ' Lý do: '.$reason : '';
         $count = 0;
+        $terminationDay = null;
+        if ($lastWorkingDay) {
+            try {
+                $terminationDay = Carbon::parse($lastWorkingDay)->toDateString();
+            } catch (\Throwable) {
+                $terminationDay = null;
+            }
+        }
 
         $contracts = Contract::query()
             ->where('employee_id', $employee->id)
@@ -418,17 +424,21 @@ class ContractService
             $previous = $contract->status;
             $contract->status = Contract::STATUS_TERMINATED;
             $contract->contract_status = Contract::STATUS_TERMINATED;
-            if ($contract->end_date && $contract->end_date->isFuture()) {
+            if ($terminationDay) {
+                if (! $contract->end_date || $contract->end_date->toDateString() > $terminationDay) {
+                    $contract->end_date = $terminationDay;
+                }
+            } elseif ($contract->end_date && $contract->end_date->isFuture()) {
                 $contract->end_date = now()->toDateString();
             }
 
-            $line = 'Chấm dứt do xóa hồ sơ nhân viên ('.$actor->name.', '.now()->format('d/m/Y H:i').').'.$reasonNote;
+            $line = 'Chấm dứt do nghỉ việc / chấm dứt quan hệ lao động ('.$actor->name.', '.now()->format('d/m/Y H:i').').'.$reasonNote;
             $contract->notes = trim((string) $contract->notes) === ''
                 ? $line
                 : rtrim((string) $contract->notes)."\n".$line;
             $contract->save();
 
-            $this->log($contract, $actor, 'terminated', 'Chấm dứt hợp đồng do xóa nhân viên', [
+            $this->log($contract, $actor, 'terminated', 'Chấm dứt hợp đồng do nhân viên nghỉ việc', [
                 'previous_status' => $previous,
                 'employee_id' => $employee->id,
             ]);
@@ -460,7 +470,33 @@ class ContractService
         $contract->contract_status = $nextStatus;
         $contract->save();
 
+        $this->syncEmployeeWorkingStatus($contract);
+
         return $contract->fresh();
+    }
+
+    protected function syncEmployeeWorkingStatus(Contract $contract): void
+    {
+        $employee = $contract->employee ?? Employee::query()->find($contract->employee_id);
+        if (! $employee) {
+            return;
+        }
+
+        if (in_array($employee->status, [Employee::STATUS_TERMINATED, Employee::STATUS_INACTIVE, Employee::STATUS_PENDING_TERMINATION, Employee::STATUS_ON_LEAVE], true)) {
+            return;
+        }
+
+        $hasActive = Contract::query()
+            ->where('employee_id', $employee->id)
+            ->where('status', Contract::STATUS_ACTIVE)
+            ->exists();
+
+        $next = $hasActive ? Employee::STATUS_ACTIVE : Employee::STATUS_PENDING;
+        if ($employee->status === $next) {
+            return;
+        }
+
+        $employee->forceFill(['status' => $next])->save();
     }
 
     public function getSalaryForEmployee(Employee $employee): int
@@ -534,7 +570,7 @@ class ContractService
             'employee_id' => $data['employee_id'] ?? $contract?->employee_id,
             'title' => $data['title'] ?? $contract?->title ?? $this->resolveContractTitle($data['contract_type'] ?? $contract?->contract_type),
             'contract_code' => $this->resolveContractCode($data['contract_code'] ?? null, $contract),
-            'contract_type' => $data['contract_type'] ?? $contract?->contract_type ?? 'official',
+            'contract_type' => $data['contract_type'] ?? $contract?->contract_type ?? 'fixed_term',
             'start_date' => $startDate,
             'end_date' => $endDate,
             'notes' => $data['notes'] ?? $contract?->notes,
@@ -542,7 +578,7 @@ class ContractService
             'base_salary' => (float) $salary,
             'allowance' => (float) ($data['allowance'] ?? $contract?->allowance ?? 0),
             'bonus' => (float) ($data['bonus'] ?? $contract?->bonus ?? 0),
-            'payment_method' => $data['payment_method'] ?? $contract?->payment_method,
+            'payment_method' => $data['payment_method'] ?? $contract?->payment_method ?? 'cash_and_bank_transfer',
             'terms' => $fixedTerms,
             'additional_terms' => $data['additional_terms'] ?? $contract?->additional_terms,
             'contract_content' => $fixedTerms,
@@ -552,7 +588,6 @@ class ContractService
             'director_signed_at' => $contract?->director_signed_at,
             'contract_template_id' => $template?->id ?? $data['contract_template_id'] ?? $contract?->contract_template_id,
             'workplace' => $data['workplace'] ?? $contract?->workplace,
-            'working_schedule' => $data['working_schedule'] ?? $contract?->working_schedule,
             'benefits' => $data['benefits'] ?? $contract?->benefits,
             'allowed_unpaid_leave_days_per_month' => (int) ($data['allowed_unpaid_leave_days_per_month'] ?? $contract?->allowed_unpaid_leave_days_per_month ?? 1),
             'allowed_makeup_attendance_per_month' => (int) ($data['allowed_makeup_attendance_per_month'] ?? $contract?->allowed_makeup_attendance_per_month ?? 3),
@@ -645,6 +680,49 @@ class ContractService
         return null;
     }
 
+    /**
+     * Không cho phép hai hợp đồng (ngoài trạng thái đóng) của cùng nhân viên có khoảng thời hạn giao nhau.
+     */
+    public function assertNoDateOverlap(int $employeeId, mixed $startDate, mixed $endDate, ?int $excludeContractId = null): void
+    {
+        $start = $this->normalizeDate($startDate);
+        if (! $start) {
+            throw new \InvalidArgumentException('Ngày bắt đầu hợp đồng là bắt buộc.');
+        }
+
+        $end = $this->normalizeDate($endDate) ?? Carbon::parse('2099-12-31')->startOfDay();
+
+        $closed = [
+            Contract::STATUS_CANCELLED,
+            Contract::STATUS_TERMINATED,
+            Contract::STATUS_REJECTED,
+        ];
+
+        $others = Contract::query()
+            ->where('employee_id', $employeeId)
+            ->when($excludeContractId, fn ($query) => $query->where('id', '!=', $excludeContractId))
+            ->whereNotIn('status', $closed)
+            ->get();
+
+        foreach ($others as $other) {
+            $otherStart = $this->normalizeDate($other->start_date);
+            if (! $otherStart) {
+                continue;
+            }
+
+            $otherEnd = $this->normalizeDate($other->end_date) ?? Carbon::parse('2099-12-31')->startOfDay();
+
+            if ($start->lte($otherEnd) && $otherStart->lte($end)) {
+                throw new \RuntimeException(sprintf(
+                    'Nhân viên đã có hợp đồng %s trùng khoảng thời gian (%s → %s). Hãy chọn thời hạn không giao với hợp đồng hiện có.',
+                    $other->contract_code ?: '#'.$other->id,
+                    $otherStart->format('d/m/Y'),
+                    $other->end_date ? $otherEnd->format('d/m/Y') : 'Không XĐ'
+                ));
+            }
+        }
+    }
+
     protected function resolveContractTitle(?string $contractType): string
     {
         return match ($contractType) {
@@ -670,84 +748,6 @@ class ContractService
         ]);
     }
 
-    /**
-     * Mức sàn = lương cơ bản của hợp đồng đang hiệu lực (active) của nhân viên.
-     * Nếu đang sửa đúng hợp đồng active thì sàn là lương CB hiện tại của chính nó.
-     */
-    protected function salaryFloorFor(Employee $employee, ?Contract $editing = null): float
-    {
-        $contract = ($editing && $editing->status === Contract::STATUS_ACTIVE)
-            ? $editing
-            : Contract::query()
-                ->where('employee_id', $employee->id)
-                ->where('status', Contract::STATUS_ACTIVE)
-                ->latest('id')
-                ->first();
-
-        return (float) ($contract?->base_salary ?: $contract?->salary ?: 0);
-    }
-
-    /**
-     * Lương cơ bản không được giảm xuống dưới mức sàn (lương CB hợp đồng đang hiệu lực).
-     */
-    protected function assertSalaryAboveFloor(Employee $employee, float $salary, ?Contract $editing = null): void
-    {
-        $floor = $this->salaryFloorFor($employee, $editing);
-
-        if ($floor > 0 && $salary + 0.0001 < $floor) {
-            throw new \RuntimeException(sprintf(
-                'Lương cơ bản (%s₫) không được thấp hơn mức lương cơ bản đang hiệu lực (%s₫) của nhân viên.',
-                number_format($salary, 0, ',', '.'),
-                number_format($floor, 0, ',', '.')
-            ));
-        }
-    }
-
-    /**
-     * Gửi thông báo cho nhân viên khi mức lương trên hợp đồng thay đổi.
-     * Không chặn tính lương — chỉ ghi log + thông báo, lương mới áp dụng ngay.
-     */
-    protected function notifyEmployeeSalaryChanged(User $actor, Contract $contract, array $details): void
-    {
-        if (! $contract->employee) {
-            return;
-        }
-
-        $userId = $contract->employee->user_id
-            ?? User::where('email', $contract->employee->email)->value('id');
-
-        if (! $userId) {
-            return;
-        }
-
-        $oldBase      = (float) ($details['old_base_salary'] ?? 0);
-        $newBase      = (float) ($details['new_base_salary'] ?? 0);
-        $oldAllowance = (float) ($details['old_allowance'] ?? 0);
-        $newAllowance = (float) ($details['new_allowance'] ?? 0);
-
-        Notification::create([
-            'sender_id' => $actor->id,
-            'target'    => 'employee',
-            'title'     => 'Mức lương trên hợp đồng thay đổi',
-            'message'   => sprintf(
-                'Hợp đồng %s của bạn vừa được cập nhật: lương cơ bản %sđ → %sđ, phụ cấp %sđ → %sđ. Bạn có thể xem chi tiết trong phần Hợp đồng.',
-                $contract->contract_code,
-                number_format($oldBase, 0, ',', '.'),
-                number_format($newBase, 0, ',', '.'),
-                number_format($oldAllowance, 0, ',', '.'),
-                number_format($newAllowance, 0, ',', '.')
-            ),
-            'data' => [
-                'type'          => 'contract_salary_updated',
-                'contract_id'   => $contract->id,
-                'employee_id'   => $contract->employee_id,
-                'old_base_salary' => $oldBase,
-                'new_base_salary' => $newBase,
-            ],
-            'is_read' => false,
-        ]);
-    }
-
     // =========================================================
     //  ĐỒNG BỘ LƯƠNG PAYROLL → HỢP ĐỒNG
     // =========================================================
@@ -767,17 +767,6 @@ class ContractService
         $oldAllowance = (float) $contract->allowance;
         $newAllowance = (float) ($payroll->allowance ?? $contract->allowance);
 
-        // Không được giảm lương hợp đồng xuống dưới mức lương cơ bản đang hiệu lực
-        if ($newBase < $oldBase) {
-            throw new \RuntimeException(sprintf(
-                'Không thể giảm lương hợp đồng %s từ %s₫ xuống %s₫. Lương không được thấp hơn mức lương cơ bản đang hiệu lực (%s₫).',
-                $contract->contract_code,
-                number_format($oldBase, 0, ',', '.'),
-                number_format($newBase, 0, ',', '.'),
-                number_format($oldBase, 0, ',', '.')
-            ));
-        }
-
         // Không có gì thay đổi → trả về luôn, không cần ghi log thừa
         if ($oldBase === $newBase && $oldAllowance === $newAllowance) {
             return $contract;
@@ -792,12 +781,6 @@ class ContractService
             $this->log($contract, $actor, 'salary_synced', 'Cập nhật lương từ bảng lương', [
                 'payroll_id'      => $payroll->id,
                 'payroll_period'  => $payroll->month . '/' . $payroll->year,
-                'old_base_salary' => $oldBase,
-                'new_base_salary' => $newBase,
-                'old_allowance'   => $oldAllowance,
-                'new_allowance'   => $newAllowance,
-            ]);
-            $this->notifyEmployeeSalaryChanged($actor, $contract, [
                 'old_base_salary' => $oldBase,
                 'new_base_salary' => $newBase,
                 'old_allowance'   => $oldAllowance,
@@ -903,7 +886,95 @@ class ContractService
         ]);
     }
 
-    protected function notifyEmployeeNeedsToSign(Contract $contract, User $actor): void
+    protected function notifyAfterDirectorSigned(Contract $contract, User $actor): void
+    {
+        $employee = $contract->employee;
+        if (! $employee) {
+            return;
+        }
+
+        $hasLogin = filled($employee->user_id)
+            || User::query()->whereRaw('LOWER(email) = ?', [strtolower((string) $employee->email)])->exists();
+
+        if ($hasLogin) {
+            $this->notifyEmployeeNeedsToSign($contract, $actor);
+
+            return;
+        }
+
+        $this->notifyAdminCreateAccountForSigning($contract, $actor);
+    }
+
+    protected function notifyAdminCreateAccountForSigning(Contract $contract, User $actor): void
+    {
+        $employee = $contract->employee;
+        $name = $employee?->name ?: 'nhân viên';
+        $email = trim((string) ($employee?->email ?? ''));
+
+        Notification::create([
+            'sender_id' => $actor->id,
+            'target' => 'admin',
+            'title' => 'Tạo tài khoản để nhân viên ký hợp đồng',
+            'message' => sprintf(
+                'Giám đốc đã ký hợp đồng %s của %s. Vui lòng tạo tài khoản đăng nhập cho nhân viên (email: %s), mật khẩu mặc định 123456, rồi hệ thống sẽ gửi email hướng dẫn nhân viên đăng nhập để ký hợp đồng.',
+                $contract->contract_code,
+                $name,
+                $email !== '' ? $email : '(chưa có email)'
+            ),
+            'is_read' => false,
+            'data' => [
+                'type' => 'contract_create_account',
+                'contract_id' => $contract->id,
+                'employee_id' => $contract->employee_id,
+                'employee_email' => $email,
+                'employee_name' => $name,
+                'default_password' => '123456',
+            ],
+        ]);
+
+        Notification::create([
+            'sender_id' => $actor->id,
+            'target' => 'hr',
+            'title' => 'Chờ admin tạo tài khoản ký hợp đồng',
+            'message' => sprintf(
+                'Hợp đồng %s đã được Giám đốc ký. Nhân viên %s chưa có tài khoản — đã thông báo admin tạo TK (email: %s).',
+                $contract->contract_code,
+                $name,
+                $email !== '' ? $email : '—'
+            ),
+            'is_read' => false,
+            'data' => [
+                'type' => 'contract_esign',
+                'contract_id' => $contract->id,
+                'employee_id' => $contract->employee_id,
+            ],
+        ]);
+    }
+
+    protected function syncEmployeeEmail(Employee $employee, mixed $email): void
+    {
+        $email = strtolower(trim((string) $email));
+        if ($email === '') {
+            return;
+        }
+
+        if (strcasecmp((string) $employee->email, $email) === 0) {
+            return;
+        }
+
+        $employee->forceFill(['email' => $email])->save();
+
+        if ($employee->user_id) {
+            User::query()->whereKey($employee->user_id)->update(['email' => $email]);
+        }
+    }
+
+    public function notifyEmployeeToSignAfterAccountCreated(Contract $contract, ?User $actor): void
+    {
+        $this->notifyEmployeeNeedsToSign($contract, $actor);
+    }
+
+    protected function notifyEmployeeNeedsToSign(Contract $contract, ?User $actor): void
     {
         if (! $contract->employee_id) {
             return;
@@ -914,7 +985,7 @@ class ContractService
             $actor,
             'Hợp đồng cần bạn ký',
             sprintf(
-                'Giám đốc đã ký hợp đồng %s phía doanh nghiệp. Hãy đăng nhập cổng nhân viên, xem nội dung rồi ký phía người lao động.',
+                'Giám đốc đã ký hợp đồng %s phía doanh nghiệp. Hãy đăng nhập cổng nhân viên (email đăng nhập đã được gửi nếu vừa tạo tài khoản), xem nội dung rồi ký phía người lao động.',
                 $contract->contract_code
             ),
             [

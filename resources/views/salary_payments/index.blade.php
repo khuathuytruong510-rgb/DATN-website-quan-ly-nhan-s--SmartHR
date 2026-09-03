@@ -10,9 +10,6 @@
                     <h3 class="fw-bold mb-1">
                         <i class="bi bi-cash-coin"></i> Lịch sử thanh toán lương
                     </h3>
-                    <p class="text-muted mb-0">
-                        Theo dõi các phiếu đã thanh toán. Để thanh toán mới, dùng quy trình bảng lương (sau khi NV xác nhận).
-                    </p>
                 </div>
                 <div>
                     <a href="{{ route('payroll.index') }}" class="btn btn-primary">
@@ -97,7 +94,6 @@
                             </td>
                             <td>
                                 <div class="fw-semibold">{{ $p->employee->name ?? '-' }}</div>
-                                <small class="text-muted">ID: {{ $p->employee->employee_code ?? '-' }}</small>
                             </td>
                             <td>{{ $p->employee->department->name ?? '-' }}</td>
                             <td class="text-center">

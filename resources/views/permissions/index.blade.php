@@ -6,7 +6,6 @@
     <div class="page-head">
         <div>
             <h1>Phân quyền</h1>
-            <p class="muted">Gán đúng một vai trò hệ thống. Chức vụ trên hồ sơ nhân viên không cấp quyền đăng nhập. Admin ≠ Giám đốc. Role Giám đốc chỉ đổi tại <a href="{{ route('director_succession.index') }}">Người giữ chức GĐ</a>.</p>
         </div>
         <div class="page-actions">
             <a class="btn" href="{{ route('accounts.index') }}">Xem danh sách tài khoản</a>

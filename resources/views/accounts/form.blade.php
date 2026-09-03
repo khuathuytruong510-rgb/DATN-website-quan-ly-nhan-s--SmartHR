@@ -6,7 +6,9 @@
     <div class="page-head">
         <div>
             <h1>Tạo tài khoản</h1>
-            <p class="muted">Tạo tài khoản đăng nhập cho hệ thống.</p>
+        </div>
+        <div class="page-actions">
+            <a class="btn" href="{{ !empty($contract) ? route('admin.notifications.index') : (!empty($linkEmployee) ? route('director_succession.index') : route('accounts.index')) }}">Quay lại</a>
         </div>
     </div>
 
@@ -16,8 +18,14 @@
                 Kết nối hồ sơ <strong>{{ $linkEmployee->name }}</strong>
                 @if($linkEmployee->employee_code) (<code>{{ $linkEmployee->employee_code }}</code>) @endif
                 — {{ $linkEmployee->position ?: '—' }}
-                @if($linkEmployee->department) · {{ $linkEmployee->department->name }} @endif.
-                Không tạo thêm hồ sơ mới và không đổi tên tài khoản Giám đốc cũ.
+                @if($linkEmployee->department) · {{ $linkEmployee->department->name }} @endif
+            </div>
+        @endif
+        @if(!empty($contract))
+            <div class="callout warning" style="margin-bottom:16px;">
+                Hợp đồng <strong>{{ $contract->contract_code }}</strong>
+                · Email: <strong>{{ $linkEmployee->email ?? $user->email }}</strong>
+                · MK mặc định: <strong>123456</strong>
             </div>
         @endif
         <form method="POST" action="{{ isset($user) && $user->id ? route('accounts.update', $user) : route('accounts.store') }}">
@@ -27,6 +35,9 @@
             @endif
             @if(!empty($linkEmployee))
                 <input type="hidden" name="employee_id" value="{{ $linkEmployee->id }}">
+            @endif
+            @if(!empty($contract))
+                <input type="hidden" name="contract_id" value="{{ $contract->id }}">
             @endif
             <div class="row g-3">
                 <div class="col-12 col-md-6">
@@ -39,21 +50,23 @@
                 <div class="col-12 col-md-6">
                     <div class="field">
                         <label class="form-label" for="email">Email</label>
-                        <input id="email" class="form-control" name="email" type="email" value="{{ old('email', $user->email ?? '') }}" required>
+                        <input id="email" class="form-control" name="email" type="email" value="{{ old('email', $user->email ?? '') }}" required {{ !empty($contract) ? '' : '' }}>
                         @error('email')<span class="error">{{ $message }}</span>@enderror
                     </div>
                 </div>
                 <div class="col-12 col-md-6">
                     <div class="field">
                         <label class="form-label" for="password">Mật khẩu</label>
-                        <input id="password" class="form-control" name="password" type="password" {{ isset($user) && $user->id ? '' : 'required' }}>
+                        <input id="password" class="form-control" name="password" type="{{ !empty($defaultPassword) ? 'text' : 'password' }}" value="{{ old('password', $defaultPassword ?? '') }}" {{ isset($user) && $user->id ? '' : 'required' }}>
+                        @if(!empty($defaultPassword))
+                        @endif
                         @error('password')<span class="error">{{ $message }}</span>@enderror
                     </div>
                 </div>
                 <div class="col-12 col-md-6">
                     <div class="field">
                         <label class="form-label" for="password_confirmation">Nhập lại mật khẩu</label>
-                        <input id="password_confirmation" class="form-control" name="password_confirmation" type="password" {{ isset($user) && $user->id ? '' : 'required' }}>
+                        <input id="password_confirmation" class="form-control" name="password_confirmation" type="{{ !empty($defaultPassword) ? 'text' : 'password' }}" value="{{ old('password_confirmation', $defaultPassword ?? '') }}" {{ isset($user) && $user->id ? '' : 'required' }}>
                     </div>
                 </div>
             </div>
@@ -73,7 +86,12 @@
                     <select id="role" class="form-select" disabled>
                         <option value="director" selected>Giám đốc</option>
                     </select>
-                    <p class="muted" style="margin:6px 0 0;font-size:13px;">Role Giám đốc không sửa tại đây. Dùng <a href="{{ route('director_succession.index') }}">Cập nhật người giữ chức Giám đốc</a> sau quyết định của doanh nghiệp.</p>
+                @elseif(!empty($contract))
+                    <select id="role" class="form-select" name="role" required>
+                        <option value="employee" {{ $currentRole === 'employee' ? 'selected' : '' }}>Nhân viên</option>
+                        <option value="hr" {{ $currentRole === 'hr' ? 'selected' : '' }}>HR</option>
+                        <option value="accountant" {{ $currentRole === 'accountant' ? 'selected' : '' }}>Kế toán</option>
+                    </select>
                 @else
                     <select id="role" class="form-select" name="role" required>
                         <option value="employee" {{ $currentRole === 'employee' ? 'selected' : '' }}>Nhân viên</option>
@@ -82,12 +100,6 @@
                         <option value="director" {{ $currentRole === 'director' ? 'selected' : '' }} {{ $blockNewDirector ? 'disabled' : '' }}>Giám đốc</option>
                         <option value="admin" {{ $currentRole === 'admin' ? 'selected' : '' }}>Admin (quản trị hệ thống)</option>
                     </select>
-                    <p class="muted" style="margin:6px 0 0;font-size:13px;">
-                        Admin quản trị CNTT. Giám đốc phê duyệt nghiệp vụ. Không gán cả hai cho cùng một người.
-                        @if($blockNewDirector)
-                            Đã có người giữ role Director — hãy <a href="{{ route('director_succession.index') }}">cập nhật người giữ chức</a>, không tạo thêm tài khoản Giám đốc và không đổi tên tài khoản cũ.
-                        @endif
-                    </p>
                 @endif
                 @error('role')<span class="error">{{ $message }}</span>@enderror
             </div>

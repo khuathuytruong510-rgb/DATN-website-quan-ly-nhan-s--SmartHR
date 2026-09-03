@@ -4,7 +4,6 @@
 <div class="page-head">
     <div>
         <h1>{{ $leaveRequest->exists ? 'Chỉnh sửa đơn nghỉ phép' : 'Tạo đơn nghỉ phép' }}</h1>
-        <p class="muted">Chọn nhân viên và loại nghỉ trước. Số ngày được phép lấy theo hợp đồng và Bộ luật Lao động.</p>
     </div>
     <a class="btn link" href="{{ route('leave_requests.index') }}">Quay lại</a>
 </div>
@@ -57,7 +56,6 @@
                 <input type="checkbox" name="half_day" value="1" {{ old('half_day', $leaveRequest->half_day) ? 'checked' : '' }} id="half_day" />
                 Nghỉ 1/2 ngày
             </label>
-            <p class="form-hint">Chỉ áp dụng khi ngày bắt đầu = ngày kết thúc.</p>
         </div>
 
         <div class="field">
@@ -71,7 +69,6 @@
                 <input type="checkbox" name="is_urgent" value="1" {{ old('is_urgent', $leaveRequest->is_urgent) ? 'checked' : '' }} id="is_urgent" />
                 Đánh dấu khẩn cấp (ưu tiên duyệt)
             </label>
-            <p class="form-hint">Chỉ chọn khi nhân viên thực sự cần và đã có lý do thuyết phục. Không bỏ qua hạn mức.</p>
             <div id="urgent_reason_wrapper" style="margin-top: 12px; display: {{ old('is_urgent', $leaveRequest->is_urgent) ? 'block' : 'none' }};">
                 <label class="form-label" for="urgent_reason">Lý do khẩn cấp</label>
                 <textarea class="form-control" name="urgent_reason" id="urgent_reason" rows="3" placeholder="Lý do nhân viên cần nghỉ phép...">{{ old('urgent_reason', $leaveRequest->urgent_reason) }}</textarea>

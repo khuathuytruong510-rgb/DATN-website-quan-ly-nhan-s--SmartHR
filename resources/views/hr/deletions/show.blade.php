@@ -7,7 +7,6 @@
 <div class="page-head">
     <div>
         <h1>{{ $req->typeLabel() }}: {{ $req->subject_label }}</h1>
-        <p class="muted">{{ $req->statusLabel() }} · Gửi lúc {{ optional($req->created_at)->format('d/m/Y H:i') }}</p>
     </div>
     <a class="btn link" href="{{ route('deletion_requests.index') }}">Danh sách</a>
 </div>
@@ -39,15 +38,13 @@
         @if($req->rejection_reason)
             <div><label>Lý do từ chối</label><div>{{ $req->rejection_reason }}</div></div>
         @endif
-        @if($req->status === 'approved' && $req->account_email)
+        @if($req->status === 'approved' && $req->isEmployee() && $req->account_email)
             <div>
                 <label>Tài khoản</label>
                 <div>
-                    {{ $req->account_email }}
+                    {{ $req->account_email }} — đã khóa đăng nhập
                     @if($req->account_cleared_at)
-                        — Admin đã xóa lúc {{ $req->account_cleared_at->format('d/m/Y H:i') }}
-                    @else
-                        — chờ Admin xóa trên Quản lý tài khoản
+                        lúc {{ $req->account_cleared_at->format('d/m/Y H:i') }}
                     @endif
                 </div>
             </div>
@@ -58,7 +55,7 @@
         <div class="actions" style="margin-top:16px;">
             <form method="POST" action="{{ route('deletion_requests.approve', $req) }}">
                 @csrf
-                <button class="btn primary" type="submit" data-confirm="{{ $req->isTransfer() ? 'Duyệt điều chuyển? Hồ sơ nhân viên sẽ đổi sang phòng ban đích ngay sau khi duyệt.' : 'Duyệt và xóa ngay? Dữ liệu được lưu vào lịch sử.' }}">{{ $req->isTransfer() ? 'Duyệt điều chuyển' : 'Duyệt và xóa' }}</button>
+                <button class="btn primary" type="submit" data-confirm="{{ $req->isTransfer() ? 'Duyệt điều chuyển? Hồ sơ nhân viên sẽ đổi sang phòng ban đích ngay sau khi duyệt.' : ($req->isEmployee() ? 'Duyệt nghỉ việc? Hồ sơ được giữ lại; hợp đồng chấm dứt; tài khoản khóa đăng nhập.' : 'Duyệt và xóa phòng ban? Dữ liệu được lưu vào lịch sử.') }}">{{ $req->isTransfer() ? 'Duyệt điều chuyển' : ($req->isEmployee() ? 'Duyệt nghỉ việc' : 'Duyệt và xóa') }}</button>
             </form>
             <form method="POST" action="{{ route('deletion_requests.reject', $req) }}" style="display:flex;gap:8px;align-items:center;">
                 @csrf
@@ -71,10 +68,9 @@
 
 <div class="card" style="margin-top:16px;">
     <h3 class="section-title" style="margin-top:0;">Dữ liệu lưu trữ</h3>
-    <p class="muted">Snapshot hồ sơ tại thời điểm gửi / xóa, dùng để tra cứu sau này.</p>
     @php
         $snapshot = $req->snapshot ?? [];
-        $relatedCounts = $snapshot['related_counts'] ?? [];
+        $settlement = $snapshot['settlement'] ?? [];
         $employee = $snapshot['employee'] ?? null;
         $transferPeople = $snapshot['employees'] ?? [];
         $savedContracts = $snapshot['contracts'] ?? data_get($snapshot, 'related.contracts', []);
@@ -191,9 +187,23 @@
             <div><label>Chức vụ</label><div>{{ $employee['position'] ?? '—' }}</div></div>
             <div><label>Phòng ban</label><div>{{ data_get($snapshot, 'department.name') ?? '—' }}</div></div>
             <div><label>Tài khoản</label><div>{{ data_get($snapshot, 'account.email') ?? '—' }}</div></div>
+            @if(! empty($snapshot['last_working_day']) || ! empty($settlement))
+                <div><label>Ngày nghỉ</label><div>{{ $fmtDate($snapshot['last_working_day'] ?? data_get($settlement, 'last_working_day')) }}</div></div>
+            @endif
         </div>
-        <h3 class="section-title">{{ $req->status === 'approved' ? 'Hợp đồng đã chấm dứt' : 'Hợp đồng' }}</h3>
-        <p class="muted">{{ $req->status === 'approved' ? 'Hợp đồng bị xóa cùng hồ sơ nhân viên và được lưu tại đây.' : 'Hợp đồng sẽ chấm dứt và lưu lại khi Giám đốc duyệt xóa.' }}</p>
+        @if($settlement)
+            <h3 class="section-title" style="margin-top:20px;">Chốt công / lương cuối</h3>
+            <div class="emp-dl">
+                <div><label>Ngày công đến ngày nghỉ</label><div>{{ $settlement['attendance_days'] ?? '—' }}</div></div>
+                <div><label>Công trong tháng nghỉ</label><div>{{ $settlement['attendance_days_in_final_month'] ?? '—' }}</div></div>
+                <div><label>Đơn OT</label><div>{{ $settlement['overtime_requests'] ?? '—' }}</div></div>
+                <div><label>Đơn phép</label><div>{{ $settlement['leave_requests'] ?? '—' }}</div></div>
+                @if(data_get($settlement, 'final_payroll.note'))
+                    <div><label>Lương cuối</label><div>{{ data_get($settlement, 'final_payroll.note') }}</div></div>
+                @endif
+            </div>
+        @endif
+        <h3 class="section-title" style="margin-top:28px;padding-top:8px;">{{ $req->status === 'approved' ? 'Hợp đồng đã chấm dứt' : 'Hợp đồng' }}</h3>
         <table>
             <thead>
                 <tr>
@@ -230,13 +240,6 @@
                 @endforelse
             </tbody>
         </table>
-        @if($relatedCounts)
-            <p style="margin-top:12px;"><strong>Bản ghi liên quan đã lưu:</strong>
-                @foreach($relatedCounts as $key => $count)
-                    {{ str_replace('_', ' ', $key) }} ({{ $count }})@if(! $loop->last), @endif
-                @endforeach
-            </p>
-        @endif
     @elseif(isset($snapshot['department']))
         <div class="emp-dl">
             <div><label>Mã</label><div>{{ $snapshot['department']['code'] ?? '—' }}</div></div>
@@ -244,9 +247,5 @@
             <div><label>Mô tả</label><div>{{ $snapshot['department']['description'] ?? '—' }}</div></div>
         </div>
     @endif
-    <details style="margin-top:12px;">
-        <summary>Xem toàn bộ JSON lưu trữ</summary>
-        <pre style="white-space:pre-wrap;font-size:12px;max-height:420px;overflow:auto;">{{ json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) }}</pre>
-    </details>
 </div>
 @endsection

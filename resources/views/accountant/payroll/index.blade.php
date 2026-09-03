@@ -11,7 +11,6 @@
 <div class="page-head">
     <div>
         <h1>Bảng lương</h1>
-        <p class="muted">Phiếu đã tính và trạng thái workflow. Tính lại chỉ với nháp / đã tính / sự cố. Thanh toán nằm ở mục Thanh toán lương.</p>
     </div>
     <div class="actions">
         <a class="btn primary" href="{{ route('accountant.payroll.generate') }}">Tính lương</a>
@@ -50,7 +49,7 @@
                 @foreach($payrolls as $p)
                     <tr>
                         <td>{{ $p->display_month }}</td>
-                        <td>{{ optional($p->employee)->name }}<br><small class="muted">{{ optional($p->employee)->email }}</small></td>
+                        <td>{{ optional($p->employee)->name }}<br></td>
                         <td>{{ number_format($p->total_salary ?? 0,0, '.', ',') }} VNĐ</td>
                         <td>
                             <span class="badge">{{ $workflow->statusLabel($p->status) }}</span>

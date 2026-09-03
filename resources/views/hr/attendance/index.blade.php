@@ -3,9 +3,6 @@
 @section('content')
 @include('components.module_header', [
     'title' => 'Chấm công',
-    'subtitle' => auth()->user()?->canManageHr()
-        ? 'Quản lý và nhập liệu chấm công nhân viên.'
-        : 'Xem dữ liệu chấm công phục vụ tính lương. Không chỉnh sửa.',
     'buttonText' => auth()->user()?->canManageHr() ? 'Thêm chấm công' : null,
     'buttonRoute' => auth()->user()?->canManageHr() ? route('attendance.create') : null,
 ])
@@ -149,7 +146,7 @@
                                     <form action="{{ route('attendance.destroy', $attendance) }}" method="POST" style="display:inline">
                                         @csrf
                                         @method('DELETE')
-                                        <button class="btn btn-sm btn-danger" type="submit" data-confirm="Xóa bản ghi chấm công?">Xóa</button>
+                                        <button class="btn btn-sm btn-danger" type="submit" data-confirm="Xóa bản ghi chấm công?" data-confirm-variant="danger">Xóa</button>
                                     </form>
                                     @endif
                                 </div>

@@ -5,7 +5,6 @@
     <div class="page-head">
         <div>
             <h1>Chi tiết lương</h1>
-            <p class="muted">{{ optional($payroll->employee)->name }} · Tháng {{ $payroll->month }}/{{ $payroll->year }}</p>
         </div>
         <div class="actions">
             <a href="{{ route('payroll.index', ['month' => $payroll->month, 'year' => $payroll->year]) }}" class="btn">← Danh sách</a>
@@ -56,13 +55,6 @@
             <div style="margin-bottom:14px;">
                 <span style="color:#64748b;font-size:13px;">Giám đốc phê duyệt</span>
                 <p style="margin:4px 0 0;font-weight:600;">{{ $payroll->directorApproverLabel() }}</p>
-                <p class="muted" style="margin:4px 0 0;font-size:12px;">
-                    Tại thời điểm duyệt
-                    @if($payroll->director_approved_at)
-                        · {{ $payroll->director_approved_at->format('d/m/Y H:i') }}
-                    @endif
-                    — không đổi khi thay người giữ chức
-                </p>
             </div>
             @endif
             <div style="margin-bottom:14px;">
@@ -82,7 +74,6 @@
                     <span style="color:#9a3412;font-size:13px;font-weight:600;">Nội dung sự cố</span>
                     <p style="margin:6px 0 0;white-space:pre-wrap;">{{ $payroll->issue_report }}</p>
                     @if($payroll->issue_reported_at)
-                        <p class="muted" style="margin:8px 0 0;font-size:12px;">Báo lúc {{ $payroll->issue_reported_at->format('d/m/Y H:i') }}</p>
                     @endif
                 </div>
             @endif

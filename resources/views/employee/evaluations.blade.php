@@ -11,7 +11,6 @@
     <div class="page-head">
         <div>
             <h1>Đánh giá của tôi</h1>
-            <p class="muted">Danh sách đánh giá hiệu suất theo tháng dành cho bạn</p>
         </div>
     </div>
 

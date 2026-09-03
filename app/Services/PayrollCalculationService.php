@@ -62,8 +62,23 @@ class PayrollCalculationService
      *
      * Chỉ được tính phiếu mới, nháp, đã tính, hoặc đang sự cố.
      */
+    /**
+     * Nhân viên được tính lương kỳ: đang làm / chờ nghỉ — không gồm Giám đốc.
+     */
+    public function payrollEligibleEmployees()
+    {
+        return Employee::query()
+            ->withoutBoardAndDirector()
+            ->whereIn('status', [Employee::STATUS_ACTIVE, Employee::STATUS_PENDING_TERMINATION])
+            ->orderBy('id');
+    }
+
     public function calculate(Employee $employee, int $month, int $year)
     {
+        if (\App\Support\RequestApprover::isDirectorProfile($employee)) {
+            throw new PayrollNotRecalculableException('Không tính lương cho Giám đốc.');
+        }
+
         return DB::transaction(function () use ($employee, $month, $year) {
             $existing = Payroll::query()
                 ->where('employee_id', $employee->id)
@@ -85,7 +100,7 @@ class PayrollCalculationService
     }
 
     /**
-     * Tính cả kỳ cho nhân viên đang làm. Bỏ qua phiếu không được tính lại.
+     * Tính cả kỳ cho nhân viên đang làm (không gồm Giám đốc). Bỏ qua phiếu không được tính lại.
      */
     public function calculatePeriod(int $month, int $year, ?User $actor = null): array
     {
@@ -94,7 +109,7 @@ class PayrollCalculationService
         $calculated = 0;
         $skipped = 0;
 
-        $employees = Employee::query()->where('status', 'active')->orderBy('id')->get();
+        $employees = $this->payrollEligibleEmployees()->get();
         foreach ($employees as $employee) {
             try {
                 $this->calculate($employee, $month, $year);
@@ -115,68 +130,83 @@ class PayrollCalculationService
         return compact('calculated', 'skipped', 'month', 'year');
     }
 
+    /**
+     * Số liệu kỳ để kế toán đối chiếu trước khi ghi phiếu (không ghi DB).
+     *
+     * @return Collection<int, object>
+     */
     public function previewPeriod(int $month, int $year): Collection
     {
-        return Employee::query()
-            ->with(['positionDetail', 'contracts', 'payrolls' => function ($query) use ($month, $year): void {
-                $query->where('month', $month)->where('year', $year);
-            }])
-            ->where('status', 'active')
-            ->orderBy('id')
-            ->get()
-            ->map(function (Employee $employee) use ($month, $year): object {
-                $payroll = $employee->payrolls->first();
-                $canRecalculate = ! $payroll
-                    || in_array($payroll->status, PayrollPaymentWorkflowService::recalculableStatuses(), true);
-                $amounts = $payroll && ! $canRecalculate
-                    ? $this->amountsFromPayroll($payroll)
-                    : $this->buildAmounts($employee, $month, $year);
+        $employees = $this->payrollEligibleEmployees()
+            ->with(['positionDetail', 'contracts'])
+            ->reorder()
+            ->orderBy('name')
+            ->get();
 
-                return (object) array_merge($amounts, [
-                    'employee' => $employee,
-                    'payroll' => $payroll,
-                    'month' => $month,
-                    'year' => $year,
-                    'can_recalculate' => $canRecalculate,
-                    'status' => $payroll?->status,
-                ]);
-            });
+        $existingByEmployee = Payroll::query()
+            ->where('month', $month)
+            ->where('year', $year)
+            ->whereIn('employee_id', $employees->pluck('id'))
+            ->get()
+            ->keyBy('employee_id');
+
+        return $employees->map(function (Employee $employee) use ($month, $year, $existingByEmployee) {
+            $existing = $existingByEmployee->get($employee->id);
+            $canRecalculate = ! $existing
+                || in_array($existing->status, PayrollPaymentWorkflowService::recalculableStatuses(), true);
+
+            $amounts = ($existing && ! $canRecalculate)
+                ? $this->amountsFromPayroll($existing)
+                : $this->buildAmounts($employee, $month, $year);
+
+            $contract = $this->activeContract($employee);
+
+            return (object) array_merge($amounts, $this->workFacts($employee, $month, $year), [
+                'employee' => $employee,
+                'payroll' => $existing,
+                'can_recalculate' => $canRecalculate,
+                'status' => $existing?->status,
+                'month' => $month,
+                'year' => $year,
+                'contract_type' => $contract?->contract_type,
+                'contract_code' => $contract?->contract_code,
+                'contract_status' => $contract?->status,
+                'working_schedule' => $contract?->working_schedule,
+            ]);
+        });
+    }
+
+    protected function activeContract(Employee $employee): ?Contract
+    {
+        $employee->loadMissing('contracts');
+
+        return $employee->contracts
+            ->sortByDesc(fn (Contract $item) => optional($item->start_date)?->toDateString())
+            ->first(fn (Contract $item) => $item->status === 'active')
+            ?? $employee->contracts->sortByDesc(fn (Contract $item) => optional($item->start_date)?->toDateString())->first();
     }
 
     /**
-     * Lương cơ bản của nhân viên khi tính lương:
-     * - Theo chức vụ: lấy mức lương chuẩn của vị trí (positions.base_salary).
-     * - Không được thấp hơn lương cơ bản ghi trong hợp đồng đang hiệu lực.
-     * => lấy giá trị cao hơn giữa 2 mức.
+     * Ngày công / giờ / tăng ca / đi muộn — không gồm số tiền.
+     *
+     * @return array<string, float|int>
      */
-    protected function baseSalaryFor(Employee $employee): int
+    protected function workFacts(Employee $employee, int $month, int $year): array
     {
-        // 1) Lương theo chức vụ (chuẩn vị trí)
-        $positionSalary = 0;
+        $attendances = Attendance::where('employee_id', $employee->id)
+            ->whereMonth('date', $month)
+            ->whereYear('date', $year)
+            ->get();
 
-        if ($employee->positionDetail && (int) $employee->positionDetail->base_salary > 0) {
-            $positionSalary = (int) $employee->positionDetail->base_salary;
-        } else {
-            $positionSalary = match ($employee->position) {
-                'Giám Đốc' => 13000000,
-                'Trưởng Phòng Nhân Sự' => 10400000,
-                default => 7800000,
-            };
-        }
-
-        // 2) Lương cơ bản theo hợp đồng đang hiệu lực
-        $contractSalary = 0;
-        $contract = Contract::query()
-            ->where('employee_id', $employee->id)
-            ->where('status', Contract::STATUS_ACTIVE)
-            ->latest('id')
-            ->first();
-
-        if ($contract) {
-            $contractSalary = (int) ($contract->base_salary ?: $contract->salary ?: 0);
-        }
-
-        return max($positionSalary, $contractSalary);
+        return [
+            'work_hours' => round((float) $attendances->sum('work_hours'), 2),
+            'late_days' => $attendances->filter(
+                fn ($row) => (int) ($row->late_minutes ?? 0) > 0 || $row->status === 'late'
+            )->count(),
+            'late_minutes' => (int) $attendances->sum('late_minutes'),
+            'absent_days' => $attendances->where('status', 'absent')->count(),
+            'early_leave_minutes' => (int) $attendances->sum('early_leave_minutes'),
+        ];
     }
 
     /**

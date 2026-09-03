@@ -7,7 +7,6 @@
     <div class="page-head">
         <div>
             <h1>Yêu cầu đổi thông tin nhận lương</h1>
-            <p class="muted">Duyệt hoặc từ chối yêu cầu thay đổi QR/STK của nhân viên</p>
         </div>
     </div>
 
@@ -58,7 +57,7 @@
                                     <form method="POST" action="{{ route('payroll.bank_requests.reject', $req) }}">
                                         @csrf
                                         <input type="hidden" name="review_note" value="Từ chối yêu cầu">
-                                        <button class="btn danger" type="submit" data-confirm="Từ chối yêu cầu này?">Từ chối</button>
+                                        <button class="btn danger" type="submit" data-confirm="Từ chối yêu cầu này?" data-confirm-variant="danger">Từ chối</button>
                                     </form>
                                     @elseif(\App\Support\RequestApprover::needsDirector($req->employee))
                                         <span class="muted">Chờ Giám đốc duyệt</span>

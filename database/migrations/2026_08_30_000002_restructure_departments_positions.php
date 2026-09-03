@@ -142,8 +142,10 @@ return new class extends Migration
         $deptId = fn (string $code) => optional(Department::where('code', $code)->first())->id;
 
         $renames = [
-            'Giám đốc'                 => ['Tổng Giám đốc', 'BGD'],
-            'Phó Giám đốc'             => ['Phó Tổng Giám đốc', 'BGD'],
+            'Giám đốc'                 => ['Giám đốc', 'BGD'],
+            'Tổng Giám đốc'            => ['Giám đốc', 'BGD'],
+            'Phó Giám đốc'             => ['Giám đốc', 'BGD'],
+            'Phó Tổng Giám đốc'        => ['Giám đốc', 'BGD'],
             'Trưởng phòng Nhân sự'     => ['Trưởng phòng HR', 'HR'],
             'Trưởng phòng Kế toán'     => ['Kế toán trưởng', 'KTTC'],
             'Trưởng phòng IT'          => ['IT Manager', 'IT'],

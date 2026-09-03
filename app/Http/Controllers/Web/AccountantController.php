@@ -163,7 +163,7 @@ class AccountantController extends Controller
 
     public function lockPayroll(Payroll $payroll)
     {
-        abort(403, 'Kế toán không khóa từng phiếu. HR chốt cả kỳ lương.');
+        abort(403, 'Kế toán không khóa từng phiếu. Kỳ lương được hệ thống chốt sau ngày cuối tháng.');
     }
 
     public function unlockPayroll(Payroll $payroll)
@@ -234,6 +234,11 @@ class AccountantController extends Controller
                 'label' => $cursor->format('m/Y'),
                 'value' => $cursor->format('Y-m'),
                 'locked' => (bool) $lockRow?->is_locked,
+                'verified' => (bool) $lockRow?->hr_verified_at,
+                'unlock_pending' => $lockRow?->unlock_request_status === 'pending',
+                'ready' => (bool) $lockRow?->is_locked
+                    && (bool) $lockRow?->hr_verified_at
+                    && $lockRow?->unlock_request_status !== 'pending',
                 'total' => $statusCounts->sum(),
                 'calculated' => (int) $statusCounts->only(PayrollPaymentWorkflowService::calculatedStatuses())->sum(),
                 'issue' => (int) ($statusCounts[PayrollPaymentWorkflowService::PAYROLL_ISSUE] ?? 0),
@@ -244,7 +249,8 @@ class AccountantController extends Controller
         $month = (int) $request->input('month', 0);
         $year = (int) $request->input('year', 0);
         if ($month < 1 || $month > 12 || $year < 2000) {
-            $preferred = $periods->first(fn (array $period) => $period['locked'] && $period['total'] > 0)
+            $preferred = $periods->first(fn (array $period) => $period['ready'] && $period['total'] > 0)
+                ?? $periods->first(fn (array $period) => $period['ready'])
                 ?? $periods->first(fn (array $period) => $period['locked'])
                 ?? $periods->first();
             $month = (int) ($preferred['month'] ?? now()->month);

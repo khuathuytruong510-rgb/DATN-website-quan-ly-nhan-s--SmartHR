@@ -31,13 +31,13 @@ class DefenseDemoSeeder extends Seeder
 
     public function run(): void
     {
-        $hcns = Department::updateOrCreate(['code' => 'HCNS'], [
-            'name' => 'Phòng Hành chính - Nhân sự',
+        $hcns = Department::updateOrCreate(['code' => 'HR'], [
+            'name' => 'Phòng Nhân sự (HR)',
             'manager' => 'Trần Thị Bích',
             'description' => 'Quản lý nhân sự, hợp đồng, chấm công, nghỉ phép.',
         ]);
-        $cntt = Department::updateOrCreate(['code' => 'CNTT'], [
-            'name' => 'Phòng Công nghệ thông tin',
+        $cntt = Department::updateOrCreate(['code' => 'IT'], [
+            'name' => 'Phòng IT',
             'manager' => 'Nguyễn Văn Nam',
             'description' => 'Phát triển và vận hành hệ thống.',
         ]);

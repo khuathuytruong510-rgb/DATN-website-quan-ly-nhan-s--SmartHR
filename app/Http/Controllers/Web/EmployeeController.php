@@ -406,14 +406,52 @@ class EmployeeController extends Controller
     public function profile()
     {
         $user = auth()->user();
-        $employee = Employee::where('email', $user->email)->with('department')->firstOrFail();
+        $employee = $user->employee()
+            ->with(['department', 'positionDetail'])
+            ->first()
+            ?? Employee::query()
+                ->with(['department', 'positionDetail'])
+                ->where('email', $user->email)
+                ->firstOrFail();
 
-        $baseSalary = optional(
-            Contract::where('employee_id', $employee->id)->where('status', 'active')->latest('start_date')->first()
-            ?? Payroll::where('employee_id', $employee->id)->orderByDesc('year')->orderByDesc('month')->first()
-        )->base_salary;
+        $baseSalary = $this->resolveProfileBaseSalary($employee);
 
         return view('employee.profile', compact('employee', 'baseSalary'));
+    }
+
+    private function resolveProfileBaseSalary(Employee $employee): ?float
+    {
+        $contract = Contract::query()
+            ->where('employee_id', $employee->id)
+            ->whereNotIn('status', [
+                Contract::STATUS_CANCELLED,
+                Contract::STATUS_REJECTED,
+                Contract::STATUS_TERMINATED,
+            ])
+            ->orderByRaw("CASE WHEN status = ? THEN 0 ELSE 1 END", [Contract::STATUS_ACTIVE])
+            ->latest('start_date')
+            ->latest('id')
+            ->first();
+
+        $fromContract = (float) ($contract?->base_salary ?: $contract?->salary ?: 0);
+        if ($fromContract > 0) {
+            return $fromContract;
+        }
+
+        $fromPosition = (float) optional($employee->positionDetail)->base_salary;
+        if ($fromPosition > 0) {
+            return $fromPosition;
+        }
+
+        $fromPayroll = (float) optional(
+            Payroll::query()
+                ->where('employee_id', $employee->id)
+                ->orderByDesc('year')
+                ->orderByDesc('month')
+                ->first()
+        )->base_salary;
+
+        return $fromPayroll > 0 ? $fromPayroll : null;
     }
 
     public function trainings(): View

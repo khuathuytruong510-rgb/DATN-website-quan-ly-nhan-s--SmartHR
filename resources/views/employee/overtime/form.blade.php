@@ -11,7 +11,6 @@
     <div class="page-head">
         <div>
             <h1>Tạo yêu cầu tăng ca</h1>
-            <p class="muted">Gửi đăng ký tăng ca cho {{ isset($employee) ? \App\Support\RequestApprover::queueLabel($employee) : 'HR' }} duyệt. Check-out muộn không tự thành tăng ca — chỉ tính trong khung được duyệt.</p>
         </div>
         <div class="actions">
             <a class="btn" href="{{ route('me.overtime_requests') }}">Quay lại</a>
@@ -25,7 +24,6 @@
             <div class="field">
                 <label>Ngày</label>
                 <input type="date" name="date" value="{{ old('date') }}" min="{{ now()->toDateString() }}" max="{{ now()->addDay()->toDateString() }}" required>
-                <p class="muted" style="margin:0.25rem 0 0;font-size:0.85em;">Chỉ hôm nay hoặc ngày mai. Không đăng ký quá khứ hoặc từ 2 ngày trở lên.</p>
                 @error('date')<div class="error">{{ $message }}</div>@enderror
             </div>
 

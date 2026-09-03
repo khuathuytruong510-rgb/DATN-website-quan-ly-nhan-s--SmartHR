@@ -39,8 +39,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/positions/id/{id}', [SmartHrController::class, 'getPositionById'])->name('api.positions.get_by_id')->middleware(\App\Http\Middleware\EnsureAdminOrHr::class);
     // API: Lấy thông tin vị trí theo tên
     Route::get('/api/positions/{name}', [SmartHrController::class, 'getPositionByName'])->name('api.positions.get')->middleware(\App\Http\Middleware\EnsureAdminOrHr::class);
-    // API: Tạo mã nhân viên tiếp theo
-    Route::get('/api/employees/next-code', [SmartHrController::class, 'getNextEmployeeCode'])->name('api.employees.next_code')->middleware(\App\Http\Middleware\EnsureAdminOrHr::class);
 
     Route::get('/admin', [SmartHrController::class, 'dashboard'])
         ->name('admin.dashboard');
@@ -186,6 +184,8 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/employees', [SmartHrController::class, 'employees'])->name('employees.index');
         Route::get('/employees/create', [SmartHrController::class, 'createEmployee'])->name('employees.create');
+        Route::get('/employees/next-code', [SmartHrController::class, 'getNextEmployeeCode'])->name('employees.next_code');
+        Route::get('/employees/by-code', [SmartHrController::class, 'findEmployeeByCode'])->name('employees.by_code');
         Route::post('/employees', [SmartHrController::class, 'storeEmployee'])->name('employees.store');
         Route::get('/employees/{employee}/edit', [SmartHrController::class, 'editEmployee'])->name('employees.edit');
         Route::get('/employees/{employee}/deletion-request', [DeletionRequestController::class, 'createEmployee'])->name('deletion_requests.create_employee');
@@ -237,8 +237,14 @@ Route::middleware('auth')->group(function () {
                 ->name('payroll.generate');
             Route::post('/payroll/period/lock', [PayrollController::class, 'lockPeriod'])
                 ->name('payroll.period.lock');
+            Route::post('/payroll/period/verify', [PayrollController::class, 'verifyPeriod'])
+                ->name('payroll.period.verify');
             Route::post('/payroll/period/unlock', [PayrollController::class, 'unlockPeriod'])
                 ->name('payroll.period.unlock');
+            Route::post('/payroll/period/unlock/approve', [PayrollController::class, 'approveUnlockPeriod'])
+                ->name('payroll.period.unlock.approve');
+            Route::post('/payroll/period/unlock/reject', [PayrollController::class, 'rejectUnlockPeriod'])
+                ->name('payroll.period.unlock.reject');
 
             // In bảng lương trình Giám đốc + duyệt toàn bộ (đặt trước {payroll})
             Route::get('/payroll/print', [PayrollController::class, 'printSheet'])

@@ -6,7 +6,6 @@
 <div class="page-head">
     <div>
         <h1>{{ $ticket->subject }}</h1>
-        <p class="muted">{{ $ticket->statusLabel() }} · {{ optional($ticket->employee)->name }} · {{ optional($ticket->created_at)->format('d/m/Y H:i') }}</p>
     </div>
     <a class="btn link" href="{{ route('support_requests.index') }}">Danh sách</a>
 </div>

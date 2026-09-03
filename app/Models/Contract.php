@@ -186,13 +186,15 @@ class Contract extends Model
 
     public function isAwaitingHrSend(): bool
     {
-        return ! $this->director_signed_at
-            && ! $this->content_locked_at
-            && in_array($this->status, [
-                self::STATUS_DRAFT,
-                self::STATUS_WAITING_EMPLOYEE_SIGNATURE,
-                'waiting_employee',
-            ], true);
+        if ($this->director_signed_at || $this->content_locked_at || $this->employee_signed_at) {
+            return false;
+        }
+
+        return in_array($this->status, [
+            self::STATUS_DRAFT,
+            self::STATUS_REJECTED,
+            'pending',
+        ], true);
     }
 
     public function isPendingDirectorEsign(): bool

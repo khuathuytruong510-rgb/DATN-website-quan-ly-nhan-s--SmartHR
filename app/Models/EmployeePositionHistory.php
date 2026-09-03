@@ -13,6 +13,7 @@ class EmployeePositionHistory extends Model
     public const REASON_SUCCESSION = 'director_succession';
     public const REASON_APPOINTMENT = 'director_appointment';
     public const REASON_TRANSFER = 'department_transfer';
+    public const REASON_TERMINATION = 'employment_terminated';
 
     protected $fillable = [
         'employee_id',

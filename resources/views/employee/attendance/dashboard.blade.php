@@ -60,7 +60,6 @@
                         <div class="card-body text-center">
                             <h6 class="text-muted">Giờ Làm Hôm Nay</h6>
                             <h3 class="text-primary" id="todayWorkHours">--</h3>
-                            <small class="text-muted">giờ</small>
                         </div>
                     </div>
                 </div>

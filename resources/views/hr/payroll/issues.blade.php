@@ -7,7 +7,6 @@
     <div class="page-head">
         <div>
             <h1>Sự cố lương từ nhân viên</h1>
-            <p class="muted">Các phiếu lương nhân viên đã báo sai sót / sự cố</p>
         </div>
         <div class="actions">
             <a href="{{ route('payroll.index') }}" class="btn">← Bảng lương</a>

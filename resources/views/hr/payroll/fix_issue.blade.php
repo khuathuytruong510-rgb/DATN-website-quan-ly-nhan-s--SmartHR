@@ -7,7 +7,6 @@
     <div class="page-head">
         <div>
             <h1>Khắc phục sự cố lương</h1>
-            <p class="muted">{{ optional($payroll->employee)->name }} · Tháng {{ $payroll->month }}/{{ $payroll->year }}</p>
         </div>
         <div class="actions">
             <a href="{{ route('payroll.issues.index') }}" class="btn">← Sự cố lương</a>
@@ -34,7 +33,6 @@
             <strong style="color:#9a3412;">Nội dung sự cố từ nhân viên</strong>
             <p style="margin:8px 0 0;white-space:pre-wrap;">{{ $payroll->issue_report }}</p>
             @if($payroll->issue_reported_at)
-                <p class="muted" style="margin:8px 0 0;font-size:12px;">Báo lúc {{ $payroll->issue_reported_at->format('d/m/Y H:i') }}</p>
             @endif
         </div>
     @endif

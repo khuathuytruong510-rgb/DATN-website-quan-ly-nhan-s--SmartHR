@@ -26,7 +26,6 @@
 <div class="page-head">
     <div>
         <h1>Phúc lợi</h1>
-        <p class="muted">Quản lý phúc lợi, trợ cấp và bảo hiểm cho nhân viên.</p>
     </div>
     <div class="page-actions">
         <a class="btn primary" href="{{ route('benefits.create') }}">Thêm phúc lợi</a>
@@ -105,7 +104,7 @@
                                             <button type="submit" class="btn btn-sm success">Duyệt</button>
                                         </form>
                                     @endif
-                                    <form method="POST" action="{{ route('benefits.destroy', $benefit) }}" style="display: inline;" data-confirm="Bạn có chắc muốn xóa phúc lợi này?">
+                                    <form method="POST" action="{{ route('benefits.destroy', $benefit) }}" data-confirm="Bạn có chắc muốn xóa phúc lợi này?" data-confirm-variant="danger">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="btn btn-sm danger">Xóa</button>

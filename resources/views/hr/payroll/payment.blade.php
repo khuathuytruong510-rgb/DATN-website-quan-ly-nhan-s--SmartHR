@@ -31,7 +31,6 @@
     <div class="page-head">
         <div>
             <h1>Thanh toán lương</h1>
-            <p class="muted">{{ optional($employee)->name }} · Tháng {{ $payroll->month }}/{{ $payroll->year }}</p>
         </div>
         <div class="actions">
             <a href="{{ route('payroll.show', $payroll) }}" class="btn">← Chi tiết</a>
@@ -79,14 +78,13 @@
                     <img src="{{ asset('storage/'.$employee->qr_image) }}" alt="QR" style="max-width:180px;border:1px solid var(--line);border-radius:8px;">
                 </div>
             @endif
-            <p class="muted" style="font-size:13px;">Kế toán không sửa hồ sơ nhân viên. Đổi STK do HR xử lý. Snapshot được chốt khi HR kiểm tra phiếu.</p>
         </div>
     </div>
 
     @if($workflow->canPay($payroll))
         <div class="card" style="margin-top:16px;">
             <h3 style="margin-top:0;">Xác nhận thanh toán</h3>
-            <form method="POST" action="{{ route('payroll.payment.confirm', $payroll) }}" id="payForm">
+            <form method="POST" action="{{ route('payroll.payment.confirm', $payroll) }}" id="payForm" data-confirm="Xác nhận đã thanh toán lương?">
                 @csrf
                 <div class="grid two-cols">
                     <div class="field">
@@ -107,7 +105,6 @@
                             data-pattern="[A-Za-z0-9\\-_]{6,50}"
                             placeholder="VD: FT240721123456"
                         >
-                        <small id="txnHelp" class="muted">Bắt buộc khi chuyển khoản (6–50 ký tự chữ/số).</small>
                     </div>
                 </div>
                 <div class="field">
@@ -187,18 +184,10 @@ document.addEventListener('DOMContentLoaded', function () {
     methodEl.addEventListener('input', syncPaymentMethod);
 
     if (payForm) {
-        payForm.addEventListener('submit', function (e) {
+        payForm.addEventListener('submit', function () {
             syncPaymentMethod();
             if (methodEl.value === 'cash') {
                 txnInput.disabled = true;
-            }
-            e.preventDefault();
-            const proceed = function () { payForm.submit(); };
-            const cancel = function () { txnInput.disabled = false; syncPaymentMethod(); };
-            if (typeof window.SmartHrConfirm === 'function') {
-                SmartHrConfirm('Xác nhận đã thanh toán lương?', proceed, cancel);
-            } else {
-                proceed();
             }
         });
     }

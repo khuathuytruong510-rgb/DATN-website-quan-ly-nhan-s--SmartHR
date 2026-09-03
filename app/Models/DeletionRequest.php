@@ -4,129 +4,145 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Facades\Storage;
 
 class DeletionRequest extends Model
 {
-    public const KIND_EMPLOYEE = 'employee';
-    public const KIND_DEPARTMENT = 'department';
-    public const KIND_TRANSFER = 'transfer';
+    public const EMPLOYEE = 'employee';
+    public const DEPARTMENT = 'department';
+    public const TRANSFER = 'transfer';
 
-    public const STATUS_PENDING = 'pending';
-    public const STATUS_APPROVED = 'approved';
-    public const STATUS_APPLIED = 'applied';
-    public const STATUS_REJECTED = 'rejected';
-    public const STATUS_CANCELLED = 'cancelled';
+    public const PENDING = 'pending';
+    public const APPROVED = 'approved';
+    public const REJECTED = 'rejected';
 
     protected $fillable = [
-        'code',
-        'kind',
-        'requestable_id',
-        'requestable_type',
-        'name',
-        'payload',
+        'subject_type',
+        'subject_id',
+        'subject_label',
+        'snapshot',
         'reason',
+        'document_path',
+        'document_name',
         'status',
-        'submitted_by',
+        'requested_by',
         'reviewed_by',
         'reviewed_at',
-        'review_note',
-        'applied_by',
-        'applied_at',
-        'cancellation_note',
+        'rejection_reason',
+        'executed_at',
+        'account_user_id',
+        'account_email',
+        'account_cleared_at',
     ];
 
     protected $casts = [
-        'payload' => 'array',
-        'requestable_id' => 'integer',
+        'snapshot' => 'array',
         'reviewed_at' => 'datetime',
-        'applied_at' => 'datetime',
+        'executed_at' => 'datetime',
+        'account_cleared_at' => 'datetime',
     ];
 
-    public function requestable(): MorphTo
+    public function requester(): BelongsTo
     {
-        return $this->morphTo();
+        return $this->belongsTo(User::class, 'requested_by');
     }
 
-    public function submittedBy(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'submitted_by');
-    }
-
-    public function reviewedBy(): BelongsTo
+    public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
     }
 
-    public function appliedBy(): BelongsTo
+    public function accountUser(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'applied_by');
+        return $this->belongsTo(User::class, 'account_user_id');
     }
 
     public function isPending(): bool
     {
-        return $this->status === self::STATUS_PENDING;
+        return $this->status === self::PENDING;
     }
 
     public function isEmployee(): bool
     {
-        return $this->kind === self::KIND_EMPLOYEE;
-    }
-
-    public function isDepartment(): bool
-    {
-        return $this->kind === self::KIND_DEPARTMENT;
+        return $this->subject_type === self::EMPLOYEE;
     }
 
     public function isTransfer(): bool
     {
-        return $this->kind === self::KIND_TRANSFER;
+        return $this->subject_type === self::TRANSFER;
     }
 
-    public function approveActionLabel(): string
+    public function documentUrl(): ?string
     {
-        return $this->isTransfer() ? 'Duyệt và chuyển' : 'Duyệt và xóa';
+        return $this->document_path ? Storage::url($this->document_path) : null;
     }
 
-    public function isApproved(): bool
+    public function typeLabel(): string
     {
-        return $this->status === self::STATUS_APPROVED;
-    }
-
-    public function isApplied(): bool
-    {
-        return $this->status === self::STATUS_APPLIED;
-    }
-
-    public function isRejected(): bool
-    {
-        return $this->status === self::STATUS_REJECTED;
-    }
-
-    public function isCancelled(): bool
-    {
-        return $this->status === self::STATUS_CANCELLED;
-    }
-
-    public function kindLabel(): string
-    {
-        return match ($this->kind) {
-            self::KIND_EMPLOYEE => 'Nhân viên',
-            self::KIND_DEPARTMENT => 'Phòng ban',
-            self::KIND_TRANSFER => 'Điều chuyển nhân viên',
-            default => 'Yêu cầu',
+        return match ($this->subject_type) {
+            self::EMPLOYEE => 'Nhân viên',
+            self::DEPARTMENT => 'Phòng ban',
+            self::TRANSFER => 'Chuyển phòng ban',
+            default => $this->subject_type,
         };
     }
 
     public function statusLabel(): string
     {
         return match ($this->status) {
-            self::STATUS_PENDING => 'Chờ Giám đốc duyệt',
-            self::STATUS_APPROVED => 'Đã duyệt — chờ HR thực hiện xóa',
-            self::STATUS_APPLIED => 'Đã xóa',
-            self::STATUS_REJECTED => 'Bị từ chối',
-            self::STATUS_CANCELLED => 'Đã hủy',
-            default => $this->status ? ucfirst($this->status) : '—',
+            self::PENDING => 'Chờ Giám đốc duyệt',
+            self::APPROVED => match (true) {
+                $this->isTransfer() => 'Đã duyệt',
+                $this->isEmployee() => 'Đã nghỉ việc',
+                default => 'Đã xóa',
+            },
+            self::REJECTED => 'Từ chối',
+            default => $this->status,
         };
+    }
+
+    public function approveActionLabel(): string
+    {
+        return match (true) {
+            $this->isTransfer() => 'Duyệt chuyển',
+            $this->isEmployee() => 'Duyệt nghỉ việc',
+            default => 'Duyệt xóa',
+        };
+    }
+
+    public function transferHistory(): ?array
+    {
+        $history = data_get($this->snapshot, 'history');
+
+        return is_array($history) ? $history : null;
+    }
+
+    public function feedbackEntries(): array
+    {
+        $raw = data_get($this->snapshot, 'feedback', []);
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $entries = [];
+        foreach ($raw as $entry) {
+            if (is_array($entry) && isset($entry['employee_id'])) {
+                $entries[(int) $entry['employee_id']] = $entry;
+            }
+        }
+
+        return $entries;
+    }
+
+    public function feedbackFor(int $employeeId): ?array
+    {
+        return $this->feedbackEntries()[$employeeId] ?? null;
+    }
+
+    public function pendingFeedbackCount(): int
+    {
+        return collect($this->feedbackEntries())
+            ->filter(fn (array $row) => ($row['status'] ?? 'pending') === 'pending')
+            ->count();
     }
 }

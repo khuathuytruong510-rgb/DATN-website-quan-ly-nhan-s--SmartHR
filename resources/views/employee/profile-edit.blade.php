@@ -6,7 +6,6 @@
     <div class="page-head">
         <div>
             <h1>Cập nhật thông tin cá nhân</h1>
-            <p class="muted">Chỉ gửi thay đổi thông tin liên hệ / giấy tờ cá nhân. Chức vụ, phòng ban, mã NV do HR quản lý.</p>
         </div>
     </div>
 

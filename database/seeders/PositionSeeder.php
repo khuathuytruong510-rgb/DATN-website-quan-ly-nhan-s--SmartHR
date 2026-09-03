@@ -11,8 +11,9 @@ class PositionSeeder extends Seeder
     public function run(): void
     {
         $catalog = [
-            ['Tổng Giám đốc',          'BGD',  'C-level',   40000000, 30000000, 50000000, 'Giám đốc điều hành toàn công ty.'],
-            ['Phó Tổng Giám đốc',      'BGD',  'Director',  30000000, 25000000, 35000000, 'Phó giám đốc phụ trách khối chức năng.'],
+            ['Giám đốc',               'BGD',  'Director',  30000000, 25000000, 40000000, 'Đại diện pháp luật, điều hành toàn công ty.'],
+            ['Trợ lý Giám đốc',        'BGD',  'Staff',     15000000, 12000000, 18000000, 'Hỗ trợ Giám đốc điều hành, lịch họp và công việc đối ngoại.'],
+            ['Thư ký',                 'BGD',  'Staff',     12000000, 10000000, 15000000, 'Thư ký văn phòng Ban Giám đốc, soạn thảo và lưu trữ hồ sơ.'],
             ['Trưởng phòng HR',        'HR',   'Manager',   20000000, 18000000, 25000000, 'Quản lý toàn bộ hoạt động nhân sự.'],
             ['HR Manager',             'HR',   'Manager',   14000000, 12000000, 18000000, 'Điều phối nhân sự, chấm công, nghỉ phép.'],
             ['HR Executive',           'HR',   'Staff',     12000000, 10000000, 15000000, 'Phụ trách hồ sơ, hợp đồng và hành chính nhân sự.'],
@@ -43,7 +44,7 @@ class PositionSeeder extends Seeder
         ];
 
         foreach ($catalog as [$name, $code, $level, $base, $min, $max, $description]) {
-            $department = Department::where('code', $code)->first();
+            $department = $this->departmentByCode($code);
             if (! $department) {
                 continue;
             }
@@ -58,5 +59,79 @@ class PositionSeeder extends Seeder
                 'department_id' => $department->id,
             ]);
         }
+
+        $this->normalizeBoardDirectorPositions();
+    }
+
+    /**
+     * Ban Giám đốc giữ: Giám đốc, Trợ lý Giám đốc, Thư ký.
+     */
+    protected function normalizeBoardDirectorPositions(): void
+    {
+        $bgd = $this->departmentByCode('BGD');
+        if (! $bgd) {
+            return;
+        }
+
+        $keepNames = ['Giám đốc', 'Trợ lý Giám đốc', 'Thư ký'];
+        $keep = [];
+
+        foreach ([
+            ['Giám đốc', 'Director', 30000000, 25000000, 40000000, 'Đại diện pháp luật, điều hành toàn công ty.'],
+            ['Trợ lý Giám đốc', 'Staff', 15000000, 12000000, 18000000, 'Hỗ trợ Giám đốc điều hành, lịch họp và công việc đối ngoại.'],
+            ['Thư ký', 'Staff', 12000000, 10000000, 15000000, 'Thư ký văn phòng Ban Giám đốc, soạn thảo và lưu trữ hồ sơ.'],
+        ] as [$name, $level, $base, $min, $max, $description]) {
+            $keep[$name] = Position::updateOrCreate(
+                ['name' => $name],
+                [
+                    'description' => $description,
+                    'level' => $level,
+                    'salary_range_min' => $min,
+                    'salary_range_max' => $max,
+                    'allowance' => (int) round($base / 12),
+                    'base_salary' => $base,
+                    'department_id' => $bgd->id,
+                ]
+            );
+        }
+
+        $director = $keep['Giám đốc'];
+        $obsolete = Position::query()
+            ->where('department_id', $bgd->id)
+            ->whereNotIn('name', $keepNames)
+            ->get();
+
+        foreach ($obsolete as $position) {
+            \App\Models\Employee::query()
+                ->where('position_id', $position->id)
+                ->update([
+                    'position_id' => $director->id,
+                    'position' => 'Giám đốc',
+                ]);
+
+            if (\Illuminate\Support\Facades\Schema::hasTable('employee_position_histories')) {
+                \App\Models\EmployeePositionHistory::query()
+                    ->where('position_id', $position->id)
+                    ->update(['position_id' => $director->id]);
+            }
+
+            $position->delete();
+        }
+    }
+
+    protected function departmentByCode(string $code): ?Department
+    {
+        $aliases = [
+            'HR' => ['HR', 'HCNS'],
+            'IT' => ['IT', 'CNTT'],
+            'KTTC' => ['KTTC', 'FINA'],
+            'KD' => ['KD', 'SALE'],
+            'DTPT' => ['DTPT', 'DT'],
+        ];
+
+        return Department::query()
+            ->whereIn('code', $aliases[$code] ?? [$code])
+            ->orderByRaw('CASE WHEN code = ? THEN 0 ELSE 1 END', [$code])
+            ->first();
     }
 }

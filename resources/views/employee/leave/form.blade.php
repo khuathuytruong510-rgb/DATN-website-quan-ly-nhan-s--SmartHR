@@ -12,7 +12,6 @@
     <div class="page-head">
         <div>
             <h1>Tạo đơn nghỉ phép</h1>
-            <p class="muted">Chọn loại nghỉ trước. Hệ thống đối chiếu hợp đồng và Bộ luật Lao động rồi mới cho chọn ngày.</p>
         </div>
         <a class="btn link" href="{{ route('me.leave_requests') }}">Quay lại danh sách</a>
     </div>
@@ -44,7 +43,6 @@
         <div class="field">
             <label class="form-label" for="leave-type">Loại nghỉ phép</label>
             @include('components.leave_type_select', ['leaveTypes' => $leaveTypes ?? null, 'selected' => $defaultType ?? null])
-            <p class="form-hint">Chọn loại trước để xem số ngày được phép theo hợp đồng và luật lao động.</p>
         </div>
 
         @include('components.leave_quota_card', [
@@ -72,7 +70,6 @@
                 <input type="checkbox" name="half_day" value="1" {{ old('half_day') ? 'checked' : '' }} id="half_day" />
                 Nghỉ 1/2 ngày
             </label>
-            <p class="form-hint">Chỉ áp dụng khi ngày bắt đầu = ngày kết thúc.</p>
         </div>
 
         <div class="field">
@@ -85,7 +82,6 @@
                 <input type="checkbox" name="is_urgent" value="1" {{ old('is_urgent') ? 'checked' : '' }} id="is_urgent" />
                 Đánh dấu khẩn cấp ({{ $approver }} ưu tiên xem)
             </label>
-            <p class="form-hint">Không bỏ qua điều kiện hợp đồng / luật. Chỉ để {{ $approver }} duyệt sớm hơn.</p>
             <div id="urgent_reason_wrapper" style="margin-top: 12px; display: {{ old('is_urgent') ? 'block' : 'none' }};">
                 <label class="form-label" for="urgent_reason">Lý do khẩn cấp</label>
                 <textarea class="form-control" name="urgent_reason" id="urgent_reason" rows="3" placeholder="Mô tả lý do cần duyệt gấp...">{{ old('urgent_reason') }}</textarea>

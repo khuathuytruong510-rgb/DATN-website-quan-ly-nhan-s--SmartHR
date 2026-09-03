@@ -7,7 +7,6 @@
     <div class="page-head">
         <div>
             <h1>{{ $assignment->exists ? 'Cập nhật gán phúc lợi' : 'Gán phúc lợi mới' }}</h1>
-            <p class="muted">{{ $assignment->exists ? 'Chỉnh sửa thông tin gán phúc lợi' : 'Thêm phúc lợi cho nhân viên' }}</p>
         </div>
     </div>
 

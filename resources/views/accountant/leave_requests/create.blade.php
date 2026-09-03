@@ -56,9 +56,6 @@
                 <input type="checkbox" name="half_day" value="1" {{ old('half_day') ? 'checked' : '' }} id="half_day" />
                 <strong>Nghỉ 1/2 ngày</strong>
             </label>
-            <p class="muted" style="margin: 0.25rem 0 0 1.5rem; font-size: 0.85em;">
-                Chỉ áp dụng khi ngày bắt đầu = ngày kết thúc.
-            </p>
         </div>
 
         <div class="form-group full-width">
@@ -71,9 +68,6 @@
                 <input type="checkbox" name="is_urgent" value="1" {{ old('is_urgent') ? 'checked' : '' }} id="is_urgent" />
                 <strong>Nghỉ phép khẩn cấp (vượt quá 2 ngày/tháng)</strong>
             </label>
-            <p class="muted" style="margin: 0.5rem 0 0 1.5rem; font-size: 0.9em;">
-                Chỉ chọn khi nhân viên thực sự cần thiết và đã cung cấp lý do thuyết phục.
-            </p>
             <div id="urgent_reason_wrapper" style="margin-top: 0.75rem; display: {{ old('is_urgent') ? 'block' : 'none' }};">
                 <label for="urgent_reason">Lý do khẩn cấp <span style="color: red;">*</span></label>
                 <textarea name="urgent_reason" id="urgent_reason" rows="3" placeholder="Lý do nhân viên cần nghỉ phép vượt quá quy định...">{{ old('urgent_reason') }}</textarea>

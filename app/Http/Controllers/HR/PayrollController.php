@@ -360,7 +360,7 @@ class PayrollController extends Controller
     {
         $user = $request->user();
         if (! $user?->is_hr) {
-            abort(403, 'Chỉ HR được chốt dữ liệu kỳ lương.');
+            abort(403, 'Chỉ HR được khóa lại kỳ sau khi chỉnh sửa.');
         }
 
         $data = $request->validate([
@@ -369,21 +369,52 @@ class PayrollController extends Controller
         ]);
 
         try {
-            $this->periodLock->lock((int) $data['month'], (int) $data['year'], $user);
+            $this->periodLock->relockAfterEdit((int) $data['month'], (int) $data['year'], $user);
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
         }
 
         return redirect()
             ->route('payroll.index', ['month' => $data['month'], 'year' => $data['year']])
-            ->with('success', sprintf('HR đã kiểm tra và chốt kỳ %02d/%d. Đã gửi kế toán tính lương. Không sửa chấm công/nghỉ phép khi kỳ đang khóa.', $data['month'], $data['year']));
+            ->with('success', sprintf(
+                'Đã khóa lại kỳ %02d/%d. Tiếp tục kiểm tra nguồn rồi bấm xác nhận gửi kế toán.',
+                $data['month'],
+                $data['year']
+            ));
+    }
+
+    public function verifyPeriod(Request $request)
+    {
+        $user = $request->user();
+        if (! $user?->is_hr) {
+            abort(403, 'Chỉ HR được xác nhận đã kiểm tra nguồn kỳ lương.');
+        }
+
+        $data = $request->validate([
+            'month' => ['required', 'integer', 'min:1', 'max:12'],
+            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
+        ]);
+
+        try {
+            $this->periodLock->markHrVerified((int) $data['month'], (int) $data['year'], $user);
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return redirect()
+            ->route('payroll.index', ['month' => $data['month'], 'year' => $data['year']])
+            ->with('success', sprintf(
+                'HR đã xác nhận kiểm tra kỳ %02d/%d. Kế toán có thể tính lương.',
+                $data['month'],
+                $data['year']
+            ));
     }
 
     public function unlockPeriod(Request $request)
     {
         $user = $request->user();
         if (! $user?->is_hr) {
-            abort(403, 'Chỉ HR được mở khóa kỳ lương.');
+            abort(403, 'Chỉ HR được gửi yêu cầu mở khóa kỳ lương.');
         }
 
         $request->merge([
@@ -397,13 +428,65 @@ class PayrollController extends Controller
         ]);
 
         try {
-            $this->periodLock->unlock((int) $data['month'], (int) $data['year'], $user, $data['unlock_reason']);
+            $this->periodLock->requestUnlock((int) $data['month'], (int) $data['year'], $user, $data['unlock_reason']);
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
         }
 
         return redirect()
             ->route('payroll.index', ['month' => $data['month'], 'year' => $data['year']])
-            ->with('success', 'Đã hủy chốt lương. Sau khi chỉnh dữ liệu, HR phải chốt lại trước khi Kế toán tính.');
+            ->with('success', 'Đã gửi yêu cầu mở khóa đến Giám đốc. Kỳ vẫn khóa cho đến khi được duyệt.');
+    }
+
+    public function approveUnlockPeriod(Request $request)
+    {
+        $user = $request->user();
+        if (! $user?->is_director) {
+            abort(403, 'Chỉ Giám đốc được duyệt mở khóa kỳ lương.');
+        }
+
+        $data = $request->validate([
+            'month' => ['required', 'integer', 'min:1', 'max:12'],
+            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
+        ]);
+
+        try {
+            $this->periodLock->approveUnlock((int) $data['month'], (int) $data['year'], $user);
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return redirect()
+            ->route('payroll.index', ['month' => $data['month'], 'year' => $data['year']])
+            ->with('success', sprintf('Đã duyệt mở khóa kỳ %02d/%d.', $data['month'], $data['year']));
+    }
+
+    public function rejectUnlockPeriod(Request $request)
+    {
+        $user = $request->user();
+        if (! $user?->is_director) {
+            abort(403, 'Chỉ Giám đốc được từ chối mở khóa kỳ lương.');
+        }
+
+        $data = $request->validate([
+            'month' => ['required', 'integer', 'min:1', 'max:12'],
+            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $this->periodLock->rejectUnlock(
+                (int) $data['month'],
+                (int) $data['year'],
+                $user,
+                $data['note'] ?? null
+            );
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return redirect()
+            ->route('payroll.index', ['month' => $data['month'], 'year' => $data['year']])
+            ->with('success', sprintf('Đã từ chối mở khóa kỳ %02d/%d.', $data['month'], $data['year']));
     }
 }

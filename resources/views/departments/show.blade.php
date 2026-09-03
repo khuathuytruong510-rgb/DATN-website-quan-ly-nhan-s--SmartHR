@@ -4,10 +4,11 @@
 <div class="page-head">
     <div>
         <h1>Thông tin phòng ban</h1>
-        <p class="muted">Xem chi tiết và số lượng nhân viên.</p>
     </div>
     <div>
+        @if(auth()->user()?->canManageHr())
         <a class="btn" href="{{ route('departments.edit', $department) }}">Sửa phòng ban</a>
+        @endif
         <a class="btn link" href="{{ route('departments.index') }}">Quay lại</a>
     </div>
 </div>
@@ -31,7 +32,6 @@
     <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px;">
         <div>
             <h2 style="font-size:18px; margin:0 0 4px;">Chức vụ trong phòng ban</h2>
-            <p class="muted" style="margin:0;">Các chức vụ tiêu biểu thuộc {{ $department->name }}.</p>
         </div>
         <a class="btn link" href="{{ route('positions.index', ['department' => $department->code]) }}">Xem tại trang Chức vụ</a>
     </div>

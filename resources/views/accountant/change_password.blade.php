@@ -11,7 +11,6 @@
 <div class="page-head">
     <div>
         <h1>Đổi mật khẩu</h1>
-        <p class="muted">Cập nhật mật khẩu tài khoản</p>
     </div>
     <div class="actions">
         <a class="btn" href="{{ route('accountant.dashboard') }}">Quay lại</a>

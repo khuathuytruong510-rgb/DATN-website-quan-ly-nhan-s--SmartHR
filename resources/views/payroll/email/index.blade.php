@@ -5,10 +5,12 @@
 @section('content')
     @include('components.module_header', [
         'title' => 'Gửi phiếu lương',
-        'subtitle' => 'Quản lý gửi email phiếu lương cho nhân viên.',
-        'buttonText' => 'Gửi tất cả',
-        'buttonRoute' => '#',
+        'subtitle' => '',
     ])
+    <form method="POST" action="{{ route('payroll.email.send_all') }}" class="mb-3" data-confirm="Bạn có chắc muốn gửi tất cả phiếu lương qua email?">
+        @csrf
+        <button class="btn primary" type="submit">Gửi tất cả</button>
+    </form>
 
     @php
         $total = $payrolls->count();
@@ -107,29 +109,4 @@
             </tbody>
         </table>
     </div>
-
-    <script>
-        document.querySelector('.module-primary-btn').addEventListener('click', function(e) {
-            e.preventDefault();
-            var sendAll = function () {
-                var form = document.createElement('form');
-                form.method = 'POST';
-                form.action = '{{ route("payroll.email.send_all") }}';
-
-                var csrf = document.createElement('input');
-                csrf.type = 'hidden';
-                csrf.name = '_token';
-                csrf.value = '{{ csrf_token() }}';
-                form.appendChild(csrf);
-
-                document.body.appendChild(form);
-                form.submit();
-            };
-            if (typeof window.SmartHrConfirm === 'function') {
-                SmartHrConfirm('Bạn có chắc muốn gửi tất cả phiếu lương qua email?', sendAll);
-            } else {
-                sendAll();
-            }
-        });
-    </script>
 @endsection

@@ -10,7 +10,6 @@
 <div class="page-head">
     <div>
         <h1>Yêu cầu hỗ trợ</h1>
-        <p class="muted">Gửi yêu cầu cho {{ \App\Support\RequestApprover::queueLabel(auth()->user()?->linkedEmployee()) }} duyệt và xử lý. Khi xử lý xong bạn sẽ nhận thông báo và có thể phản hồi kết quả.</p>
     </div>
     <div class="actions">
         <a class="btn primary" href="{{ route('me.support_requests.create') }}">Tạo yêu cầu mới</a>

@@ -45,7 +45,7 @@ class EmployeeController extends ApiController
             'email' => 'required|email|unique:employees,email',
             'position' => 'required|string|max:255',
             'department_id' => 'required|exists:departments,id',
-            'status' => 'nullable|in:active,inactive,on_leave',
+            'status' => 'nullable|in:active,inactive,on_leave,pending_termination,terminated',
         ]);
 
         if ($validator->fails()) {
@@ -78,7 +78,7 @@ class EmployeeController extends ApiController
             'email' => 'sometimes|required|email|unique:employees,email,'.$employee->id,
             'position' => 'sometimes|required|string|max:255',
             'department_id' => 'sometimes|required|exists:departments,id',
-            'status' => 'nullable|in:active,inactive,on_leave',
+            'status' => 'nullable|in:active,inactive,on_leave,pending_termination,terminated',
         ]);
 
         if ($validator->fails()) {
@@ -86,6 +86,9 @@ class EmployeeController extends ApiController
         }
 
         $data = $validator->validated();
+        if ($employee->isTerminated() || $employee->isPendingTermination()) {
+            unset($data['status']);
+        }
         if ($employee->department_id && isset($data['department_id']) && (int) $data['department_id'] !== (int) $employee->department_id) {
             return response()->json([
                 'errors' => [
@@ -109,12 +112,16 @@ class EmployeeController extends ApiController
         $this->requireHr($request);
 
         $employee = Employee::findOrFail($id);
-        $departmentId = $employee->department_id;
-        $employee->delete();
+        if ($employee->isTerminated()) {
+            return response()->json([
+                'message' => 'Nhân viên đã nghỉ việc. Hồ sơ lịch sử được giữ lại, không xóa.',
+            ], 422);
+        }
 
-        $this->syncDepartmentCount($departmentId);
-
-        return response()->json(null, 204);
+        return response()->json([
+            'message' => 'Cần gửi đề nghị nghỉ việc để Giám đốc duyệt. Không xóa hồ sơ nhân viên.',
+            'redirect' => route('deletion_requests.create_employee', $employee),
+        ], 403);
     }
 
     protected function syncDepartmentCount(int $departmentId): void
@@ -122,7 +129,9 @@ class EmployeeController extends ApiController
         $department = Department::find($departmentId);
 
         if ($department) {
-            $department->employee_count = Employee::where('department_id', $departmentId)->count();
+            $department->employee_count = Employee::where('department_id', $departmentId)
+                ->whereIn('status', Employee::workingStatuses())
+                ->count();
             $department->save();
         }
     }

@@ -6,7 +6,6 @@
     <div class="page-head">
         <div>
             <h1>Tạo thông báo</h1>
-            <p class="muted">Gửi thông báo đến nhân viên hoặc toàn bộ nhân viên.</p>
         </div>
     </div>
 
@@ -36,7 +35,6 @@
                     @endif
                 </select>
                 @if ($user->is_director)
-                    <p class="muted" style="margin:8px 0 0;font-size:13px;">Giám đốc phát hành thông báo quản lý đến HR hoặc toàn hệ thống. HR chỉ thông báo đến nhân viên.</p>
                 @endif
             </div>
 

@@ -65,6 +65,18 @@ class DirectorSuccessionRequest extends FormRequest
                     .Carbon::parse($min)->format('d/m/Y').'.'
                 );
             }
+
+            $incomingId = (int) $this->input('incoming_user_id');
+            if ($incomingId > 0) {
+                $incoming = \App\Models\User::query()->with('employee')->find($incomingId);
+                $employee = $incoming?->linkedEmployee();
+                if ($incoming && ($incoming->is_locked || ($employee && $employee->isTerminated()))) {
+                    $validator->errors()->add(
+                        'incoming_user_id',
+                        'Không chọn nhân viên đã nghỉ việc hoặc tài khoản đang khóa.'
+                    );
+                }
+            }
         });
     }
 }

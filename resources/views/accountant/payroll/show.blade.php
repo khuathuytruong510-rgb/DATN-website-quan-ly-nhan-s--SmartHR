@@ -19,7 +19,6 @@
 <div class="page-head">
     <div>
         <h1>Chi tiết bảng lương</h1>
-        <p class="muted">Phiếu lương {{ optional($employee)->name }} · Tháng {{ $payroll->display_month }}</p>
     </div>
     <div class="actions">
         <a class="btn" href="{{ route('accountant.payroll.index') }}">Quay lại</a>
@@ -43,21 +42,13 @@
 
 <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:16px;">
     <div class="card" style="margin:0;">
-        <p class="muted" style="margin:0 0 6px;font-size:13px;">① Lương cơ bản (hợp đồng)</p>
         <p style="margin:0;font-size:22px;font-weight:800;">{{ $money($f['base_salary']) }}</p>
-        <p class="muted" style="margin:8px 0 0;font-size:12px;">Cơ sở tính lương ngày và bảo hiểm. Không cộng vào thực nhận.</p>
     </div>
     <div class="card" style="margin:0;">
-        <p class="muted" style="margin:0 0 6px;font-size:13px;">② Lương theo ngày công</p>
         <p style="margin:0;font-size:22px;font-weight:800;">{{ $money($f['work_pay']) }}</p>
-        <p class="muted" style="margin:8px 0 0;font-size:12px;">
-            {{ $f['work_days'] }}/{{ $f['calendar_days'] }} ngày công nếu đi làm đủ × lương ngày (CB ÷ {{ $f['standard_days'] }}).
-        </p>
     </div>
     <div class="card" style="margin:0;">
-        <p class="muted" style="margin:0 0 6px;font-size:13px;">③ Lương thực nhận</p>
         <p style="margin:0;font-size:22px;font-weight:800;color:var(--primary);">{{ $money($f['net']) }}</p>
-        <p class="muted" style="margin:8px 0 0;font-size:12px;">Tổng thu nhập − bảo hiểm − thuế − khấu trừ.</p>
     </div>
 </div>
 
@@ -67,12 +58,6 @@
         <div style="margin-bottom:14px;">
             <span class="muted" style="font-size:13px;">Nhân viên</span>
             <p style="margin:4px 0 0;font-weight:700;">{{ optional($employee)->name }}</p>
-            <p class="muted" style="margin:4px 0 0;font-size:13px;">
-                {{ optional($employee)->employee_code }}
-                @if(optional($employee)->email)
-                    · {{ $employee->email }}
-                @endif
-            </p>
         </div>
         <div style="margin-bottom:14px;">
             <span class="muted" style="font-size:13px;">Chức vụ</span>
@@ -81,7 +66,6 @@
         <div style="margin-bottom:14px;">
             <span class="muted" style="font-size:13px;">Kỳ lương</span>
             <p style="margin:4px 0 0;font-weight:600;">Tháng {{ $payroll->display_month }}</p>
-            <p class="muted" style="margin:4px 0 0;font-size:13px;">Từ {{ $f['period_start'] }} đến {{ $f['period_end'] }}</p>
         </div>
         <div>
             <span class="muted" style="font-size:13px;">Trạng thái</span>
@@ -93,13 +77,6 @@
         <div style="margin-top:14px;">
             <span class="muted" style="font-size:13px;">Giám đốc phê duyệt</span>
             <p style="margin:4px 0 0;font-weight:600;">{{ $payroll->directorApproverLabel() }}</p>
-            <p class="muted" style="margin:4px 0 0;font-size:12px;">
-                Tại thời điểm duyệt
-                @if($payroll->director_approved_at)
-                    · {{ $payroll->director_approved_at->format('d/m/Y H:i') }}
-                @endif
-                — không đổi khi thay người giữ chức
-            </p>
         </div>
         @endif
     </div>
@@ -158,15 +135,7 @@
                 </tr>
             </tbody>
         </table>
-        <p class="muted" style="margin:12px 0 0;font-size:12px;">
-            {{ $f['full_attendance_formula'] }}.
-            Lương ngày vẫn lấy lương CB ÷ {{ $f['standard_days'] }}.
-        </p>
         @if(!empty($f['holidays']))
-            <p class="muted" style="margin:8px 0 0;font-size:12px;">
-                Lễ trong kỳ:
-                {{ collect($f['holidays'])->map(fn ($h) => \Carbon\Carbon::parse($h['date'])->format('d/m').' '.$h['name'])->implode('; ') }}.
-            </p>
         @endif
     </div>
 </div>
@@ -263,9 +232,5 @@
             </tr>
         </tbody>
     </table>
-    <p class="muted" style="margin:14px 0 0;font-size:12px;">
-        Thực nhận = tổng thu nhập − tổng khấu trừ.
-        {{ $money($f['base_salary']) }} lương hợp đồng không được cộng vào tổng thu nhập.
-    </p>
 </div>
 @endsection

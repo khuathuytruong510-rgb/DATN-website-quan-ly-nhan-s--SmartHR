@@ -26,12 +26,12 @@ class ContractTemplate extends Model
 
     public function scopeActive($query)
     {
-        if (Schema::hasColumn($this->getTable(), 'status')) {
-            return $query->where('status', 'active');
-        }
-
         if (Schema::hasColumn($this->getTable(), 'is_active')) {
             return $query->where('is_active', true);
+        }
+
+        if (Schema::hasColumn($this->getTable(), 'status')) {
+            return $query->where('status', 'active');
         }
 
         return $query;

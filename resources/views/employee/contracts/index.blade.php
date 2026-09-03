@@ -7,7 +7,6 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
             <h2 class="mb-1">Hợp đồng của tôi</h2>
-            <p class="text-muted mb-0">Thông tin hợp đồng đang có hiệu lực và đã ký.</p>
         </div>
     </div>
 
@@ -47,10 +46,9 @@
                             @if($contract->isPendingEmployeeEsign())
                                 <form method="POST" action="{{ route('me.contracts.sign', $contract) }}" class="mt-3">
                                     @csrf
-                                    <button class="btn btn-primary" type="submit" data-confirm="Xác nhận ký hợp đồng này?">✍️ Ký hợp đồng</button>
+                                    <button class="btn btn-primary" type="submit" data-confirm="Xác nhận ký hợp đồng này phía người lao động? Đây là mô phỏng quy trình ký điện tử, chưa phải chứng thư số pháp lý.">Ký hợp đồng</button>
                                 </form>
                             @elseif(! $contract->director_signed_at && ! $contract->employee_signed_at)
-                                <p class="text-muted mt-3 mb-0">Chờ HR gửi và Giám đốc ký phía doanh nghiệp trước.</p>
                             @endif
                             <div class="mt-3">
                                 <a class="btn btn-outline-secondary" href="{{ route('me.contracts.document', $contract) }}" target="_blank">Xem / tải tài liệu</a>

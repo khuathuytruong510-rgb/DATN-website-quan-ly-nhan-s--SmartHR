@@ -32,14 +32,31 @@ class RequestApprover
         return (bool) self::staffUser($employee)?->is_director;
     }
 
-    /** HR không quản lý hồ sơ / yêu cầu của Giám đốc. */
+    /** Hồ sơ chức vụ Giám đốc (kể cả chưa gắn user is_director). */
+    public static function isDirectorProfile(?Employee $employee): bool
+    {
+        if (! $employee) {
+            return false;
+        }
+
+        if (self::isDirectorEmployee($employee)) {
+            return true;
+        }
+
+        $employee->loadMissing('positionDetail');
+        $position = mb_strtolower(trim((string) ($employee->position ?: $employee->positionDetail?->name)));
+
+        return $position === 'giám đốc';
+    }
+
+    /** HR không quản lý hồ sơ / yêu cầu của Giám đốc (vẫn quản lý Trợ lý, Thư ký Ban Giám đốc). */
     public static function hrMayManage(?User $actor, ?Employee $employee): bool
     {
         if (! $actor?->is_hr || ! $employee) {
             return false;
         }
 
-        return ! self::isDirectorEmployee($employee);
+        return ! self::isDirectorProfile($employee);
     }
 
     public static function canReview(?User $actor, ?Employee $employee): bool

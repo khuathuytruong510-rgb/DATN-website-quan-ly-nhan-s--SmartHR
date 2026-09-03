@@ -16,7 +16,6 @@
         <div class="mb-8">
             <h1 class="text-3xl font-bold text-gray-800 mb-2">Chấm công khuôn mặt</h1>
             <p class="text-gray-600">Hôm nay: <strong id="attendance-now">{{ date('d/m/Y H:i:s') }}</strong></p>
-            <p class="text-sm text-gray-500 mt-1">Đăng ký khuôn mặt một lần — {{ $approverLabel }} duyệt kèm ảnh xong bạn mới chấm công được. Khi chấm vào/ra phải trong phạm vi <strong>60m</strong> quanh văn phòng.</p>
             @if(session('success'))
                 <div class="mt-3 rounded-lg bg-green-50 text-green-800 px-4 py-2">{{ session('success') }}</div>
             @endif

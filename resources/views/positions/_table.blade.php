@@ -3,7 +3,6 @@
         <h2 style="font-size:17px; margin:0;">
             {{ $title }}
             @isset($deptLink)
-                <small class="muted"> · <a href="{{ $deptLink }}" style="color:var(--primary);">Xem phòng ban</a></small>
             @endisset
         </h2>
         <span class="badge bg-secondary">{{ $positions->count() }} chức vụ</span>

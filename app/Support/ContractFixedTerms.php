@@ -36,9 +36,7 @@ TEXT;
 
 1. Thời gian thực tập theo hợp đồng.
 
-2. Thời gian làm việc:
-- 08 giờ/ngày.
-- 05 ngày/tuần (Thứ Hai đến Thứ Sáu).
+2. Thời gian làm việc bình thường: 08 giờ/ngày, 05 ngày/tuần (Thứ Hai đến Thứ Sáu).
 
 3. Phụ cấp thực tập:
 - Theo mức phụ cấp đã thỏa thuận.
@@ -59,9 +57,7 @@ TEXT . $common,
 
 2. Mức lương thử việc bằng 85% mức lương chính thức.
 
-3. Thời gian làm việc:
-- 08 giờ/ngày.
-- 05 ngày/tuần.
+3. Thời gian làm việc bình thường: 08 giờ/ngày, 05 ngày/tuần (Thứ Hai đến Thứ Sáu).
 
 4. Người lao động phải tuân thủ nội quy lao động của công ty.
 
