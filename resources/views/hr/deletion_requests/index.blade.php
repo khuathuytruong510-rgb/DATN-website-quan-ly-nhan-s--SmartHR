@@ -15,7 +15,30 @@
         'cancelled' => 'background:#e2e8f0;color:#475569;',
     ];
 @endphp
-<div class="content" style="max-width:1100px;">
+<style>
+    .deletion-requests-page { max-width: 100%; }
+    .deletion-requests-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .deletion-requests-table { min-width: 1040px; table-layout: fixed; }
+    .deletion-requests-table th,
+    .deletion-requests-table td { overflow-wrap: normal; }
+    .deletion-requests-table code { display: inline-block; white-space: nowrap; }
+    .deletion-requests-table .nowrap { white-space: nowrap; }
+    .deletion-requests-table .request-subject-name {
+        margin-top: 8px;
+        font-weight: 700;
+        line-height: 1.35;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .deletion-requests-table .request-reason {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .deletion-requests-table .actions { flex-wrap: nowrap; }
+</style>
+<div class="content deletion-requests-page">
     <div class="page-head">
         <div>
             <h1>Yêu cầu xóa</h1>
@@ -54,8 +77,17 @@
         </form>
     </div>
 
-    <div class="card" style="padding:0;overflow:hidden;">
-        <table>
+    <div class="card deletion-requests-table-wrap" style="padding:0;">
+        <table class="deletion-requests-table">
+            <colgroup>
+                <col style="width:145px;">
+                <col style="width:220px;">
+                <col style="width:320px;">
+                <col style="width:120px;">
+                <col style="width:145px;">
+                <col style="width:210px;">
+                <col style="width:130px;">
+            </colgroup>
             <thead>
                 <tr>
                     <th>Mã</th>
@@ -70,23 +102,23 @@
             <tbody>
                 @forelse($requests as $req)
                     <tr>
-                        <td><code>{{ $req->code }}</code></td>
+                        <td class="nowrap"><code>{{ $req->code }}</code></td>
                         <td>
                             <span class="badge" style="background:#e0e7ff;color:#3730a3;">{{ $req->kindLabel() }}</span>
-                            <div style="font-weight:600;margin-top:4px;">{{ $req->name }}</div>
+                            <div class="request-subject-name" title="{{ $req->name }}">{{ $req->name }}</div>
                         </td>
-                        <td style="max-width:280px;">
-                            <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ $req->reason }}">{{ $req->reason }}</div>
+                        <td>
+                            <div class="request-reason" title="{{ $req->reason }}">{{ $req->reason }}</div>
                         </td>
                         <td>{{ optional($req->submittedBy)->name ?? '—' }}</td>
-                        <td>{{ optional($req->created_at)->format('d/m/Y H:i') }}</td>
-                        <td>
+                        <td class="nowrap">{{ optional($req->created_at)->format('d/m/Y H:i') }}</td>
+                        <td class="nowrap">
                             <span class="badge" style="{{ $badgeMap[$req->status] ?? '' }}">{{ $req->statusLabel() }}</span>
                             @if ($req->reviewed_at)
                                 <div class="muted" style="font-size:12px;margin-top:4px;">{{ optional($req->reviewed_at)->format('d/m/Y H:i') }}</div>
                             @endif
                         </td>
-                        <td style="text-align:right;">
+                        <td class="nowrap" style="text-align:right;">
                             <div class="actions" style="justify-content:flex-end;">
                                 @if($req->isPending() && $isDirector)
                                     <form method="POST" action="{{ route('deletion_requests.approve', $req) }}">

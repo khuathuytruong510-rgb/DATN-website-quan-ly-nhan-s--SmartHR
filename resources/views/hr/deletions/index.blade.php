@@ -1,11 +1,12 @@
 @extends('layouts.app')
 
-@section('title', 'Nghỉ việc / điều chuyển')
+@section('title', 'Xóa / chuyển nhân viên')
 
 @section('content')
 <div class="page-head">
     <div>
-        <h1>{{ $canReview ? 'Duyệt nghỉ việc / điều chuyển' : 'Lịch sử nghỉ việc / điều chuyển' }}</h1>
+        <h1>{{ $canReview ? 'Duyệt xóa / chuyển nhân viên' : 'Lịch sử xóa / chuyển nhân viên' }}</h1>
+        <p class="muted">HR gửi đề nghị kèm lý do hoặc biên bản. Giám đốc duyệt rồi mới xóa hoặc chuyển phòng. Dữ liệu được lưu để tra cứu.</p>
     </div>
 </div>
 
@@ -44,7 +45,7 @@
                             <div class="muted" style="font-size:13px;color:#c2410c;">{{ $req->pendingFeedbackCount() }} phản hồi chờ HR giải quyết</div>
                         @endif
                         @if($req->status === 'approved' && $req->account_email && ! $req->account_cleared_at)
-                            <div class="muted" style="font-size:13px;">Tài khoản {{ $req->account_email }} đã khóa đăng nhập</div>
+                            <div class="muted" style="font-size:13px;">Chờ Admin xóa tài khoản {{ $req->account_email }}</div>
                         @endif
                     </td>
                     <td>
@@ -64,7 +65,7 @@
                             @if($canReview && $req->isPending())
                                 <form method="POST" action="{{ route('deletion_requests.approve', $req) }}">
                                     @csrf
-                                    <button class="btn primary" type="submit" data-confirm="{{ $req->isTransfer() ? 'Duyệt và chuyển nhân viên ngay?' : ($req->isEmployee() ? 'Duyệt nghỉ việc? Hồ sơ được giữ lại, hợp đồng chấm dứt, tài khoản khóa đăng nhập.' : 'Duyệt và xóa phòng ban? Dữ liệu sẽ được lưu vào lịch sử.') }}">{{ $req->approveActionLabel() }}</button>
+                                    <button class="btn primary" type="submit" data-confirm="{{ $req->isTransfer() ? 'Duyệt và chuyển nhân viên ngay?' : 'Duyệt và xóa ngay? Dữ liệu sẽ được lưu vào lịch sử.' }}">{{ $req->approveActionLabel() }}</button>
                                 </form>
                             @endif
                         </div>

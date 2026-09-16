@@ -90,12 +90,27 @@ class FaceAttendanceController extends Controller
             return $e->toResponse();
         }
 
+        if ($request->has('face_image') && ! $request->has('face_embedding')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chấm công khuôn mặt phải dựa trên dữ liệu nhận diện thật từ camera, không chấp nhận ảnh tĩnh.',
+            ], 422);
+        }
+
         $data = $request->validate([
-            'face_embedding' => 'required|string',
+            'face_embedding' => ['required', 'string'],
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
             'notes' => 'nullable|string|max:500',
         ]);
+
+        $incomingEmbedding = $this->faceService->parse($data['face_embedding']);
+        if (! $incomingEmbedding) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dữ liệu khuôn mặt không hợp lệ. Vui lòng chụp lại bằng camera.',
+            ], 422);
+        }
 
         $profile = FaceProfile::where('employee_id', $employee->id)->first();
         if (! $profile || ! $profile->isUsableForPunch() || ! $this->faceService->parse($profile->face_embedding)) {

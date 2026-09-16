@@ -54,6 +54,10 @@ class FillEmployeeFullDataSeeder extends Seeder
         $made = 0;
 
         foreach ($employees as $emp) {
+            if ($emp->user?->is_director) {
+                continue;
+            }
+
             $salary = (int) ($emp->positionDetail?->base_salary ?: $this->fallbackSalary($emp->position));
             $allowance = (int) ($emp->positionDetail?->allowance ?: 0);
 

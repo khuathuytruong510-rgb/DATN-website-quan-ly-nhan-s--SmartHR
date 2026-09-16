@@ -18,8 +18,20 @@
 </div>
 
 <div class="card">
-    <form method="GET" class="row" style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
-        <input name="q" placeholder="Tìm theo tên/ email/ tháng" value="{{ request('q') }}">
+    <form method="GET" class="row" style="display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
+        <input name="q" placeholder="Tìm theo tên hoặc email" value="{{ request('q') }}">
+        <select name="month" aria-label="Tháng">
+            <option value="">Tất cả tháng</option>
+            @for($month = 1; $month <= 12; $month++)
+                <option value="{{ $month }}" @selected((string) request('month') === (string) $month)>Tháng {{ $month }}</option>
+            @endfor
+        </select>
+        <select name="year" aria-label="Năm">
+            <option value="">Tất cả năm</option>
+            @foreach($payrollYears as $year)
+                <option value="{{ $year }}" @selected((string) request('year') === (string) $year)>{{ $year }}</option>
+            @endforeach
+        </select>
         <select name="status">
             <option value="">Tất cả trạng thái</option>
             <option value="calculated" {{ request('status')=='calculated' ? 'selected' : '' }}>Kế toán đã tính — chờ HR</option>
@@ -30,6 +42,7 @@
             <option value="paid" {{ request('status')=='paid' ? 'selected' : '' }}>Đã trả</option>
         </select>
         <button class="btn" type="submit">Tìm</button>
+        <a class="btn" href="{{ route('accountant.payroll.index') }}">Xóa lọc</a>
     </form>
 
     @if($payrolls->count() === 0)

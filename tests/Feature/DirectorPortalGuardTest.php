@@ -134,6 +134,40 @@ class DirectorPortalGuardTest extends TestCase
         $this->assertSame('Nguyen Van GD', $employee->fresh()->name);
     }
 
+    public function test_director_dashboard_approval_counts_exclude_later_payment_steps(): void
+    {
+        ['director' => $gd, 'employee' => $employee] = $this->seedPeople();
+
+        Payroll::create([
+            'employee_id' => $employee->id,
+            'month' => now()->month,
+            'year' => now()->year,
+            'base_salary' => 10000000,
+            'total_salary' => 10000000,
+            'status' => PayrollPaymentWorkflowService::DIRECTOR_APPROVED,
+        ]);
+        Payroll::create([
+            'employee_id' => $employee->id,
+            'month' => now()->month,
+            'year' => now()->year,
+            'base_salary' => 10000000,
+            'total_salary' => 10000000,
+            'status' => PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED,
+        ]);
+        Payroll::create([
+            'employee_id' => $employee->id,
+            'month' => now()->month,
+            'year' => now()->year,
+            'base_salary' => 10000000,
+            'total_salary' => 10000000,
+            'status' => PayrollPaymentWorkflowService::PAID,
+        ]);
+
+        $this->actingAs($gd)->get(route('dashboard'))
+            ->assertOk()
+            ->assertSeeInOrder(['Đã duyệt', '1', 'Chờ NV xác nhận', '1']);
+    }
+
     public function test_director_approves_only_hr_checked_and_ignores_client_status(): void
     {
         ['director' => $gd, 'employee' => $employee] = $this->seedPeople();

@@ -36,16 +36,27 @@ class AccountantController extends Controller
 
     public function payrollIndex(Request $request): View
     {
-        $query = Payroll::with('employee')->orderByDesc('month');
+        $query = Payroll::with('employee')
+            ->orderByDesc('year')
+            ->orderByDesc('month');
 
-        if ($q = $request->input('q')) {
+        if ($q = trim((string) $request->input('q'))) {
             $query->where(function($w) use ($q) {
-                $w->where('month', 'like', "%{$q}%")
-                  ->orWhereHas('employee', function($e) use ($q) {
+                $w->whereHas('employee', function($e) use ($q) {
                       $e->where('name', 'like', "%{$q}%")
                         ->orWhere('email', 'like', "%{$q}%");
                   });
             });
+        }
+
+        $month = $request->integer('month');
+        if ($month >= 1 && $month <= 12) {
+            $query->where('month', $month);
+        }
+
+        $year = $request->integer('year');
+        if ($year >= 2000 && $year <= 2100) {
+            $query->where('year', $year);
         }
 
         if ($status = $request->input('status')) {
@@ -69,6 +80,11 @@ class AccountantController extends Controller
         return view('accountant.payroll.index', [
             'payrolls' => $payrolls,
             'workflow' => app(PayrollPaymentWorkflowService::class),
+            'payrollYears' => Payroll::query()
+                ->select('year')
+                ->distinct()
+                ->orderByDesc('year')
+                ->pluck('year'),
         ]);
     }
 

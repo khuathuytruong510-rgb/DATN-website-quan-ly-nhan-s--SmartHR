@@ -111,6 +111,41 @@ function captureThumbnail(video) {
     return canvas.toDataURL('image/jpeg', 0.7);
 }
 
+function faceCenter(detection) {
+    const box = detection.detection.box;
+    return {
+        x: box.x + box.width / 2,
+        y: box.y + box.height / 2,
+    };
+}
+
+async function ensureLiveFaceMotion() {
+    const first = await detectFace();
+    const issue = faceQuality(first, $('face-video'));
+    if (!first || issue) {
+        throw new Error(issue || 'Không thấy khuôn mặt. Nhìn thẳng camera.');
+    }
+
+    const firstCenter = faceCenter(first);
+    setGuide('Liveness: hãy nghiêng đầu hoặc xoay mặt nhẹ 1 lần trong 1–2 giây.');
+    await sleep(450);
+
+    const second = await detectFace();
+    const secondIssue = faceQuality(second, $('face-video'));
+    if (!second || secondIssue) {
+        throw new Error(secondIssue || 'Không thể xác minh khuôn mặt đang di chuyển.');
+    }
+
+    const secondCenter = faceCenter(second);
+    const distance = Math.hypot(secondCenter.x - firstCenter.x, secondCenter.y - firstCenter.y);
+
+    if (distance < 18) {
+        throw new Error('Hãy nghiêng đầu hoặc quay mặt nhẹ để kiểm tra thực thể sống. Ảnh tĩnh hoặc màn hình điện thoại không vượt qua bước này.');
+    }
+
+    return true;
+}
+
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -557,6 +592,7 @@ async function detectionLoop() {
 
 async function collectSamples() {
     const samples = [];
+    const centers = [];
     for (let i = 0; i < SAMPLE_COUNT; i += 1) {
         const detection = await detectFace();
         const issue = faceQuality(detection, $('face-video'));
@@ -564,7 +600,14 @@ async function collectSamples() {
             throw new Error(issue || 'Không nhận được khuôn mặt. Hãy giữ mặt trong khung rồi thử lại.');
         }
         samples.push(Array.from(detection.descriptor));
+        centers.push(faceCenter(detection));
         setGuide(`Đã lấy mẫu ${i + 1}/${SAMPLE_COUNT}...`);
+        if (centers.length > 1) {
+            const lastMove = Math.hypot(centers[centers.length - 1].x - centers[centers.length - 2].x, centers[centers.length - 1].y - centers[centers.length - 2].y);
+            if (lastMove < 14 && i > 0) {
+                throw new Error('Hãy di chuyển nhẹ đầu hoặc mặt để xác minh là người thật trong khi đăng ký.');
+            }
+        }
         await sleep(350);
     }
     return averageDescriptors(samples);
@@ -578,6 +621,7 @@ async function registerFace() {
     updateButtons();
     setMessage('Đang lấy mẫu khuôn mặt...');
     try {
+        await ensureLiveFaceMotion();
         const embedding = await collectSamples();
         const data = await api('/api/employee/attendance/register-face', {
             method: 'POST',
@@ -624,6 +668,7 @@ async function punchFace() {
     updateButtons();
     setMessage('Đang nhận diện khuôn mặt...');
     try {
+        await ensureLiveFaceMotion();
         const detection = await detectFace();
         const issue = faceQuality(detection, $('face-video'));
         if (!detection || issue) {

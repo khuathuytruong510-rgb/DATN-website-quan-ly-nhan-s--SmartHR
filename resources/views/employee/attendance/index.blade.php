@@ -920,42 +920,8 @@
     }
 
     async function submitFaceAttendance() {
-        if (!faceCapturedImage) {
-            showFaceMessage('Vui lòng chụp ảnh khuôn mặt trước khi chấm công.');
-            return;
-        }
-
-        const notes = document.getElementById('check-in-notes').value || document.getElementById('check-out-notes').value || null;
-
-        try {
-            const response = await fetch('/api/employee/attendance/face', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                    face_image: faceCapturedImage,
-                    latitude: currentLatitude || null,
-                    longitude: currentLongitude || null,
-                    notes,
-                }),
-            });
-            const data = await response.json();
-
-            if (data.success) {
-                showFaceMessage(data.message, true);
-                loadTodayAttendance();
-                setTimeout(() => loadAttendanceHistory(), 500);
-            } else {
-                showFaceMessage(data.message || 'Chấm công bằng khuôn mặt thất bại.');
-            }
-        } catch (error) {
-            console.error('Face attendance error:', error);
-            showFaceMessage('Lỗi khi chấm công bằng khuôn mặt. Vui lòng thử lại.');
-        }
+        showFaceMessage('Chấm công bằng ảnh tĩnh không được phép. Hãy dùng camera để nhận diện khuôn mặt thật.', false);
+        return;
     }
 
     function showFaceMessage(message, success = false) {

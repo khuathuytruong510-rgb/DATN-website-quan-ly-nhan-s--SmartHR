@@ -12,7 +12,8 @@ class ContractController extends ApiController
 {
     public function index(Request $request): \Illuminate\Http\JsonResponse
     {
-        $query = Contract::with('employee');
+        $query = Contract::with('employee')
+            ->whereDoesntHave('employee.user', fn ($query) => $query->where('is_director', true));
 
         if ($search = $request->query('q')) {
             $query->where(function ($query) use ($search) {
@@ -38,6 +39,12 @@ class ContractController extends ApiController
     public function store(Request $request): \Illuminate\Http\JsonResponse
     {
         $this->requireHr($request);
+
+        if (Employee::whereKey($request->input('employee_id'))
+            ->whereHas('user', fn ($query) => $query->where('is_director', true))
+            ->exists()) {
+            return response()->json(['message' => 'Giám đốc không thuộc đối tượng tạo hợp đồng nhân viên.'], 422);
+        }
 
         $validator = Validator::make($request->all(), [
             'employee_id' => 'required|exists:employees,id',

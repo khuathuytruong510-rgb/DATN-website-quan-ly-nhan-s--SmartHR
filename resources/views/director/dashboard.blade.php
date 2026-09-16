@@ -16,7 +16,82 @@
     </div>
 </div>
 
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-body">
+        <form method="GET" action="{{ route('dashboard') }}" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label mb-1">Tháng</label>
+                <select name="month" class="form-select">
+                    @for($i = 1; $i <= 12; $i++)
+                        <option value="{{ $i }}" {{ (int) request('month', $payroll['month']) == $i ? 'selected' : '' }}>
+                            Tháng {{ $i }}
+                        </option>
+                    @endfor
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label mb-1">Năm</label>
+                <select name="year" class="form-select">
+                    @for($y = 2025; $y <= 2035; $y++)
+                        <option value="{{ $y }}" {{ (int) request('year', $payroll['year']) == $y ? 'selected' : '' }}>
+                            {{ $y }}
+                        </option>
+                    @endfor
+                </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button class="btn btn-primary" type="submit">Xem thống kê</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="page-stack">
+    <section class="dash-section">
+        <h2 class="section-title">So sánh với tháng trước</h2>
+        <div class="grid emp-kpis" style="grid-template-columns:repeat(4,minmax(180px,1fr));">
+            @php
+                $payrollDelta = $payroll['totalFund'] - $previousPayroll['totalFund'];
+                $leaveDelta = $leave['days'] - $previousLeave['days'];
+                $lateDelta = $attendance['late'] - $previousAttendance['late'];
+                $absentDelta = $attendance['absent'] - $previousAttendance['absent'];
+                $fmtDelta = fn($value) => ($value > 0 ? '+' : '') . number_format($value, 0, ',', '.');
+            @endphp
+            <article class="emp-kpi {{ $payrollDelta >= 0 ? 'is-info' : 'is-muted' }}">
+                <div class="emp-kpi-head">
+                    <h3 class="emp-kpi-label">Quỹ lương</h3>
+                    <span class="emp-kpi-ico {{ $payrollDelta >= 0 ? 'ico-info' : 'ico-muted' }}"><i class="bi bi-cash-stack"></i></span>
+                </div>
+                <div class="emp-kpi-value is-money">{{ number_format($payroll['totalFund'], 0, ',', '.') }} đ</div>
+                <p class="emp-kpi-sub">So với {{ $previousMonthLabel }}: {{ $fmtDelta($payrollDelta) }} đ</p>
+            </article>
+            <article class="emp-kpi {{ $leaveDelta >= 0 ? 'is-warn' : 'is-ok' }}">
+                <div class="emp-kpi-head">
+                    <h3 class="emp-kpi-label">Ngày nghỉ đã duyệt</h3>
+                    <span class="emp-kpi-ico {{ $leaveDelta >= 0 ? 'ico-warn' : 'ico-ok' }}"><i class="bi bi-calendar-check"></i></span>
+                </div>
+                <div class="emp-kpi-value">{{ number_format($leave['days'], 1) }}</div>
+                <p class="emp-kpi-sub">So với {{ $previousMonthLabel }}: {{ $fmtDelta($leaveDelta) }} ngày</p>
+            </article>
+            <article class="emp-kpi {{ $lateDelta <= 0 ? 'is-ok' : 'is-warn' }}">
+                <div class="emp-kpi-head">
+                    <h3 class="emp-kpi-label">Đi muộn</h3>
+                    <span class="emp-kpi-ico {{ $lateDelta <= 0 ? 'ico-ok' : 'ico-warn' }}"><i class="bi bi-clock-history"></i></span>
+                </div>
+                <div class="emp-kpi-value">{{ $attendance['late'] }}</div>
+                <p class="emp-kpi-sub">So với {{ $previousMonthLabel }}: {{ $fmtDelta($lateDelta) }} lượt</p>
+            </article>
+            <article class="emp-kpi {{ $absentDelta <= 0 ? 'is-ok' : 'is-danger' }}">
+                <div class="emp-kpi-head">
+                    <h3 class="emp-kpi-label">Vắng</h3>
+                    <span class="emp-kpi-ico {{ $absentDelta <= 0 ? 'ico-ok' : 'ico-danger' }}"><i class="bi bi-person-x"></i></span>
+                </div>
+                <div class="emp-kpi-value">{{ $attendance['absent'] }}</div>
+                <p class="emp-kpi-sub">So với {{ $previousMonthLabel }}: {{ $fmtDelta($absentDelta) }} lượt</p>
+            </article>
+        </div>
+    </section>
+
     <section class="dash-section">
         <h2 class="section-title">Nhân sự</h2>
         <div class="grid emp-kpis">
@@ -89,6 +164,14 @@
                 </div>
                 <div class="emp-kpi-value">{{ $contracts['expiringSoon'] }}</div>
                 <p class="emp-kpi-sub">Cần gia hạn hoặc thanh lý</p>
+            </article>
+            <article class="emp-kpi {{ $contracts['expired'] ? 'is-danger' : 'is-muted' }}">
+                <div class="emp-kpi-head">
+                    <h3 class="emp-kpi-label">Đã hết hạn</h3>
+                    <span class="emp-kpi-ico {{ $contracts['expired'] ? 'ico-danger' : 'ico-muted' }}"><i class="bi bi-slash-circle"></i></span>
+                </div>
+                <div class="emp-kpi-value">{{ $contracts['expired'] }}</div>
+                <p class="emp-kpi-sub">Hợp đồng đã hết hiệu lực</p>
             </article>
         </div>
     </section>

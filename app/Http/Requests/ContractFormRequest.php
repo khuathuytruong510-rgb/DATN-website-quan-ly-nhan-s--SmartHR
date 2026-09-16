@@ -36,7 +36,6 @@ class ContractFormRequest extends FormRequest
             'workplace' => ['nullable', 'string', 'max:255'],
             'benefits' => ['nullable', 'string'],
             'notes' => ['nullable', 'string'],
-            'document' => ['nullable', 'file', 'mimes:pdf,doc,docx', 'max:20480'],
             'parent_contract_id' => ['nullable', 'exists:contracts,id'],
         ];
     }
@@ -92,7 +91,6 @@ class ContractFormRequest extends FormRequest
             'end_date.after_or_equal' => 'Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.',
             'base_salary.required' => 'Lương cơ bản là bắt buộc.',
             'base_salary.min' => 'Lương cơ bản phải lớn hơn hoặc bằng 0.',
-            'document.mimes' => 'Chỉ cho phép upload file PDF hoặc DOCX.',
         ];
     }
 }

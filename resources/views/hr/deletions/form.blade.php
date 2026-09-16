@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', $subjectType === 'employee' ? 'Đề nghị nghỉ việc' : 'Đề nghị xóa phòng ban')
+@section('title', $subjectType === 'employee' ? 'Đề nghị xóa nhân viên' : 'Đề nghị xóa phòng ban')
 
 @section('content')
 @php
@@ -16,7 +16,14 @@
 @endphp
 <div class="page-head">
     <div>
-        <h1>{{ $isEmployee ? 'Đề nghị nghỉ việc / chấm dứt hồ sơ' : 'Đề nghị xóa phòng ban' }}</h1>
+        <h1>{{ $isEmployee ? 'Đề nghị xóa nhân viên' : 'Đề nghị xóa phòng ban' }}</h1>
+        <p class="muted">
+            @if($isEmployee)
+                Gửi Giám đốc duyệt. Chỉ xóa sau khi được phê duyệt. Cần lý do hoặc biên bản/tài liệu.
+            @else
+                Trước khi xóa phòng ban phải chuyển nhân viên sang phòng khác hoặc đề nghị xóa nhân viên. Chuyển phòng cũng gửi Giám đốc duyệt; nhân viên chỉ đổi phòng sau khi được phê duyệt.
+            @endif
+        </p>
     </div>
     <a class="btn link" href="{{ $isEmployee ? route('employees.index') : route('departments.index') }}">Quay lại</a>
 </div>
@@ -40,6 +47,7 @@
 <div class="card">
     <p><strong>{{ $isEmployee ? 'Nhân viên' : 'Phòng ban' }}:</strong> {{ $label }}</p>
     @if($isEmployee)
+        <p class="muted">Email: {{ $employee->email }} @if($employee->user) · Tài khoản: {{ $employee->user->email }} (Admin sẽ xóa tài khoản sau khi Giám đốc duyệt)@endif</p>
     @endif
 </div>
 
@@ -47,8 +55,9 @@
     <div class="card" style="margin-top:16px;">
         <h3 class="section-title" style="margin-top:0;">Nhân viên trong phòng ban ({{ $staff->count() }})</h3>
         @if($hasStaff)
+            <p class="muted">Chọn phòng đích, nhập lý do hoặc đính kèm biên bản, rồi gửi Giám đốc duyệt chuyển. Hoặc đề nghị xóa từng người. Không gửi được đề nghị xóa phòng ban khi còn nhân viên.</p>
             @if($targets->isEmpty())
-                <p class="muted">Chưa có phòng ban khác để chuyển.</p>
+                <p class="muted">Chưa có phòng ban khác để chuyển. Hãy tạo phòng ban mới hoặc đề nghị xóa từng nhân viên.</p>
                 <table>
                     <thead>
                         <tr>
@@ -70,11 +79,11 @@
                                         $pendingTransferId = $pendingTransfers[$member->id] ?? null;
                                     @endphp
                                     @if($pendingId)
-                                        <a href="{{ route('deletion_requests.show', $pendingId) }}">Chờ GĐ duyệt nghỉ việc</a>
+                                        <a href="{{ route('deletion_requests.show', $pendingId) }}">Chờ GĐ duyệt xóa</a>
                                     @elseif($pendingTransferId)
                                         <a href="{{ route('deletion_requests.show', $pendingTransferId) }}">Chờ GĐ duyệt chuyển</a>
                                     @else
-                                        <a href="{{ route('deletion_requests.create_employee', $member) }}">Đề nghị nghỉ việc</a>
+                                        <a href="{{ route('deletion_requests.create_employee', $member) }}">Đề nghị xóa</a>
                                     @endif
                                 </td>
                             </tr>
@@ -102,6 +111,7 @@
                     <div class="field">
                         <label>Biên bản / tài liệu (nếu có)</label>
                         <input type="file" name="document" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+                        <p class="muted">Cần lý do hoặc file. Giám đốc nhận thông báo và duyệt rồi nhân viên mới đổi phòng.</p>
                     </div>
                     <table>
                         <thead>
@@ -127,11 +137,11 @@
                                     <td>{{ $member->email }}</td>
                                     <td>
                                         @if($pendingId)
-                                            <a href="{{ route('deletion_requests.show', $pendingId) }}">Chờ GĐ duyệt nghỉ việc</a>
+                                            <a href="{{ route('deletion_requests.show', $pendingId) }}">Chờ GĐ duyệt xóa</a>
                                         @elseif($pendingTransferId)
                                             <a href="{{ route('deletion_requests.show', $pendingTransferId) }}">Chờ GĐ duyệt chuyển</a>
                                         @else
-                                            <a href="{{ route('deletion_requests.create_employee', $member) }}">Đề nghị nghỉ việc</a>
+                                            <a href="{{ route('deletion_requests.create_employee', $member) }}">Đề nghị xóa</a>
                                         @endif
                                     </td>
                                 </tr>
@@ -154,22 +164,17 @@
 <div class="card" style="margin-top:16px;">
     <form method="POST" action="{{ $action }}" enctype="multipart/form-data">
         @csrf
-        @if($isEmployee)
-            <div class="field">
-                <label>Ngày nghỉ việc</label>
-                <input type="date" name="last_working_day" value="{{ old('last_working_day', now()->toDateString()) }}">
-            </div>
-        @endif
         <div class="field">
-            <label>{{ $isEmployee ? 'Lý do nghỉ việc' : 'Lý do xóa phòng ban' }}</label>
-            <textarea name="reason" rows="4" placeholder="{{ $isEmployee ? 'Ví dụ: hết hạn HĐ, thỏa thuận chấm dứt...' : 'Ví dụ: tái cơ cấu...' }}">{{ old('reason') }}</textarea>
+            <label>Lý do xóa</label>
+            <textarea name="reason" rows="4" placeholder="Ví dụ: nghỉ việc, tái cơ cấu...">{{ old('reason') }}</textarea>
         </div>
         <div class="field">
             <label>Biên bản / tài liệu đính kèm</label>
             <input type="file" name="document" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+            <p class="muted">PDF, Word hoặc ảnh. Tối đa 10MB. Cần ít nhất lý do hoặc file.</p>
         </div>
         <div class="actions">
-            <button class="btn primary" type="submit" data-confirm="{{ $isEmployee ? 'Gửi đề nghị nghỉ việc cho Giám đốc? Hồ sơ lịch sử sẽ được giữ lại.' : 'Gửi đề nghị xóa phòng ban cho Giám đốc? Hồ sơ chưa bị xóa.' }}">{{ $isEmployee ? 'Gửi Giám đốc duyệt nghỉ việc' : 'Gửi Giám đốc duyệt xóa' }}</button>
+            <button class="btn primary" type="submit" data-confirm="Gửi đề nghị này cho Giám đốc duyệt? Hồ sơ chưa bị xóa.">Gửi Giám đốc duyệt xóa</button>
         </div>
     </form>
 </div>
