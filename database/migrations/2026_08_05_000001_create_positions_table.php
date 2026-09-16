@@ -11,15 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('positions', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->text('description')->nullable();
-            $table->string('level')->nullable();
-            $table->integer('salary_range_min')->nullable();
-            $table->integer('salary_range_max')->nullable();
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('positions')) {
+            Schema::create('positions', function (Blueprint $table) {
+                $table->id();
+                $table->string('name');
+                $table->text('description')->nullable();
+                $table->string('level')->nullable();
+                $table->integer('salary_range_min')->nullable();
+                $table->integer('salary_range_max')->nullable();
+                $table->timestamps();
+            });
+        }
     }
 
     /**

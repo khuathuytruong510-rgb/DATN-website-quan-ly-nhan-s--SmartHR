@@ -39,7 +39,7 @@ class Department extends Model
 
     public function isBoard(): bool
     {
-        return $this->code === self::BOARD_CODE || $this->name === self::BOARD_NAME;
+        return strtoupper((string) $this->code) === self::BOARD_CODE || $this->name === self::BOARD_NAME;
     }
 
     public function employees(): HasMany
@@ -50,22 +50,5 @@ class Department extends Model
     public function positions(): HasMany
     {
         return $this->hasMany(Position::class);
-    }
-
-    public function isBoard(): bool
-    {
-        return strtoupper((string) $this->code) === self::BOARD_CODE
-            || $this->name === self::BOARD_NAME;
-    }
-
-    public function scopeNotBoard($query)
-    {
-        return $query
-            ->where(function ($q) {
-                $q->whereNull('code')->orWhere('code', '!=', self::BOARD_CODE);
-            })
-            ->where(function ($q) {
-                $q->whereNull('name')->orWhere('name', '!=', self::BOARD_NAME);
-            });
     }
 }
