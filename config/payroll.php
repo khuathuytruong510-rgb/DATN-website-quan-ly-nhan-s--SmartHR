@@ -33,17 +33,58 @@ return [
     'vietnam_culture_day_from_year' => 2026,
 
     /*
-    | Bảo hiểm người lao động = mức đóng × tỷ lệ (BHXH + BHYT + BHTN ≈ 10,5%).
-    | Mặc định mức đóng = lương cơ bản hợp đồng.
+    | Bảo hiểm bắt buộc người lao động đóng (Luật BHXH / BHYT / BHTN):
+    | - BHXH (hưu trí + tử tuất): 8%
+    | - BHYT: 1,5%
+    | - BHTN: 1%
+    | Tổng mặc định = 10,5%.
+    |
+    | Trần đóng:
+    | - BHXH + BHYT: tối đa 20 × lương cơ sở
+    | - BHTN: tối đa 20 × mức lương tối thiểu vùng
+    | (NĐ 73/2024 lương cơ sở; NĐ 74/2024 lương tối thiểu vùng I — chỉnh qua env khi Nhà nước điều chỉnh).
     */
-    'insurance_employee_rate' => (float) env('PAYROLL_INSURANCE_RATE', 0.105),
+    'insurance' => [
+        'bhxh_rate' => (float) env('PAYROLL_BHXH_RATE', 0.08),
+        'bhyt_rate' => (float) env('PAYROLL_BHYT_RATE', 0.015),
+        'bhtn_rate' => (float) env('PAYROLL_BHTN_RATE', 0.01),
+        'base_salary' => (float) env('PAYROLL_SOCIAL_BASE_SALARY', 2_340_000),
+        'regional_minimum_wage' => (float) env('PAYROLL_REGIONAL_MIN_WAGE', 4_960_000),
+        'cap_multiplier' => (int) env('PAYROLL_INSURANCE_CAP_MULTIPLIER', 20),
+    ],
 
     /*
-    | Giảm trừ gia cảnh trước khi áp dụng biểu thuế lũy tiến.
-    | 0 = giữ số liệu demo hiện tại. Luật VN: 11.000.000 / người / tháng.
+    | Tỷ lệ tổng (tương thích ngược). Nếu không set env thì = tổng 3 tỷ lệ trên.
     */
-    'personal_deduction' => (float) env('PAYROLL_PERSONAL_DEDUCTION', 0),
-    'dependent_deduction' => (float) env('PAYROLL_DEPENDENT_DEDUCTION', 4400000),
+    'insurance_employee_rate' => (float) env(
+        'PAYROLL_INSURANCE_RATE',
+        (float) env('PAYROLL_BHXH_RATE', 0.08)
+        + (float) env('PAYROLL_BHYT_RATE', 0.015)
+        + (float) env('PAYROLL_BHTN_RATE', 0.01)
+    ),
+
+    /*
+    | Giảm trừ gia cảnh trước khi áp dụng biểu thuế lũy tiến từng phần
+    | (Nghị quyết 954/2020/UBTVQH14):
+    | - Bản thân: 11.000.000 đ/tháng
+    | - Người phụ thuộc: 4.400.000 đ/tháng/người
+    */
+    'personal_deduction' => (float) env('PAYROLL_PERSONAL_DEDUCTION', 11_000_000),
+    'dependent_deduction' => (float) env('PAYROLL_DEPENDENT_DEDUCTION', 4_400_000),
+
+    /*
+    | Biểu thuế TNCN lũy tiến từng phần (tháng) — Luật thuế TNCN / TT 111/2013/TT-BTC.
+    | Mỗi bậc: [ngưỡng trên (null = vô hạn), thuế suất].
+    */
+    'pit_brackets' => [
+        [5_000_000, 0.05],
+        [10_000_000, 0.10],
+        [18_000_000, 0.15],
+        [32_000_000, 0.20],
+        [52_000_000, 0.25],
+        [80_000_000, 0.30],
+        [null, 0.35],
+    ],
 
     'bonus' => [
         'full_attendance_days' => (int) env('PAYROLL_BONUS_FULL_DAYS', 22),

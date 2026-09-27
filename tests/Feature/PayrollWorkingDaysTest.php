@@ -88,11 +88,13 @@ class PayrollWorkingDaysTest extends TestCase
 
         $amounts = app(PayrollCalculationService::class)->buildAmounts($employee, 8, 2026);
 
+        $service = app(PayrollCalculationService::class);
         $daily = 45000000 / 26;
         $workPay = $daily * 26;
         $gross = $workPay + 1000000 + 500000;
-        $insurance = 45000000 * 0.105;
-        $tax = app(PayrollCalculationService::class)->calculateTax($gross - $insurance);
+        $insurance = $service->calculateInsurance(45000000);
+        $familyDeduction = $service->familyDeduction($employee);
+        $tax = $service->calculateTax(max(0, $gross - $insurance - $familyDeduction));
 
         $this->assertEqualsWithDelta($daily, $amounts['daily_salary'], 0.01);
         $this->assertEqualsWithDelta($workPay, $amounts['working_salary'], 0.01);
@@ -101,6 +103,7 @@ class PayrollWorkingDaysTest extends TestCase
         $this->assertEqualsWithDelta($tax, $amounts['tax'], 0.01);
         $this->assertEqualsWithDelta($gross - $insurance - $tax, $amounts['total_salary'], 1);
         $this->assertEqualsWithDelta($amounts['base_salary'], $amounts['working_salary'], 0.01);
+        $this->assertSame(11_000_000.0, $familyDeduction);
     }
 
     private function employee(): Employee

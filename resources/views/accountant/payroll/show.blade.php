@@ -197,17 +197,33 @@
                 <td colspan="2" style="background:#f8fafc;font-weight:700;">Khấu trừ</td>
             </tr>
             <tr>
-                <td>Bảo hiểm ({{ $money($f['insurance_base']) }} × {{ $pct }})</td>
+                <td>
+                    Bảo hiểm bắt buộc (BHXH 8% + BHYT 1,5% + BHTN 1%)
+                    <div class="muted" style="font-size:12px;font-weight:400;">
+                        Mức đóng {{ $money($f['insurance_base']) }}
+                        @if(($f['insurance_bhxh_bhyt_base'] ?? $f['insurance_base']) < $f['insurance_base'] || ($f['insurance_bhtn_base'] ?? $f['insurance_base']) < $f['insurance_base'])
+                            (áp trần: BHXH/BHYT {{ $money($f['insurance_bhxh_bhyt_base'] ?? $f['insurance_base']) }},
+                            BHTN {{ $money($f['insurance_bhtn_base'] ?? $f['insurance_base']) }})
+                        @endif
+                        → BHXH {{ $money($f['insurance_bhxh'] ?? 0) }}
+                        + BHYT {{ $money($f['insurance_bhyt'] ?? 0) }}
+                        + BHTN {{ $money($f['insurance_bhtn'] ?? 0) }}
+                        (≈ {{ $pct }}).
+                    </div>
+                </td>
                 <td style="text-align:right;color:#dc2626;font-weight:700;">− {{ $money($f['insurance']) }}</td>
             </tr>
             <tr>
                 <td>
-                    Thuế TNCN
+                    Thuế TNCN (biểu lũy tiến từng phần)
                     <div class="muted" style="font-size:12px;font-weight:400;">
-                        Thu nhập chịu thuế {{ $money($f['gross']) }}
+                        Tổng TN {{ $money($f['gross']) }}
                         − BH {{ $money($f['insurance']) }}
-                        − giảm trừ gia cảnh {{ $money($f['family_deduction']) }}
-                        = {{ $money($f['taxable_income']) }}, rồi áp dụng biểu lũy tiến.
+                        − GTGC bản thân {{ $money($f['personal_deduction'] ?? $f['family_deduction']) }}
+                        @if(($f['dependent_count'] ?? 0) > 0)
+                            − NPT {{ (int) $f['dependent_count'] }} × {{ $money(($f['dependent_deduction'] ?? 0) / max(1, (int) $f['dependent_count'])) }}
+                        @endif
+                        = TNTT {{ $money($f['taxable_income']) }}.
                     </div>
                 </td>
                 <td style="text-align:right;color:#dc2626;font-weight:700;">− {{ $money($f['tax']) }}</td>
