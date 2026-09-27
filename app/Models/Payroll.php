@@ -16,6 +16,9 @@ class Payroll extends Model
         'base_salary',
         'daily_salary',
         'working_salary',
+        'actual_working_salary',
+        'paid_leave_salary',
+        'paid_holiday_salary',
         'working_days',
         'required_working_days',
         'paid_leave_days',
@@ -30,9 +33,18 @@ class Payroll extends Model
         'overtime_salary',
         'allowance',
         'bonus',
+        'gross_salary',
         'deduction',
         'late_penalty_fee',
         'insurance',
+        'insurance_base',
+        'insurance_bhxh',
+        'insurance_bhyt',
+        'insurance_bhtn',
+        'personal_deduction_amount',
+        'dependent_count',
+        'dependent_deduction_amount',
+        'taxable_income',
         'tax',
         'total_salary',
         'status',
@@ -164,13 +176,17 @@ class Payroll extends Model
 
         return (string) $this->month;
     }
-    public function getGrossSalaryAttribute(): float
+    public function getGrossSalaryAttribute($value): float
     {
+        if ($value !== null && $value !== '') {
+            return round((float) $value, 2);
+        }
+
         return round(
-            ($this->working_salary ?? 0)
-            + ($this->overtime_salary ?? 0)
-            + ($this->allowance ?? 0)
-            + ($this->bonus ?? 0),
+            (float) ($this->attributes['working_salary'] ?? 0)
+            + (float) ($this->attributes['overtime_salary'] ?? 0)
+            + (float) ($this->attributes['allowance'] ?? 0)
+            + (float) ($this->attributes['bonus'] ?? 0),
             2
         );
     }

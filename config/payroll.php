@@ -45,9 +45,14 @@ return [
     | (NĐ 73/2024 lương cơ sở; NĐ 74/2024 lương tối thiểu vùng I — chỉnh qua env khi Nhà nước điều chỉnh).
     */
     'insurance' => [
+        // Tỷ lệ người lao động đóng (khấu trừ trên phiếu lương)
         'bhxh_rate' => (float) env('PAYROLL_BHXH_RATE', 0.08),
         'bhyt_rate' => (float) env('PAYROLL_BHYT_RATE', 0.015),
         'bhtn_rate' => (float) env('PAYROLL_BHTN_RATE', 0.01),
+        // Tỷ lệ người sử dụng lao động đóng (chi phí công ty — không trừ lương)
+        'employer_bhxh_rate' => (float) env('PAYROLL_EMPLOYER_BHXH_RATE', 0.175),
+        'employer_bhyt_rate' => (float) env('PAYROLL_EMPLOYER_BHYT_RATE', 0.03),
+        'employer_bhtn_rate' => (float) env('PAYROLL_EMPLOYER_BHTN_RATE', 0.01),
         'base_salary' => (float) env('PAYROLL_SOCIAL_BASE_SALARY', 2_340_000),
         'regional_minimum_wage' => (float) env('PAYROLL_REGIONAL_MIN_WAGE', 4_960_000),
         'cap_multiplier' => (int) env('PAYROLL_INSURANCE_CAP_MULTIPLIER', 20),

@@ -101,18 +101,29 @@
 
         <div class="card">
             <h3 style="margin-top:0;">Chi tiết số tiền</h3>
-            <div style="margin-bottom:12px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Lương cơ bản</span><strong>{{ number_format($payroll->base_salary ?? 0, 0, '.', ',') }} ₫</strong></div>
-            <div style="margin-bottom:12px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Phụ cấp</span><strong style="color:#166534;">+ {{ number_format($payroll->allowance ?? 0, 0, '.', ',') }} ₫</strong></div>
-            <div style="margin-bottom:12px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Thưởng</span><strong style="color:#166534;">+ {{ number_format($payroll->bonus ?? 0, 0, '.', ',') }} ₫</strong></div>
-            <div style="margin-bottom:12px;display:flex;justify-content:space-between;"><span style="color:#64748b;">BHXH</span><strong style="color:#dc2626;">− {{ number_format($payroll->insurance ?? 0, 0, '.', ',') }} ₫</strong></div>
-            <div style="margin-bottom:12px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Thuế</span><strong style="color:#dc2626;">− {{ number_format($payroll->tax ?? 0, 0, '.', ',') }} ₫</strong></div>
-            <div style="margin-bottom:12px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Khấu trừ</span><strong style="color:#dc2626;">− {{ number_format($payroll->deduction ?? 0, 0, '.', ',') }} ₫</strong></div>
+            @php $m = fn ($v) => number_format((float) $v, 0, '.', ',') . ' ₫'; @endphp
+            <div style="margin-bottom:10px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Lương cơ bản HĐ</span><strong>{{ $m($payroll->base_salary) }}</strong></div>
+            <div style="margin-bottom:10px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Lương theo công</span><strong style="color:#166534;">+ {{ $m($payroll->working_salary) }}</strong></div>
+            <div style="margin-bottom:10px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Tăng ca / làm lễ·CN</span><strong style="color:#166534;">+ {{ $m($payroll->overtime_salary) }}</strong></div>
+            <div style="margin-bottom:10px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Phụ cấp</span><strong style="color:#166534;">+ {{ $m($payroll->allowance) }}</strong></div>
+            <div style="margin-bottom:10px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Thưởng</span><strong style="color:#166534;">+ {{ $m($payroll->bonus) }}</strong></div>
+            <div style="margin-bottom:10px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Tổng thu nhập</span><strong>{{ $m($payroll->gross_salary ?: ((float)$payroll->working_salary + (float)$payroll->overtime_salary + (float)$payroll->allowance + (float)$payroll->bonus)) }}</strong></div>
+            <div style="margin:12px 0;border-top:1px dashed var(--line);"></div>
+            <div style="margin-bottom:8px;display:flex;justify-content:space-between;"><span style="color:#64748b;">BHXH 8%</span><strong style="color:#dc2626;">− {{ $m($payroll->insurance_bhxh) }}</strong></div>
+            <div style="margin-bottom:8px;display:flex;justify-content:space-between;"><span style="color:#64748b;">BHYT 1,5%</span><strong style="color:#dc2626;">− {{ $m($payroll->insurance_bhyt) }}</strong></div>
+            <div style="margin-bottom:8px;display:flex;justify-content:space-between;"><span style="color:#64748b;">BHTN 1%</span><strong style="color:#dc2626;">− {{ $m($payroll->insurance_bhtn) }}</strong></div>
+            <div style="margin-bottom:10px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Tổng BH NLĐ</span><strong style="color:#dc2626;">− {{ $m($payroll->insurance) }}</strong></div>
+            <div style="margin-bottom:8px;display:flex;justify-content:space-between;"><span style="color:#64748b;">GTGC bản thân</span><strong>{{ $m($payroll->personal_deduction_amount) }}</strong></div>
+            <div style="margin-bottom:8px;display:flex;justify-content:space-between;"><span style="color:#64748b;">GTGC NPT ({{ (int) ($payroll->dependent_count ?? 0) }})</span><strong>{{ $m($payroll->dependent_deduction_amount) }}</strong></div>
+            <div style="margin-bottom:8px;display:flex;justify-content:space-between;"><span style="color:#64748b;">TNTT</span><strong>{{ $m($payroll->taxable_income) }}</strong></div>
+            <div style="margin-bottom:10px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Thuế TNCN</span><strong style="color:#dc2626;">− {{ $m($payroll->tax) }}</strong></div>
+            <div style="margin-bottom:10px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Khấu trừ khác</span><strong style="color:#dc2626;">− {{ $m($payroll->deduction) }}</strong></div>
             @if(($payroll->late_penalty_fee ?? 0) > 0)
-            <div style="margin-bottom:12px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Phạt đi muộn</span><strong style="color:#dc2626;">− {{ number_format($payroll->late_penalty_fee ?? 0, 0, '.', ',') }} ₫</strong></div>
+            <div style="margin-bottom:10px;display:flex;justify-content:space-between;"><span style="color:#64748b;">Phạt đi muộn</span><strong style="color:#dc2626;">− {{ $m($payroll->late_penalty_fee) }}</strong></div>
             @endif
             <div style="border-top:1px solid var(--line);padding-top:14px;display:flex;justify-content:space-between;align-items:center;">
                 <span style="color:#64748b;">Thực nhận</span>
-                <strong style="font-size:24px;color:var(--primary);">{{ number_format($payroll->total_salary ?? 0, 0, '.', ',') }} ₫</strong>
+                <strong style="font-size:24px;color:var(--primary);">{{ $m($payroll->total_salary) }}</strong>
             </div>
         </div>
     </div>

@@ -95,12 +95,18 @@
                            value="{{ old('bonus', $payroll->bonus ?? 0) }}">
                 </div>
                 <div class="field">
-                    <label for="insurance">BHXH (−)</label>
+                    <label for="insurance">Tổng BH NLĐ (− BHXH+BHYT+BHTN)</label>
                     <input type="number" step="0.01" min="0" id="insurance" name="insurance" class="money-input"
                            value="{{ old('insurance', $payroll->insurance ?? 0) }}">
+                    <span style="color:#64748b;font-size:12px;">
+                        Hiện tại: BHXH {{ number_format((float) ($payroll->insurance_bhxh ?? 0), 0, '.', ',') }}
+                        · BHYT {{ number_format((float) ($payroll->insurance_bhyt ?? 0), 0, '.', ',') }}
+                        · BHTN {{ number_format((float) ($payroll->insurance_bhtn ?? 0), 0, '.', ',') }}
+                        · TNTT {{ number_format((float) ($payroll->taxable_income ?? 0), 0, '.', ',') }}
+                    </span>
                 </div>
                 <div class="field">
-                    <label for="tax">Thuế (−)</label>
+                    <label for="tax">Thuế TNCN (−)</label>
                     <input type="number" step="0.01" min="0" id="tax" name="tax" class="money-input"
                            value="{{ old('tax', $payroll->tax ?? 0) }}">
                 </div>

@@ -42,6 +42,21 @@ class PayrollCalculationServiceTest extends TestCase
         $this->assertSame(25150000.0, $service->calculateTax(100000000));
     }
 
+    public function test_tax_breakdown_lists_each_progressive_bracket_segment(): void
+    {
+        $service = new PayrollCalculationService();
+        $parts = $service->calculateTaxBreakdown(12_000_000);
+
+        $this->assertSame(1050000.0, $parts['tax']);
+        $this->assertCount(3, $parts['segments']);
+        $this->assertSame(0.05, $parts['segments'][0]['rate']);
+        $this->assertSame(250000.0, $parts['segments'][0]['tax']);
+        $this->assertSame(0.10, $parts['segments'][1]['rate']);
+        $this->assertSame(500000.0, $parts['segments'][1]['tax']);
+        $this->assertSame(0.15, $parts['segments'][2]['rate']);
+        $this->assertSame(300000.0, $parts['segments'][2]['tax']);
+    }
+
     public function test_insurance_breakdown_applies_legal_rates_and_caps(): void
     {
         $service = new PayrollCalculationService();
