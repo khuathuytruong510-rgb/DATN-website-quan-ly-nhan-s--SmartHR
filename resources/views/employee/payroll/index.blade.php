@@ -96,34 +96,41 @@
                         </div>
                     </div>
 
+                    @php $em = fn ($v) => number_format((float) $v, 0, '.', ','); @endphp
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 rounded-xl bg-slate-50 border border-slate-100 p-4 mb-4">
                         <div>
                             <div class="text-xs text-gray-500 mb-1">Ngày công</div>
                             <div class="font-bold">{{ $p->working_days ?? 0 }}</div>
                         </div>
                         <div>
-                            <div class="text-xs text-gray-500 mb-1">Lương cơ bản</div>
-                            <div class="font-bold">{{ number_format($p->base_salary ?? 0, 0, '.', ',') }}</div>
+                            <div class="text-xs text-gray-500 mb-1">Lương theo công</div>
+                            <div class="font-bold">{{ $em($p->working_salary) }}</div>
                         </div>
                         <div>
-                            <div class="text-xs text-gray-500 mb-1">Phụ cấp</div>
-                            <div class="font-bold text-green-700">+{{ number_format($p->allowance ?? 0, 0, '.', ',') }}</div>
+                            <div class="text-xs text-gray-500 mb-1">Phụ cấp + thưởng</div>
+                            <div class="font-bold text-green-700">+{{ $em(($p->allowance ?? 0) + ($p->bonus ?? 0)) }}</div>
                         </div>
-                        <div>
-                            <div class="text-xs text-gray-500 mb-1">Khấu trừ</div>
-                            <div class="font-bold text-red-600">-{{ number_format(($p->insurance ?? 0)+($p->tax ?? 0)+($p->deduction ?? 0), 0, '.', ',') }}</div>
-                        </div>
-                        @if(($p->late_penalty_fee ?? 0) > 0)
-                        <div>
-                            <div class="text-xs text-gray-500 mb-1">Phạt đi muộn</div>
-                            <div class="font-bold text-red-600">-{{ number_format($p->late_penalty_fee ?? 0, 0, '.', ',') }} ₫</div>
-                        </div>
-                        @endif
                         <div>
                             <div class="text-xs text-gray-500 mb-1">Thực lĩnh</div>
-                            <div class="font-extrabold text-blue-600 text-xl">{{ number_format($p->total_salary ?? 0, 0, '.', ',') }} ₫</div>
+                            <div class="font-extrabold text-blue-600 text-xl">{{ $em($p->total_salary) }} ₫</div>
                         </div>
                     </div>
+                    <details class="mb-4 rounded-xl border border-gray-200">
+                        <summary class="px-4 py-2.5 cursor-pointer font-semibold text-gray-800">Chi tiết thu nhập / BH / thuế</summary>
+                        <div class="p-4 border-t text-sm space-y-2">
+                            <div class="flex justify-between"><span>Tổng thu nhập</span><strong>{{ $em($p->gross_salary ?: ((float)$p->working_salary + (float)$p->overtime_salary + (float)$p->allowance + (float)$p->bonus)) }}</strong></div>
+                            <div class="flex justify-between text-red-600"><span>BHXH 8%</span><strong>−{{ $em($p->insurance_bhxh) }}</strong></div>
+                            <div class="flex justify-between text-red-600"><span>BHYT 1,5%</span><strong>−{{ $em($p->insurance_bhyt) }}</strong></div>
+                            <div class="flex justify-between text-red-600"><span>BHTN 1%</span><strong>−{{ $em($p->insurance_bhtn) }}</strong></div>
+                            <div class="flex justify-between"><span>GTGC bản thân</span><strong>{{ $em($p->personal_deduction_amount) }}</strong></div>
+                            <div class="flex justify-between"><span>GTGC NPT ({{ (int) ($p->dependent_count ?? 0) }})</span><strong>{{ $em($p->dependent_deduction_amount) }}</strong></div>
+                            <div class="flex justify-between"><span>TNTT</span><strong>{{ $em($p->taxable_income) }}</strong></div>
+                            <div class="flex justify-between text-red-600"><span>Thuế TNCN</span><strong>−{{ $em($p->tax) }}</strong></div>
+                            @if(($p->late_penalty_fee ?? 0) > 0)
+                            <div class="flex justify-between text-red-600"><span>Phạt đi muộn</span><strong>−{{ $em($p->late_penalty_fee) }}</strong></div>
+                            @endif
+                        </div>
+                    </details>
 
                     <div class="flex flex-wrap gap-2">
                         @if($p->status === 'payroll_issue' || $p->confirmation_status === 'issue_reported')
