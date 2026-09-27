@@ -57,7 +57,6 @@
             <option value="calculated" {{ request('status')=='calculated' ? 'selected' : '' }}>Đã tính — chờ gửi duyệt</option>
             <option value="hr_checked" {{ request('status')=='hr_checked' ? 'selected' : '' }}>Đã gửi duyệt — chờ Giám đốc</option>
             <option value="director_approved" {{ request('status')=='director_approved' ? 'selected' : '' }}>Giám đốc đã duyệt — chờ NV</option>
-            <option value="payroll_issue" {{ request('status')=='payroll_issue' ? 'selected' : '' }}>Sự cố lương</option>
             <option value="employee_confirmed" {{ request('status')=='employee_confirmed' ? 'selected' : '' }}>NV đã xác nhận — chờ TT</option>
             <option value="paid" {{ request('status')=='paid' ? 'selected' : '' }}>Đã trả</option>
         </select>

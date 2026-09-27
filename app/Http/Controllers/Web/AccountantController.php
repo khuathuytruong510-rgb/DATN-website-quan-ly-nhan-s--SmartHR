@@ -159,7 +159,7 @@ class AccountantController extends Controller
     {
         if (! in_array($payroll->status, PayrollPaymentWorkflowService::recalculableStatuses(), true)) {
             return redirect()->route('accountant.payroll.show', $payroll)
-                ->with('error', 'Chỉ tính lại phiếu đang nháp, đã tính, hoặc đang sự cố. Phiếu HR đã kiểm tra / Giám đốc đã duyệt phải đi đúng vòng workflow.');
+                ->with('error', 'Chỉ tính lại phiếu đang nháp hoặc đã tính. Phiếu đã gửi duyệt / Giám đốc đã duyệt phải đi đúng vòng workflow.');
         }
 
         try {
@@ -347,6 +347,7 @@ class AccountantController extends Controller
         $year = (int) $request->input('year', 0);
         if ($month < 1 || $month > 12 || $year < 2000) {
             $preferred = $periods->first(fn (array $period) => $period['ready'] && $period['total'] > 0)
+                ?? $periods->first(fn (array $period) => $period['locked'] && $period['total'] > 0)
                 ?? $periods->first(fn (array $period) => $period['ready'])
                 ?? $periods->first(fn (array $period) => $period['locked'])
                 ?? $periods->first();
@@ -401,23 +402,6 @@ class AccountantController extends Controller
     public function payrollSend(): View
     {
         return view('accountant.payroll.send');
-    }
-
-    public function payrollFeedback(): View
-    {
-        $issues = Payroll::with('employee')
-            ->where(function ($q) {
-                $q->where('status', PayrollPaymentWorkflowService::PAYROLL_ISSUE)
-                    ->orWhere('confirmation_status', 'issue_reported');
-            })
-            ->whereNotNull('issue_report')
-            ->orderByDesc('issue_reported_at')
-            ->orderByDesc('id')
-            ->paginate(20);
-
-        return view('accountant.payroll.feedback', [
-            'issues' => $issues,
-        ]);
     }
 
     public function leaveRequests(Request $request): View

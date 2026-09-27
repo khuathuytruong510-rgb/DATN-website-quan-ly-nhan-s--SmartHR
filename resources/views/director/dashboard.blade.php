@@ -195,14 +195,6 @@
                 <div class="emp-kpi-value">{{ $payroll['awaitingDirector'] }}</div>
                 <p class="emp-kpi-sub">HR đã kiểm tra — chờ Giám đốc</p>
             </a>
-            <article class="emp-kpi {{ $payroll['issues'] ? 'is-danger' : 'is-muted' }}">
-                <div class="emp-kpi-head">
-                    <h3 class="emp-kpi-label">Sự cố cần duyệt lại</h3>
-                    <span class="emp-kpi-ico {{ $payroll['issues'] ? 'ico-danger' : 'ico-muted' }}"><i class="bi bi-exclamation-octagon"></i></span>
-                </div>
-                <div class="emp-kpi-value">{{ $payroll['issues'] }}</div>
-                <p class="emp-kpi-sub">Phiếu bị báo sự cố</p>
-            </article>
             <article class="emp-kpi is-ok">
                 <div class="emp-kpi-head">
                     <h3 class="emp-kpi-label">Đã duyệt</h3>

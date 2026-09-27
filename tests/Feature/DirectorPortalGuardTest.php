@@ -71,7 +71,7 @@ class DirectorPortalGuardTest extends TestCase
         $this->actingAs($gd)->get(route('attendance.create'))->assertForbidden();
         $this->actingAs($gd)->get(route('leave_requests.create'))->assertForbidden();
         $this->actingAs($gd)->get(route('payroll.payment.show', $payable))->assertForbidden();
-        $this->actingAs($gd)->get(route('payroll.issues.fix_form', $payable))->assertForbidden();
+        $this->actingAs($gd)->get('/payroll/'.$payable->id.'/fix-issue')->assertNotFound();
     }
 
     public function test_director_cannot_generate_review_pay_or_lock_period(): void
@@ -269,7 +269,10 @@ class DirectorPortalGuardTest extends TestCase
         $this->actingAs($gd);
         $this->get(route('leave_requests.index'))->assertOk()->assertDontSee('+ Tạo Đơn Xin Nghỉ', false);
         $this->get(route('employees.index'))->assertOk()->assertDontSee('+ Tạo nhân viên', false);
-        $this->get(route('payroll.index'))->assertOk()->assertSee('Phê duyệt cuối')->assertDontSee('Chốt dữ liệu kỳ');
-        $this->get(route('payroll.issues.index'))->assertOk()->assertDontSee('Khắc phục');
+        $this->get(route('payroll.index', ['month' => 8, 'year' => 2026]))
+            ->assertOk()
+            ->assertSee('Phê duyệt cuối')
+            ->assertDontSee('Chốt dữ liệu kỳ');
+        $this->get('/payroll/issues')->assertNotFound();
     }
 }

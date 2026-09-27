@@ -518,14 +518,9 @@
                                             </button>
                                         </form>
                                     @elseif($workflow->isCalculated($payroll->status))
-                                        <span class="badge text-bg-secondary text-wrap" style="max-width:160px;">Chờ HR kiểm tra phiếu</span>
+                                        <span class="badge text-bg-secondary text-wrap" style="max-width:160px;">Chờ Kế toán gửi duyệt</span>
                                     @elseif($workflow->isHrChecked($payroll->status))
                                         <span class="badge text-bg-info text-wrap" style="max-width:160px;">Chờ phê duyệt cuối</span>
-                                    @elseif($payroll->status === 'payroll_issue' || $payroll->confirmation_status === 'issue_reported')
-                                        <span class="badge text-bg-danger text-wrap" style="max-width:160px;" title="{{ $payroll->issue_report }}">Sự cố lương</span>
-                                        @if(auth()->user()->canManageHr())
-                                            <a href="{{ route('payroll.issues.fix_form', $payroll) }}" class="btn btn-sm btn-danger">Khắc phục</a>
-                                        @endif
                                     @elseif($workflow->isDirectorApproved($payroll->status))
                                         <span class="badge text-bg-warning text-wrap" style="max-width:160px;">Chờ xác nhận của nhân viên</span>
                                     @elseif($canPay)

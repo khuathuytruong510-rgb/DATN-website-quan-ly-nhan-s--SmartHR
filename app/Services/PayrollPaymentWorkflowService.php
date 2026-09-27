@@ -40,7 +40,7 @@ class PayrollPaymentWorkflowService
     /** Giám đốc đã phê duyệt, chờ nhân viên xác nhận. */
     public const DIRECTOR_APPROVED = 'director_approved';
 
-    /** Nhân viên báo sự cố trên phiếu đã phát hành. */
+    /** @deprecated Đã bỏ tính năng sự cố lương — giữ hằng số để đọc dữ liệu cũ. */
     public const PAYROLL_ISSUE = 'payroll_issue';
 
     /** Nhân viên đã xác nhận phiếu lương. */
@@ -65,7 +65,7 @@ class PayrollPaymentWorkflowService
 
     public static function recalculableStatuses(): array
     {
-        return [self::DRAFT, self::CALCULATED, self::PAYROLL_ISSUE, 'pending'];
+        return [self::DRAFT, self::CALCULATED, 'pending'];
     }
 
     public static function hrCheckedStatuses(): array
@@ -114,7 +114,7 @@ class PayrollPaymentWorkflowService
             self::CALCULATED, 'pending' => 'Hệ thống đã tính — chờ Kế toán gửi duyệt',
             self::HR_CHECKED, 'hr_approved', 'hr_reviewed' => 'Kế toán đã gửi duyệt — chờ Giám đốc',
             self::DIRECTOR_APPROVED, 'waiting_confirmation', 'approved' => 'Giám đốc đã duyệt — chờ NV xác nhận',
-            self::PAYROLL_ISSUE => 'Sự cố lương — chờ HR/Kế toán xử lý',
+            self::PAYROLL_ISSUE => 'Trạng thái cũ (đã bỏ sự cố lương)',
             self::EMPLOYEE_CONFIRMED => 'NV đã xác nhận — đủ điều kiện thanh toán',
             self::READY_FOR_PAYMENT => 'NV đã xác nhận — đủ điều kiện thanh toán',
             self::PAID => 'Đã thanh toán',
@@ -182,9 +182,7 @@ class PayrollPaymentWorkflowService
 
     public function canConfirm(Payroll $payroll): bool
     {
-        return $this->isDirectorApproved($payroll->status)
-            && $payroll->status !== self::PAYROLL_ISSUE
-            && $payroll->confirmation_status !== 'issue_reported';
+        return $this->isDirectorApproved($payroll->status);
     }
 
     public function canPay(Payroll $payroll): bool
@@ -198,7 +196,7 @@ class PayrollPaymentWorkflowService
     }
 
     /**
-     * NV xác nhận / báo sự cố: phiếu phải thuộc hồ sơ gắn user đăng nhập.
+     * NV xác nhận: phiếu phải thuộc hồ sơ gắn user đăng nhập.
      * Không đọc employee_id từ request. actor = null chỉ dùng cho link email / job tự động.
      */
     protected function assertActorOwnsPayroll(Payroll $payroll, ?User $actor): void
@@ -222,8 +220,6 @@ class PayrollPaymentWorkflowService
             self::HR_CHECKED => $this->canSubmitToDirector($payroll) && $actor?->canPayPayroll(),
             self::DIRECTOR_APPROVED => $this->canFinalApprove($payroll) && $actor?->canFinalApprovePayroll(),
             self::EMPLOYEE_CONFIRMED => $this->canConfirm($payroll),
-            self::PAYROLL_ISSUE => $this->canReportIssue($payroll),
-            self::CALCULATED => $this->canRemediateIssue($payroll),
             self::PAID => $this->canPay($payroll) && $actor?->canPayPayroll(),
             default => false,
         };
@@ -231,137 +227,6 @@ class PayrollPaymentWorkflowService
         if (! $allowed) {
             throw new RuntimeException('Không được chuyển trạng thái bảng lương theo cách này.');
         }
-    }
-
-    public function canReportIssue(Payroll $payroll): bool
-    {
-        if ($payroll->status === self::PAID || $payroll->status === self::PAYROLL_ISSUE) {
-            return false;
-        }
-
-        return $this->isDirectorApproved($payroll->status)
-            || in_array($payroll->status, self::payableStatuses(), true);
-    }
-
-    public function reportIssue(Payroll $payroll, string $issue, ?User $actor = null): Payroll
-    {
-        $actor ??= Auth::user();
-
-        return DB::transaction(function () use ($payroll, $issue, $actor) {
-            $payroll = $this->lockPayroll($payroll);
-            $this->assertActorOwnsPayroll($payroll, $actor);
-            $this->assertTransition($payroll, self::PAYROLL_ISSUE, $actor);
-
-            $payroll->update([
-                'status' => self::PAYROLL_ISSUE,
-                'issue_report' => $issue,
-                'issue_reported_at' => now(),
-                'confirmation_status' => 'issue_reported',
-                'confirmation_token' => null,
-                'confirmed_at' => null,
-            ]);
-
-            ActivityLog::create([
-                'user_id' => $actor?->id ?? Auth::id(),
-                'action' => 'payroll_issue_reported',
-                'meta' => sprintf('payroll:%d;reason:%s', $payroll->id, Str::limit($issue, 200)),
-            ]);
-
-            $payroll = $payroll->fresh(['employee']);
-            $employeeName = optional($payroll->employee)->name ?? 'Nhân viên';
-            $period = sprintf('%02d/%d', $payroll->month, $payroll->year);
-            $this->notifyHr(
-                $actor,
-                "Báo sự cố lương — {$employeeName}",
-                "Nhân viên {$employeeName} báo sự cố phiếu lương tháng {$period} (mã #{$payroll->id}):\n{$issue}",
-                ['payroll_id' => $payroll->id, 'type' => 'payroll_issue']
-            );
-
-            return $payroll;
-        });
-    }
-
-    public function canRemediateIssue(Payroll $payroll): bool
-    {
-        return $payroll->status === self::PAYROLL_ISSUE
-            || $payroll->confirmation_status === 'issue_reported';
-    }
-
-    /**
-     * HR/Kế toán khắc phục sự cố → tính lại (calculated), HR phải kiểm tra lại.
-     */
-    public function remediateIssue(Payroll $payroll, array $data, ?User $actor = null): Payroll
-    {
-        if (! $this->canRemediateIssue($payroll) || $payroll->status === self::PAID) {
-            throw new RuntimeException('Chỉ khắc phục được phiếu lương đang có báo cáo sự cố.');
-        }
-
-        $actor ??= Auth::user();
-
-        return DB::transaction(function () use ($payroll, $data, $actor) {
-            $payroll = $this->lockPayroll($payroll);
-            $this->assertTransition($payroll, self::CALCULATED, $actor);
-
-            $workingSalary = (float) ($data['working_salary'] ?? $payroll->working_salary ?? 0);
-            $overtimeSalary = (float) ($data['overtime_salary'] ?? $payroll->overtime_salary ?? 0);
-            $allowance = (float) ($data['allowance'] ?? $payroll->allowance ?? 0);
-            $bonus = (float) ($data['bonus'] ?? $payroll->bonus ?? 0);
-            $insurance = (float) ($data['insurance'] ?? $payroll->insurance ?? 0);
-            $tax = (float) ($data['tax'] ?? $payroll->tax ?? 0);
-            $deduction = (float) ($data['deduction'] ?? $payroll->deduction ?? 0);
-            $latePenaltyFee = (float) ($data['late_penalty_fee'] ?? $payroll->late_penalty_fee ?? 0);
-            $baseSalary = (float) ($data['base_salary'] ?? $payroll->base_salary ?? 0);
-
-            $total = round(
-                $workingSalary + $overtimeSalary + $allowance + $bonus - $insurance - $tax - $deduction - $latePenaltyFee,
-                2
-            );
-
-            $previousIssue = $payroll->issue_report;
-            $amountBefore = (float) $payroll->total_salary;
-
-            $payroll->update([
-                'base_salary' => $baseSalary,
-                'working_salary' => $workingSalary,
-                'overtime_salary' => $overtimeSalary,
-                'allowance' => $allowance,
-                'bonus' => $bonus,
-                'insurance' => $insurance,
-                'tax' => $tax,
-                'deduction' => $deduction,
-                'late_penalty_fee' => $latePenaltyFee,
-                'total_salary' => $total,
-                'status' => self::CALCULATED,
-                'confirmation_status' => 'pending',
-                'confirmed_at' => null,
-                'confirmation_deadline' => null,
-                'confirmation_token' => null,
-                'issue_report' => null,
-                'issue_reported_at' => null,
-                'sent_at' => null,
-                'email_status' => 'pending',
-                'director_approved_by' => null,
-                'director_approved_name' => null,
-                'director_approved_at' => null,
-            ]);
-
-            $payroll = $payroll->fresh(['employee']);
-            $this->snapshotPayoutAccount($payroll);
-
-            ActivityLog::create([
-                'user_id' => $actor?->id,
-                'action' => 'payroll_issue_remediated',
-                'meta' => sprintf(
-                    'payroll:%d;prev_issue:%s;amount_before:%s;amount_after:%s',
-                    $payroll->id,
-                    Str::limit((string) $previousIssue, 120),
-                    $amountBefore,
-                    $total
-                ),
-            ]);
-
-            return $payroll;
-        });
     }
 
     /**
@@ -669,10 +534,6 @@ class PayrollPaymentWorkflowService
         $count = 0;
         $items = Payroll::query()
             ->whereIn('status', self::directorApprovedStatuses())
-            ->where(function ($q) {
-                $q->whereNull('confirmation_status')
-                    ->orWhere('confirmation_status', '!=', 'issue_reported');
-            })
             ->get();
 
         foreach ($items as $payroll) {

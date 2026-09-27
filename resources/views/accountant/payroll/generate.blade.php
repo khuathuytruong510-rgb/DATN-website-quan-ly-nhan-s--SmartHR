@@ -20,7 +20,7 @@
         <h1>Tính lương</h1>
         <p class="muted">
             Chọn kỳ → đối chiếu bảng số liệu (chấm công, nghỉ phép, tăng ca, phụ cấp, BH, thuế) → mới bấm Tính lương.
-            Chỉ tính phiếu nháp / đã tính / sự cố. Không tính lại phiếu HR đã kiểm tra, Giám đốc đã duyệt, NV đã xác nhận hoặc đã thanh toán.
+            Chỉ tính phiếu nháp / đã tính. Không tính lại phiếu đã gửi duyệt, Giám đốc đã duyệt, NV đã xác nhận hoặc đã thanh toán.
         </p>
     </div>
     <div class="actions">
@@ -64,7 +64,7 @@
                     <th>Kỳ</th>
                     <th>HR chốt</th>
                     <th>Phiếu</th>
-                    <th>Đã tính / sự cố</th>
+                    <th>Đã tính</th>
                     <th></th>
                 </tr>
             </thead>

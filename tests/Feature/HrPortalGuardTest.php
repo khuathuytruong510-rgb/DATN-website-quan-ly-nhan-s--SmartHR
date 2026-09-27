@@ -263,7 +263,7 @@ class HrPortalGuardTest extends TestCase
         $this->get(route('leave_requests.index'))->assertOk()->assertSee('Nghỉ phép');
         $this->get(route('attendance.index'))->assertOk();
         $this->get(route('contracts.index'))->assertOk();
-        $this->get(route('payroll.issues.index'))->assertOk();
+        $this->get(route('payroll.index'))->assertOk();
         $this->get(route('hr-dashboard.index'))->assertOk();
     }
 

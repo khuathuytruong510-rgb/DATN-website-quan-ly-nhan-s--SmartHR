@@ -139,7 +139,7 @@ class PayrollAuthorizationHardeningTest extends TestCase
         $this->assertSame(PayrollPaymentWorkflowService::PAID, $paid->status);
     }
 
-    public function test_employee_cannot_confirm_or_report_another_persons_payroll(): void
+    public function test_employee_cannot_confirm_another_persons_payroll(): void
     {
         ['aliceUser' => $aliceUser, 'bobPayroll' => $bobPayroll, 'alicePayroll' => $alicePayroll] = $this->seedPeople();
 
@@ -147,20 +147,13 @@ class PayrollAuthorizationHardeningTest extends TestCase
             ->post(route('me.payroll.confirm', $bobPayroll))
             ->assertForbidden();
 
-        $this->actingAs($aliceUser)
-            ->post(route('me.payroll.report_issue', $bobPayroll), ['issue_report' => 'Sai phụ cấp'])
-            ->assertForbidden();
-
         $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $bobPayroll->fresh()->status);
-
-        $workflow = app(PayrollPaymentWorkflowService::class);
-        $workflow->reportIssue($alicePayroll->fresh(), 'Thiếu phụ cấp', $aliceUser);
 
         $this->actingAs($aliceUser)
             ->post(route('me.payroll.confirm', $alicePayroll->fresh()))
             ->assertRedirect();
 
-        $this->assertSame(PayrollPaymentWorkflowService::PAYROLL_ISSUE, $alicePayroll->fresh()->status);
+        $this->assertSame(PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, $alicePayroll->fresh()->status);
     }
 
     public function test_accountant_cannot_recalculate_after_hr_checked_or_lock_individual_slip(): void
@@ -188,36 +181,13 @@ class PayrollAuthorizationHardeningTest extends TestCase
         $workflow->markPaid($payroll->fresh(), ['payment_method' => 'cash'], $accountant);
     }
 
-    public function test_issue_loop_requires_accountant_then_director_before_confirm(): void
+    public function test_report_issue_route_is_removed(): void
     {
-        ['hr' => $hr, 'director' => $director, 'accountant' => $accountant, 'aliceUser' => $aliceUser, 'alicePayroll' => $payroll] = $this->seedPeople();
-        $workflow = app(PayrollPaymentWorkflowService::class);
-
-        $workflow->reportIssue($payroll->fresh(), 'Sai số', $aliceUser);
-        $workflow->remediateIssue($payroll->fresh(), [
-            'base_salary' => 10000000,
-            'working_salary' => 10000000,
-            'overtime_salary' => 0,
-            'allowance' => 0,
-            'bonus' => 0,
-            'insurance' => 0,
-            'tax' => 0,
-            'deduction' => 0,
-        ], $hr);
-
-        $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $payroll->fresh()->status);
+        ['aliceUser' => $aliceUser, 'alicePayroll' => $payroll] = $this->seedPeople();
 
         $this->actingAs($aliceUser)
-            ->post(route('me.payroll.confirm', $payroll->fresh()))
-            ->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $payroll->fresh()->status);
-
-        $this->actingAs($director)
-            ->post(route('payroll.approve', $payroll->fresh()))
-            ->assertForbidden();
-
-        $this->actingAs($accountant)->post(route('payroll.review', $payroll->fresh()))->assertRedirect();
-        $this->actingAs($director)->post(route('payroll.approve', $payroll->fresh()))->assertRedirect();
+            ->post('/me/payroll/'.$payroll->id.'/report-issue', ['issue_report' => 'Sai số'])
+            ->assertNotFound();
 
         $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $payroll->fresh()->status);
     }
@@ -333,7 +303,7 @@ class PayrollAuthorizationHardeningTest extends TestCase
         $workflow->markPaid($payroll->fresh(), ['payment_method' => 'cash'], $accountant);
     }
 
-    public function test_second_approve_issue_and_sign_do_not_repeat(): void
+    public function test_second_approve_and_sign_do_not_repeat(): void
     {
         ['director' => $director, 'accountant' => $accountant, 'aliceUser' => $aliceUser, 'alice' => $alice] = $this->seedPeople();
         $workflow = app(PayrollPaymentWorkflowService::class);
@@ -357,15 +327,6 @@ class PayrollAuthorizationHardeningTest extends TestCase
         } catch (\RuntimeException) {
         }
         $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $checked->fresh()->status);
-
-        $workflow->reportIssue($checked->fresh(), 'Sai số', $aliceUser);
-        try {
-            $workflow->reportIssue($checked->fresh(), 'Sai số lần 2', $aliceUser);
-            $this->fail('Báo sự cố lần hai phải bị chặn.');
-        } catch (\RuntimeException) {
-        }
-        $this->assertSame(PayrollPaymentWorkflowService::PAYROLL_ISSUE, $checked->fresh()->status);
-        $this->assertSame('Sai số', $checked->fresh()->issue_report);
 
         $contract = Contract::create([
             'employee_id' => $alice->id,
@@ -432,7 +393,7 @@ class PayrollAuthorizationHardeningTest extends TestCase
         }
     }
 
-    public function test_service_confirm_and_report_issue_bind_employee_from_logged_in_user(): void
+    public function test_service_confirm_binds_employee_from_logged_in_user(): void
     {
         ['alicePayroll' => $payroll, 'bobUser' => $bobUser] = $this->seedPeople();
         $workflow = app(PayrollPaymentWorkflowService::class);
@@ -440,13 +401,6 @@ class PayrollAuthorizationHardeningTest extends TestCase
         try {
             $workflow->confirm($payroll, $bobUser);
             $this->fail('Xác nhận phiếu người khác phải bị chặn ở service.');
-        } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('chính mình', $e->getMessage());
-        }
-
-        try {
-            $workflow->reportIssue($payroll, 'Sai số công', $bobUser);
-            $this->fail('Báo sự cố phiếu người khác phải bị chặn ở service.');
         } catch (\RuntimeException $e) {
             $this->assertStringContainsString('chính mình', $e->getMessage());
         }

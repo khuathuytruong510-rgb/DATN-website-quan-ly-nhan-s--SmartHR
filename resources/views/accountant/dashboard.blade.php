@@ -70,9 +70,6 @@
         <a class="emp-action" href="{{ route('payroll.index') }}">
             <i class="bi bi-wallet2 ico-violet"></i> Thanh toán lương
         </a>
-        <a class="emp-action" href="{{ route('accountant.payroll.feedback') }}">
-            <i class="bi bi-exclamation-triangle ico-warn"></i> Sự cố lương
-        </a>
     </div>
 </div>
 @endsection

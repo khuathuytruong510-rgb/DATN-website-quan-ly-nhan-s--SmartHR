@@ -87,14 +87,14 @@ class AccountantPortalPagesTest extends TestCase
         $this->get(route('accountant.payroll.show', $payroll))
             ->assertOk()
             ->assertDontSee('Gửi email xác nhận')
-            ->assertSee('Chi tiết tính lương')
+            ->assertSee('Chi tiết bảng lương')
             ->assertSee('Lương cơ bản')
             ->assertSee('Tổng thu nhập')
             ->assertSee('Tổng khấu trừ')
             ->assertSee('Phụ cấp')
             ->assertSee('Ngày công')
             ->assertSee('Thực nhận');
-        $this->get(route('accountant.payroll.feedback'))->assertOk();
+        $this->get('/accountant/payroll/feedback')->assertNotFound();
         $this->get(route('accountant.leave_requests'))->assertOk()->assertDontSee('Tạo đơn nghỉ');
         $this->get(route('accountant.activity_logs'))->assertOk();
         $this->get(route('accountant.profile'))->assertRedirect();
@@ -235,7 +235,7 @@ class AccountantPortalPagesTest extends TestCase
             ->assertSee('Kỳ lương tháng 08/2026')
             ->assertSee('Đã tính 11 phiếu')
             ->assertSee('Không bỏ qua phiếu nào')
-            ->assertSee('HR mở khóa kỳ lương')
+            ->assertSee('Giám đốc duyệt mở khóa kỳ lương')
             ->assertSee('Lý do: Reset demo')
             ->assertSee('Kế toán thanh toán lương')
             ->assertSee('Hình thức: tiền mặt');

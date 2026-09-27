@@ -169,7 +169,7 @@ class AccountantPortalGuardTest extends TestCase
         ]);
     }
 
-    public function test_recalculate_allowed_only_for_draft_calculated_and_issue(): void
+    public function test_recalculate_allowed_only_for_draft_and_calculated(): void
     {
         ['hr' => $hr, 'accountant' => $kt, 'alice' => $alice, 'bob' => $bob] = $this->seedPeople();
         $this->lockPeriod($hr);
@@ -187,19 +187,8 @@ class AccountantPortalGuardTest extends TestCase
         $this->actingAs($kt)->post(route('accountant.payroll.recalculate', $bobSlip))->assertRedirect();
         $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $bobSlip->fresh()->status);
 
-        $issue = Payroll::create([
-            'employee_id' => $alice->id,
-            'month' => 7,
-            'year' => 2026,
-            'base_salary' => 10000000,
-            'total_salary' => 1,
-            'status' => PayrollPaymentWorkflowService::PAYROLL_ISSUE,
-        ]);
-        // Chỉ khóa kỳ 7 — không verify để tránh auto-tính ghi đè phiếu sự cố.
         $this->actingAs($hr)->post(route('payroll.period.lock'), ['month' => 7, 'year' => 2026])->assertRedirect();
         app(\App\Services\PayrollPeriodLockService::class)->markHrVerified(7, 2026, $hr);
-        $this->actingAs($kt)->post(route('accountant.payroll.recalculate', $issue))->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $issue->fresh()->status);
 
         $checked = Payroll::create([
             'employee_id' => $bob->id,
@@ -332,12 +321,9 @@ class AccountantPortalGuardTest extends TestCase
         $this->assertSame('failed', $fresh->email_status);
     }
 
-    public function test_accountant_cannot_fix_issue_amounts_or_edit_employee_bank(): void
+    public function test_accountant_cannot_edit_employee_bank_on_payment(): void
     {
         ['accountant' => $kt, 'alice' => $alice] = $this->seedPeople();
-        $issue = $this->payroll($alice, PayrollPaymentWorkflowService::PAYROLL_ISSUE, [
-            'issue_report' => 'Sai ngày công',
-        ]);
         $payable = Payroll::create([
             'employee_id' => $alice->id,
             'month' => 6,
@@ -347,11 +333,10 @@ class AccountantPortalGuardTest extends TestCase
             'status' => PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED,
         ]);
 
-        $this->actingAs($kt)->get(route('payroll.issues.fix_form', $issue))->assertForbidden();
-        $this->actingAs($kt)->post(route('payroll.issues.fix', $issue), [
+        $this->actingAs($kt)->post('/payroll/'.$payable->id.'/fix-issue', [
             'base_salary' => 1,
             'working_salary' => 1,
-        ])->assertForbidden();
+        ])->assertNotFound();
         $this->actingAs($kt)->post(route('payroll.payment.bank', $payable), [
             'bank_name' => 'Hack Bank',
             'account_number' => '000000000001',
@@ -359,7 +344,6 @@ class AccountantPortalGuardTest extends TestCase
         ])->assertForbidden();
 
         $this->assertSame('MB Bank', $alice->fresh()->bank_name);
-        $this->assertSame(PayrollPaymentWorkflowService::PAYROLL_ISSUE, $issue->fresh()->status);
     }
 
     public function test_payment_screen_lists_only_employee_confirmed(): void

@@ -215,41 +215,16 @@ class EmployeePortalGuardTest extends TestCase
         $this->actingAs($alice)->delete('/me/payroll/'.$fresh->id)->assertForbidden();
     }
 
-    public function test_issue_loop_cannot_skip_to_paid(): void
+    public function test_employee_cannot_report_payroll_issue_anymore(): void
     {
-        ['aliceUser' => $alice, 'alice' => $emp, 'hr' => $hr, 'director' => $director, 'accountant' => $accountant] = $this->seedPeople();
-        $workflow = app(PayrollPaymentWorkflowService::class);
+        ['aliceUser' => $alice, 'alice' => $emp] = $this->seedPeople();
         $payroll = $this->payroll($emp, PayrollPaymentWorkflowService::DIRECTOR_APPROVED);
 
-        $workflow->reportIssue($payroll->fresh(), 'Sai ngày công', $alice);
-        $this->assertSame(PayrollPaymentWorkflowService::PAYROLL_ISSUE, $payroll->fresh()->status);
+        $this->actingAs($alice)
+            ->post('/me/payroll/'.$payroll->id.'/report-issue', ['issue_report' => 'Sai ngày công'])
+            ->assertNotFound();
 
-        try {
-            $workflow->markPaid($payroll->fresh(), ['payment_method' => 'cash'], $accountant);
-            $this->fail('Không được thanh toán phiếu đang báo sai.');
-        } catch (\RuntimeException) {
-        }
-
-        $this->assertSame(PayrollPaymentWorkflowService::PAYROLL_ISSUE, $payroll->fresh()->status);
-    }
-
-    public function test_issue_loop_returns_to_accountant_then_director_before_confirm(): void
-    {
-        ['aliceUser' => $alice, 'alice' => $emp, 'hr' => $hr, 'director' => $director, 'accountant' => $accountant] = $this->seedPeople();
-        $workflow = app(PayrollPaymentWorkflowService::class);
-        $payroll = $this->payroll($emp, PayrollPaymentWorkflowService::DIRECTOR_APPROVED);
-
-        $workflow->reportIssue($payroll->fresh(), 'Sai OT', $alice);
-        $workflow->remediateIssue($payroll->fresh(), ['base_salary' => 10000000, 'working_salary' => 10000000], $hr);
-        $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $payroll->fresh()->status);
-
-        $this->actingAs($alice)->post(route('me.payroll.confirm', $payroll->fresh()))->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $payroll->fresh()->status);
-
-        $this->actingAs($accountant)->post(route('payroll.review', $payroll->fresh()))->assertRedirect();
-        $this->actingAs($director)->post(route('payroll.approve', $payroll->fresh()))->assertRedirect();
-        $this->actingAs($alice)->post(route('me.payroll.confirm', $payroll->fresh()))->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, $payroll->fresh()->status);
+        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $payroll->fresh()->status);
     }
 
     public function test_bank_change_pending_blocks_second_request_and_snapshot_keeps_old_account(): void

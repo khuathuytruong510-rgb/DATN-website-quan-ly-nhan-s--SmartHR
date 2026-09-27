@@ -51,27 +51,6 @@ class PayrollController extends Controller
         ]);
     }
 
-    /**
-     * Danh sách phiếu lương bị nhân viên báo sự cố.
-     */
-    public function issues()
-    {
-        $issues = Payroll::with('employee')
-            ->where(function ($q) {
-                $q->where('status', PayrollPaymentWorkflowService::PAYROLL_ISSUE)
-                    ->orWhere('confirmation_status', 'issue_reported');
-            })
-            ->whereNotNull('issue_report')
-            ->orderByDesc('issue_reported_at')
-            ->orderByDesc('id')
-            ->paginate(20);
-
-        return view('hr.payroll.issues', [
-            'issues' => $issues,
-            'workflow' => $this->workflow,
-        ]);
-    }
-
     public function generate(Request $request, PayrollCalculationService $service)
     {
         if (! request()->user()?->canPayPayroll()) {
@@ -107,63 +86,6 @@ class PayrollController extends Controller
             'payroll' => $payroll,
             'workflow' => $this->workflow,
         ]);
-    }
-
-    /**
-     * Form khắc phục sự cố lương (sửa số liệu).
-     */
-    public function fixIssueForm(Payroll $payroll)
-    {
-        $user = request()->user();
-        if (! $user?->canManageHr()) {
-            abort(403, 'Chỉ HR được nhập số khắc phục. Kế toán tính lại từ dữ liệu nguồn sau khi HR xử lý sự cố.');
-        }
-
-        if (! $this->workflow->canRemediateIssue($payroll)) {
-            return redirect()
-                ->route('payroll.show', $payroll)
-                ->with('error', 'Phiếu này không đang ở trạng thái báo sự cố.');
-        }
-
-        $payroll->load('employee');
-
-        return view('hr.payroll.fix_issue', [
-            'payroll' => $payroll,
-            'workflow' => $this->workflow,
-        ]);
-    }
-
-    /**
-     * Lưu khắc phục → tính lại (calculated), HR kiểm tra lại, Giám đốc duyệt lại.
-     */
-    public function fixIssueSave(Request $request, Payroll $payroll)
-    {
-        $user = $request->user();
-        if (! $user?->canManageHr()) {
-            abort(403, 'Chỉ HR được nhập số khắc phục. Kế toán tính lại từ dữ liệu nguồn sau khi HR xử lý sự cố.');
-        }
-
-        $data = $request->validate([
-            'base_salary' => ['required', 'numeric', 'min:0'],
-            'working_salary' => ['required', 'numeric', 'min:0'],
-            'overtime_salary' => ['nullable', 'numeric', 'min:0'],
-            'allowance' => ['nullable', 'numeric', 'min:0'],
-            'bonus' => ['nullable', 'numeric', 'min:0'],
-            'insurance' => ['nullable', 'numeric', 'min:0'],
-            'tax' => ['nullable', 'numeric', 'min:0'],
-            'deduction' => ['nullable', 'numeric', 'min:0'],
-            'fix_note' => ['nullable', 'string', 'max:1000'],
-        ]);
-
-        try {
-            $this->workflow->remediateIssue($payroll, $data, $user);
-        } catch (\Throwable $e) {
-            return back()->withInput()->with('error', $e->getMessage());
-        }
-
-        return redirect()
-            ->route('payroll.show', $payroll)
-            ->with('success', 'Đã khắc phục sự cố. Phiếu đã tính lại — chờ Kế toán gửi duyệt, rồi Giám đốc phê duyệt lại.');
     }
 
     public function review(Payroll $payroll)

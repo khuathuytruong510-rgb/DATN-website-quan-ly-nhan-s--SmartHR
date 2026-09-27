@@ -108,7 +108,7 @@ class PayrollTwoStepApprovalTest extends TestCase
         Mail::fake();
         $this->travelTo(\Carbon\Carbon::parse('2026-09-15 00:15:00'));
         ['hr' => $hr, 'accountant' => $accountant, 'director' => $director, 'employee' => $employee, 'payroll' => $payroll] = $this->seedPayroll();
-        $issueEmployee = Employee::create([
+        $paidEmployee = Employee::create([
             'name' => 'Nguyen Van C',
             'email' => 'employee-c@example.com',
             'position' => 'Developer',
@@ -116,13 +116,13 @@ class PayrollTwoStepApprovalTest extends TestCase
             'status' => 'active',
             'employee_code' => 'EMP003',
         ]);
-        $issue = Payroll::create([
-            'employee_id' => $issueEmployee->id,
+        $alreadyPaid = Payroll::create([
+            'employee_id' => $paidEmployee->id,
             'month' => 8,
             'year' => 2026,
             'base_salary' => 10000000,
-            'status' => PayrollPaymentWorkflowService::PAYROLL_ISSUE,
-            'issue_report' => 'Chờ kiểm tra phụ cấp',
+            'status' => PayrollPaymentWorkflowService::PAID,
+            'paid_at' => now(),
         ]);
 
         $this->artisan('payroll:auto-calculate-monthly', ['--date' => '2026-09-15'])
@@ -132,7 +132,7 @@ class PayrollTwoStepApprovalTest extends TestCase
         $this->assertTrue($locks->isLocked(8, 2026));
         $this->assertFalse($locks->isHrVerified(8, 2026));
         $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $payroll->fresh()->status);
-        $this->assertSame(PayrollPaymentWorkflowService::PAYROLL_ISSUE, $issue->fresh()->status);
+        $this->assertSame(PayrollPaymentWorkflowService::PAID, $alreadyPaid->fresh()->status);
         $this->assertDatabaseMissing('activity_logs', ['action' => 'payroll_period_auto_hr_verified']);
         $this->assertDatabaseMissing('activity_logs', ['action' => 'payroll_auto_calculated']);
 
@@ -142,17 +142,17 @@ class PayrollTwoStepApprovalTest extends TestCase
 
         // Auto-finalize không còn gửi duyệt / phê duyệt hộ người.
         $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $payroll->fresh()->status);
-        $this->assertSame(PayrollPaymentWorkflowService::PAYROLL_ISSUE, $issue->fresh()->status);
+        $this->assertSame(PayrollPaymentWorkflowService::PAID, $alreadyPaid->fresh()->status);
 
         // HR xác nhận → hệ thống tự tính; KT gửi duyệt; GĐ duyệt; hết hạn → auto confirm.
         $this->actingAs($hr)->post(route('payroll.period.verify'), ['month' => 8, 'year' => 2026])->assertRedirect();
         $this->assertTrue($locks->isHrVerified(8, 2026));
         $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $payroll->fresh()->status);
+        $this->assertSame(PayrollPaymentWorkflowService::PAID, $alreadyPaid->fresh()->status);
 
         $this->actingAs($accountant)->post(route('payroll.review', $payroll))->assertRedirect();
         $this->actingAs($director)->post(route('payroll.approve', $payroll->fresh()))->assertRedirect();
         $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $payroll->fresh()->status);
-        $this->assertSame(PayrollPaymentWorkflowService::PAYROLL_ISSUE, $issue->fresh()->status);
 
         $deadline = $payroll->fresh()->confirmation_deadline;
         $this->assertNotNull($deadline);
@@ -308,9 +308,9 @@ class PayrollTwoStepApprovalTest extends TestCase
         $this->assertFalse(app(\App\Services\PayrollPeriodLockService::class)->isLocked(8, 2026));
     }
 
-    public function test_payroll_issue_returns_to_calculated_then_hr_check_then_director(): void
+    public function test_employee_confirm_then_accountant_can_pay(): void
     {
-        ['hr' => $hr, 'director' => $director, 'accountant' => $accountant, 'employee' => $employee, 'payroll' => $payroll] = $this->seedPayroll();
+        ['director' => $director, 'accountant' => $accountant, 'employee' => $employee, 'payroll' => $payroll] = $this->seedPayroll();
         $employeeUser = User::factory()->create([
             'is_hr' => false,
             'is_admin' => false,
@@ -321,40 +321,9 @@ class PayrollTwoStepApprovalTest extends TestCase
 
         $this->actingAs($accountant)->post(route('payroll.review', $payroll))->assertRedirect();
         $this->actingAs($director)->post(route('payroll.approve', $payroll))->assertRedirect();
+        $this->actingAs($employeeUser)->post(route('me.payroll.confirm', $payroll->fresh()))->assertRedirect();
 
-        $workflow = app(PayrollPaymentWorkflowService::class);
-        $workflow->reportIssue($payroll->fresh(), 'Sai phụ cấp', $employeeUser);
-
-        $this->assertSame(PayrollPaymentWorkflowService::PAYROLL_ISSUE, $payroll->fresh()->status);
-
-        $workflow->remediateIssue($payroll->fresh(), [
-            'base_salary' => 10000000,
-            'working_salary' => 10000000,
-            'overtime_salary' => 0,
-            'allowance' => 0,
-            'bonus' => 0,
-            'insurance' => 0,
-            'tax' => 0,
-            'deduction' => 0,
-        ], $accountant);
-
-        $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $payroll->fresh()->status);
-        $this->assertNull($payroll->fresh()->issue_report);
-
-        $this->actingAs($director)
-            ->post(route('payroll.approve', $payroll->fresh()))
-            ->assertForbidden();
-
-        $this->actingAs($accountant)
-            ->post(route('payroll.review', $payroll->fresh()))
-            ->assertRedirect();
-
-        $this->assertSame(PayrollPaymentWorkflowService::HR_CHECKED, $payroll->fresh()->status);
-
-        $this->actingAs($director)
-            ->post(route('payroll.approve', $payroll->fresh()))
-            ->assertRedirect();
-
-        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $payroll->fresh()->status);
+        $this->assertSame(PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, $payroll->fresh()->status);
+        $this->assertTrue(app(PayrollPaymentWorkflowService::class)->canPay($payroll->fresh()));
     }
 }

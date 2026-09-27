@@ -248,13 +248,13 @@ class CrossRolePayrollWorkflowTest extends TestCase
             'total_salary' => 10000000,
             'status' => PayrollPaymentWorkflowService::CALCULATED,
         ]);
-        $issue = Payroll::create([
+        $checked = Payroll::create([
             'employee_id' => $alice->id,
             'month' => 4,
             'year' => 2026,
             'base_salary' => 10000000,
             'total_salary' => 10000000,
-            'status' => PayrollPaymentWorkflowService::PAYROLL_ISSUE,
+            'status' => PayrollPaymentWorkflowService::HR_CHECKED,
         ]);
         $paid = Payroll::create([
             'employee_id' => $alice->id,
@@ -267,74 +267,12 @@ class CrossRolePayrollWorkflowTest extends TestCase
         ]);
 
         $this->actingAs($gd)->post(route('payroll.approve', $calculated))->assertForbidden();
-        $this->actingAs($gd)->post(route('payroll.approve', $issue))->assertForbidden();
+        $this->actingAs($gd)->post(route('payroll.approve', $checked))->assertRedirect();
         $this->actingAs($gd)->post(route('payroll.approve', $paid))->assertForbidden();
 
         $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $calculated->fresh()->status);
-        $this->assertSame(PayrollPaymentWorkflowService::PAYROLL_ISSUE, $issue->fresh()->status);
+        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $checked->fresh()->status);
         $this->assertSame(PayrollPaymentWorkflowService::PAID, $paid->fresh()->status);
-    }
-
-    public function test_issue_loop_must_reenter_hr_and_director_before_pay(): void
-    {
-        Mail::fake();
-        [
-            'hr' => $hr,
-            'director' => $gd,
-            'accountant' => $kt,
-            'aliceUser' => $aliceUser,
-            'alice' => $alice,
-        ] = $this->seedPeople();
-
-        $this->actingAs($hr)->post(route('payroll.period.lock'), ['month' => 7, 'year' => 2026])->assertRedirect();
-        $this->actingAs($hr)->post(route('payroll.period.verify'), ['month' => 7, 'year' => 2026])->assertRedirect();
-        $this->actingAs($kt)->post(route('accountant.payroll.generate_post'), ['month' => '2026-07'])->assertRedirect();
-
-        $payroll = $this->aliceSlip($alice, 7);
-        $this->actingAs($kt)->post(route('payroll.review', $payroll))->assertRedirect();
-        $this->actingAs($gd)->post(route('payroll.approve', $payroll->fresh()))->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $payroll->fresh()->status);
-
-        $this->actingAs($aliceUser)->post(route('me.payroll.report_issue', $payroll->fresh()), [
-            'issue_report' => 'Sai ngày công trên phiếu tháng 7',
-        ])->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::PAYROLL_ISSUE, $payroll->fresh()->status);
-
-        // Không có đường tắt: sự cố → duyệt / thanh toán
-        $this->actingAs($gd)->post(route('payroll.approve', $payroll->fresh()))->assertForbidden();
-        $this->pay($kt, $payroll->fresh())->assertRedirect();
-        $this->pay($hr, $payroll->fresh())->assertForbidden();
-        $this->actingAs($aliceUser)->post(route('me.payroll.confirm', $payroll->fresh()))->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::PAYROLL_ISSUE, $payroll->fresh()->status);
-
-        // KT tính lại từ nguồn → CALCULATED, vẫn không được PAID
-        $this->actingAs($kt)->post(route('accountant.payroll.recalculate', $payroll->fresh()))->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $payroll->fresh()->status);
-        $this->pay($kt, $payroll->fresh())->assertRedirect();
-        $this->actingAs($gd)->post(route('payroll.approve', $payroll->fresh()))->assertForbidden();
-        $this->actingAs($aliceUser)->post(route('me.payroll.confirm', $payroll->fresh()))->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $payroll->fresh()->status);
-        $this->assertDatabaseMissing('salary_payments', ['payroll_id' => $payroll->id]);
-
-        // Phải đi lại: KT gửi duyệt → GĐ duyệt → NV xác nhận → KT thanh toán
-        $this->actingAs($kt)->post(route('payroll.review', $payroll->fresh()))->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::HR_CHECKED, $payroll->fresh()->status);
-        $this->pay($kt, $payroll->fresh())->assertRedirect();
-
-        $this->actingAs($gd)->post(route('payroll.approve', $payroll->fresh()))->assertRedirect();
-        $this->pay($kt, $payroll->fresh())->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $payroll->fresh()->status);
-
-        $this->actingAs($aliceUser)->post(route('me.payroll.confirm', $payroll->fresh()))->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, $payroll->fresh()->status);
-
-        $this->pay($kt, $payroll->fresh(), ['transaction_code' => 'TXN-ISSUE-007'])->assertRedirect();
-        $fresh = $payroll->fresh('salaryPayment');
-        $this->assertSame(PayrollPaymentWorkflowService::PAID, $fresh->status);
-        $this->assertSame(1, SalaryPayment::where('payroll_id', $fresh->id)->count());
-        $this->assertSame('TXN-ISSUE-007', $fresh->salaryPayment->transaction_code);
-        $this->assertSame($kt->id, (int) $fresh->salaryPayment->paid_by);
-        $this->assertNotNull($fresh->salaryPayment->paid_at);
     }
 
     public function test_cross_role_idor_uses_business_permission_not_just_auth(): void
@@ -368,9 +306,9 @@ class CrossRolePayrollWorkflowTest extends TestCase
 
         // NV A không thao tác phiếu B
         $this->actingAs($aliceUser)->post(route('me.payroll.confirm', $bobConfirmed))->assertForbidden();
-        $this->actingAs($aliceUser)->post(route('me.payroll.report_issue', $bobConfirmed), [
-            'issue_report' => 'Không phải phiếu của tôi',
-        ])->assertForbidden();
+        $this->actingAs($aliceUser)
+            ->post('/me/payroll/'.$bobConfirmed->id.'/report-issue', ['issue_report' => 'Không phải phiếu của tôi'])
+            ->assertNotFound();
         $this->assertSame(PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, $bobConfirmed->fresh()->status);
 
         // KT không chiếm bước HR / GĐ trên cùng ID

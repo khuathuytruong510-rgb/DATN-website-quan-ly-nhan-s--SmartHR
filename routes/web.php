@@ -97,7 +97,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/me/contracts/{contract}', [EmployeeController::class, 'contractShow'])->name('me.contracts.show')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/attendance/{attendance}', [EmployeeController::class, 'attendanceShow'])->name('me.attendance.show')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::post('/me/payroll/{payroll}/confirm', [\App\Http\Controllers\Web\PayrollConfirmationController::class, 'confirm'])->name('me.payroll.confirm')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
-    Route::post('/me/payroll/{payroll}/report-issue', [\App\Http\Controllers\Web\PayrollConfirmationController::class, 'reportIssue'])->name('me.payroll.report_issue')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::post('/me/payroll/bank-change-request', [\App\Http\Controllers\Web\PayrollConfirmationController::class, 'requestBankChange'])->name('me.payroll.bank_change')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/evaluations', [EmployeeController::class, 'evaluations'])->name('me.evaluations')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/benefits', [EmployeeController::class, 'benefits'])->name('me.benefits')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
@@ -271,14 +270,6 @@ Route::middleware('auth')->group(function () {
             Route::post('/payroll/email/{payroll}/send', [\App\Http\Controllers\Web\PayrollEmailController::class, 'send'])
                 ->name('payroll.email.send');
 
-            // Sự cố lương từ nhân viên
-            Route::get('/payroll/issues', [PayrollController::class, 'issues'])
-                ->name('payroll.issues.index');
-            Route::get('/payroll/{payroll}/fix-issue', [PayrollController::class, 'fixIssueForm'])
-                ->name('payroll.issues.fix_form');
-            Route::post('/payroll/{payroll}/fix-issue', [PayrollController::class, 'fixIssueSave'])
-                ->name('payroll.issues.fix');
-
             // Chi tiết
             Route::get('/payroll/{payroll}', [PayrollController::class, 'show'])
                 ->name('payroll.show');
@@ -410,7 +401,6 @@ Route::middleware('auth')->group(function () {
         Route::post('/accountant/payroll/pay-all', [\App\Http\Controllers\Web\AccountantController::class, 'payAll'])->name('accountant.payroll.pay_all');
         Route::get('/accountant/payroll/send', [\App\Http\Controllers\Web\AccountantController::class, 'payrollSend'])->name('accountant.payroll.send');
         Route::post('/accountant/payroll/send-all', [\App\Http\Controllers\Web\AccountantController::class, 'sendAllPayrolls'])->name('accountant.payroll.send_all');
-        Route::get('/accountant/payroll/feedback', [\App\Http\Controllers\Web\AccountantController::class, 'payrollFeedback'])->name('accountant.payroll.feedback');
         Route::get('/accountant/leave-requests', [\App\Http\Controllers\Web\AccountantController::class, 'leaveRequests'])->name('accountant.leave_requests');
         Route::get('/accountant/leave-requests/create', [\App\Http\Controllers\Web\AccountantController::class, 'createLeaveRequest'])->name('accountant.leave_requests.create');
         Route::post('/accountant/leave-requests', [\App\Http\Controllers\Web\AccountantController::class, 'storeLeaveRequest'])->name('accountant.leave_requests.store');

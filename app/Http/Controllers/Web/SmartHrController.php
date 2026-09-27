@@ -396,7 +396,6 @@ class SmartHrController extends Controller
             'awaitingEmployee' => (clone $payrollQuery)->whereIn('status', $directorApprovalStatuses)->count(),
             'awaitingPayment' => (clone $payrollQuery)->whereIn('status', PayrollPaymentWorkflowService::payableStatuses())->count(),
             'paid' => (clone $payrollQuery)->where('status', PayrollPaymentWorkflowService::PAID)->count(),
-            'issues' => (clone $payrollQuery)->where('status', PayrollPaymentWorkflowService::PAYROLL_ISSUE)->count(),
         ];
 
         $previousPayrollQuery = Payroll::where('month', $previousMonth->month)->where('year', $previousMonth->year);
@@ -407,7 +406,6 @@ class SmartHrController extends Controller
             'awaitingEmployee' => (clone $previousPayrollQuery)->whereIn('status', $directorApprovalStatuses)->count(),
             'awaitingPayment' => (clone $previousPayrollQuery)->whereIn('status', PayrollPaymentWorkflowService::payableStatuses())->count(),
             'paid' => (clone $previousPayrollQuery)->where('status', PayrollPaymentWorkflowService::PAID)->count(),
-            'issues' => (clone $previousPayrollQuery)->where('status', PayrollPaymentWorkflowService::PAYROLL_ISSUE)->count(),
         ];
 
         $approvedLeaves = LeaveRequest::where('status', 'approved')

@@ -276,11 +276,6 @@
                                                 Duyệt
                                             </button>
                                         </form>
-                                    @elseif($payroll->confirmation_status === 'issue_reported')
-                                        <span class="badge text-bg-danger text-wrap" style="max-width:160px;" title="{{ $payroll->issue_report }}">Có sự cố</span>
-                                        @if(auth()->user()->is_admin || auth()->user()->is_hr || auth()->user()->is_accountant)
-                                            <a href="{{ route('payroll.issues.fix_form', $payroll) }}" class="btn btn-sm btn-danger">Khắc phục</a>
-                                        @endif
                                     @elseif(in_array($payroll->status, ['waiting_confirmation', 'approved'], true))
                                         <span class="badge text-bg-warning text-wrap" style="max-width:160px;">Chờ xác nhận của nhân viên</span>
                                     @elseif($canPay)

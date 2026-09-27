@@ -31,8 +31,6 @@
                             if (! $payrollId && preg_match('/mã\s*#(\d+)/u', (string) $notification->message, $m)) {
                                 $payrollId = (int) $m[1];
                             }
-                            $isIssue = data_get($notification->data, 'type') === 'payroll_issue'
-                                || str_contains((string) $notification->title, 'sự cố lương');
                             $isFace = data_get($notification->data, 'type') === 'face_registration';
                             $faceProfile = $isFace
                                 ? \App\Models\FaceProfile::with('employee')->find(data_get($notification->data, 'face_profile_id'))
@@ -122,14 +120,9 @@
                                 @endif
                             </div>
                         @endif
-                        @if($isIssue && ! auth()->user()->is_admin && ! auth()->user()->is_super_admin)
+                        @if($payrollId && ! auth()->user()->is_admin && ! auth()->user()->is_super_admin)
                             <div class="actions" style="margin-top:10px;">
-                                @if($payrollId)
-                                    <a href="{{ route('payroll.issues.fix_form', $payrollId) }}" class="btn primary">Khắc phục</a>
-                                    <a href="{{ route('payroll.show', $payrollId) }}" class="btn">Xem phiếu</a>
-                                @else
-                                    <a href="{{ route('payroll.issues.index') }}" class="btn primary">Xem sự cố lương</a>
-                                @endif
+                                <a href="{{ route('payroll.show', $payrollId) }}" class="btn">Xem phiếu</a>
                             </div>
                         @endif
                         <p class="muted">Gửi đến: {{ ucfirst($notification->target) }} | {{ $notification->created_at->format('d/m/Y H:i') }}</p>
