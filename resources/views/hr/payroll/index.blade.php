@@ -22,11 +22,12 @@
                         @if(!empty($paymentFocus))
                             Chỉ phiếu nhân viên đã xác nhận. Kế toán thanh toán → salary_payment → Đã trả. Không thanh toán phiếu chưa xác nhận hoặc đã trả.
                         @elseif(!empty($hrWorkOnly))
-                            HR đối chiếu hợp đồng (lương CB, phụ cấp), ngày công, giờ làm, tăng ca và nghỉ phép. Kế toán mới tính các khoản phát sinh và thực nhận sau khi HR chốt.
+                            HR đối chiếu hợp đồng (lương CB, phụ cấp), ngày công, giờ làm, tăng ca và nghỉ phép.
+                            Quy trình kỳ: Khóa kỳ → HR xác nhận nguồn → Kế toán tính → HR kiểm tra phiếu → Giám đốc duyệt → NV xác nhận → Kế toán thanh toán.
                             Kỳ lương từ {{ $periodMeta['start_label'] ?? '01/'.sprintf('%02d/%d', $month, $year) }} đến {{ $periodMeta['end_label'] ?? '' }}.
                             {{ $periodMeta['formula_label'] ?? '' }}
                         @else
-                            HR kiểm tra ngày công / nghỉ phép → Chốt gửi kế toán tính → Kế toán tính lương → HR xác nhận phiếu đã tính → Giám đốc phê duyệt cuối → Nhân viên xác nhận → Kế toán thanh toán.
+                            Khóa kỳ → HR xác nhận nguồn → Kế toán tính lương → HR kiểm tra phiếu đã tính → Giám đốc phê duyệt → Nhân viên xác nhận → Kế toán thanh toán.
                         @endif
                     </p>
                 </div>
@@ -39,6 +40,8 @@
                     $canBulkHrReview = $user->canManageHr();
                     $canBulkFinalApprove = $user->canFinalApprovePayroll();
                     $periodLocked = (bool) optional($periodLock ?? null)->is_locked;
+                    $periodVerified = (bool) optional($periodLock ?? null)->hr_verified_at;
+                    $unlockPending = optional($periodLock ?? null)->unlock_request_status === 'pending';
                     $periodMeta = $periodMeta ?? app(\App\Services\PayrollCalculationService::class)->periodMeta((int) $month, (int) $year);
                     $hrWorkOnly = !empty($hrWorkOnly);
                     $contractTypeLabel = function (?string $type): string {
@@ -116,53 +119,111 @@
                         {{ $periodMeta['formula_label'] }}.
                     </p>
 
-                    @if($user->canManageHr())
-                        @if($periodLocked)
-                            <form method="POST" action="{{ route('payroll.period.unlock') }}"
-                                  data-confirm="Hủy chốt lương kỳ {{ sprintf('%02d/%d', $month, $year) }}? Sau đó có thể sửa chấm công/nghỉ phép. Phải chốt lại trước khi Kế toán tính.">
-                                @csrf
-                                <input type="hidden" name="month" value="{{ $month }}">
-                                <input type="hidden" name="year" value="{{ $year }}">
-                                <div class="d-flex gap-2 flex-wrap align-items-end">
-                                    <div style="flex:1;min-width:220px;">
-                                        <label class="form-label mb-1">Kỳ {{ sprintf('%02d/%d', $month, $year) }} đã chốt — đã gửi kế toán</label>
-                                        <input type="text" name="unlock_reason" class="form-control" required minlength="10" maxlength="500"
-                                               placeholder="Lý do mở khóa (bắt buộc ≥ 10 ký tự, ghi nhật ký)">
+                    @if($user->canManageHr() || $user->canActAsDirector())
+                        <div class="border rounded-3 p-3 mb-2" style="background:#f8fafc;">
+                            @if(! $periodLocked)
+                                <p class="mb-2 fw-semibold">Kỳ đang mở</p>
+                                @if($user->canManageHr())
+                                    <form method="POST" action="{{ route('payroll.period.lock') }}"
+                                          data-confirm="Khóa kỳ {{ sprintf('%02d/%d', $month, $year) }}? Sau khi khóa, không sửa chấm công/nghỉ phép cho đến khi Giám đốc duyệt mở khóa.">
+                                        @csrf
+                                        <input type="hidden" name="month" value="{{ $month }}">
+                                        <input type="hidden" name="year" value="{{ $year }}">
+                                        <button type="submit" class="btn btn-primary">Khóa lại kỳ</button>
+                                    </form>
+                                    <p class="text-muted mb-0 mt-1" style="font-size:12px;">Đối chiếu bảng số liệu bên dưới trước khi khóa. Sau khi khóa còn phải bấm xác nhận nguồn.</p>
+                                    @if(optional($periodLock ?? null)->unlock_reason)
+                                        <p class="text-muted mb-0 mt-1" style="font-size:12px;">
+                                            Lần mở khóa trước: {{ $periodLock->unlock_reason }}
+                                            @if($periodLock->unlocked_at)
+                                                · {{ $periodLock->unlocked_at->format('d/m/Y H:i') }}
+                                            @endif
+                                        </p>
+                                    @endif
+                                @endif
+                            @elseif($unlockPending)
+                                <p class="mb-2 fw-semibold text-warning">Đang chờ Giám đốc duyệt mở khóa kỳ {{ sprintf('%02d/%d', $month, $year) }}</p>
+                                <p class="text-muted small mb-2">
+                                    Lý do: {{ $periodLock->unlock_request_reason }}
+                                    @if($periodLock->unlock_requested_at)
+                                        · gửi {{ $periodLock->unlock_requested_at->format('d/m/Y H:i') }}
+                                    @endif
+                                </p>
+                                @if($user->canActAsDirector())
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <form method="POST" action="{{ route('payroll.period.unlock.approve') }}"
+                                              data-confirm="Duyệt mở khóa kỳ {{ sprintf('%02d/%d', $month, $year) }}?">
+                                            @csrf
+                                            <input type="hidden" name="month" value="{{ $month }}">
+                                            <input type="hidden" name="year" value="{{ $year }}">
+                                            <button type="submit" class="btn btn-success">Duyệt mở khóa</button>
+                                        </form>
+                                        <form method="POST" action="{{ route('payroll.period.unlock.reject') }}"
+                                              data-confirm="Từ chối mở khóa kỳ {{ sprintf('%02d/%d', $month, $year) }}?">
+                                            @csrf
+                                            <input type="hidden" name="month" value="{{ $month }}">
+                                            <input type="hidden" name="year" value="{{ $year }}">
+                                            <button type="submit" class="btn btn-outline-danger">Từ chối</button>
+                                        </form>
                                     </div>
-                                    <button type="submit" class="btn btn-outline-danger">Hủy chốt lương</button>
-                                </div>
-                                <p class="text-muted mb-0 mt-1" style="font-size:12px;">
+                                @else
+                                    <p class="text-muted mb-0" style="font-size:12px;">Kỳ vẫn khóa. Không thể xác nhận nguồn hay tính lương khi yêu cầu đang chờ duyệt.</p>
+                                @endif
+                            @else
+                                <p class="mb-2 fw-semibold">
+                                    @if($periodVerified)
+                                        Đã chốt + HR đã xác nhận nguồn — Kế toán được tính
+                                    @else
+                                        Đã chốt — HR đang kiểm tra
+                                    @endif
+                                </p>
+                                <p class="text-muted mb-2" style="font-size:12px;">
                                     Chốt lúc {{ optional($periodLock->locked_at)->format('d/m/Y H:i') }}
                                     @if($periodLock->locker)
                                         · {{ $periodLock->locker->name }}
                                     @endif
-                                    @if($payrolls->isEmpty())
-                                        · Chờ kế toán tính lương
+                                    @if($periodVerified && $periodLock->hr_verified_at)
+                                        · Xác nhận nguồn {{ $periodLock->hr_verified_at->format('d/m/Y H:i') }}
                                     @endif
                                 </p>
-                            </form>
-                        @else
-                            <form method="POST" action="{{ route('payroll.period.lock') }}"
-                                  data-confirm="Chốt dữ liệu kỳ {{ sprintf('%02d/%d', $month, $year) }}? Sau khi chốt, không sửa chấm công/nghỉ phép của kỳ; Kế toán mới được tính lương.">
-                                @csrf
-                                <input type="hidden" name="month" value="{{ $month }}">
-                                <input type="hidden" name="year" value="{{ $year }}">
-                                <button type="submit" class="btn btn-primary">
-                                    Đã kiểm tra — chốt và gửi kế toán tính lương
-                                </button>
-                                <p class="text-muted mb-0 mt-1" style="font-size:12px;">Đối chiếu bảng số liệu bên dưới trước khi chốt.</p>
-                                @if(optional($periodLock ?? null)->unlock_reason)
-                                    <p class="text-muted mb-0 mt-1" style="font-size:12px;">
-                                        Lần mở khóa trước: {{ $periodLock->unlock_reason }}
-                                        @if($periodLock->unlocked_at)
-                                            · {{ $periodLock->unlocked_at->format('d/m/Y H:i') }}
-                                        @endif
-                                    </p>
+                                @if($user->canManageHr())
+                                    <div class="d-flex gap-2 flex-wrap align-items-end">
+                                        @unless($periodVerified)
+                                            <form method="POST" action="{{ route('payroll.period.verify') }}"
+                                                  data-confirm="Xác nhận đã kiểm tra nguồn kỳ {{ sprintf('%02d/%d', $month, $year) }} và gửi Kế toán tính lương?">
+                                                @csrf
+                                                <input type="hidden" name="month" value="{{ $month }}">
+                                                <input type="hidden" name="year" value="{{ $year }}">
+                                                <button type="submit" class="btn btn-success">Đã kiểm tra nguồn — gửi kế toán tính</button>
+                                            </form>
+                                        @endunless
+                                        <form method="POST" action="{{ route('payroll.period.unlock') }}"
+                                              data-confirm="Gửi yêu cầu mở khóa kỳ {{ sprintf('%02d/%d', $month, $year) }} cho Giám đốc duyệt?">
+                                            @csrf
+                                            <input type="hidden" name="month" value="{{ $month }}">
+                                            <input type="hidden" name="year" value="{{ $year }}">
+                                            <div class="d-flex gap-2 flex-wrap align-items-end">
+                                                <div style="flex:1;min-width:220px;">
+                                                    <input type="text" name="unlock_reason" class="form-control" required minlength="10" maxlength="500"
+                                                           placeholder="Lý do mở khóa (≥ 10 ký tự, gửi Giám đốc)">
+                                                </div>
+                                                <button type="submit" class="btn btn-outline-danger">Yêu cầu mở khóa</button>
+                                            </div>
+                                        </form>
+                                    </div>
                                 @endif
-                            </form>
-                        @endif
-                    @elseif($canGenerate && ! $periodLocked)
-                        <p class="text-muted mb-0" style="font-size:13px;">HR chưa kiểm tra và chốt kỳ {{ sprintf('%02d/%d', $month, $year) }}. Kế toán chưa được tính lương.</p>
+                            @endif
+                        </div>
+                    @elseif($canGenerate && (! $periodLocked || ! $periodVerified || $unlockPending))
+                        <p class="text-muted mb-0" style="font-size:13px;">
+                            @if(! $periodLocked)
+                                HR chưa khóa kỳ {{ sprintf('%02d/%d', $month, $year) }}. Kế toán chưa được tính lương.
+                            @elseif($unlockPending)
+                                Kỳ đang chờ Giám đốc duyệt mở khóa. Kế toán chưa được tính lương.
+                            @else
+                                HR đã khóa nhưng chưa xác nhận nguồn kỳ {{ sprintf('%02d/%d', $month, $year) }}. Kế toán chưa được tính lương.
+                            @endif
+                        </p>
                     @endif
 
                     @if($canBulkHrReview && $pendingHrCount > 0)

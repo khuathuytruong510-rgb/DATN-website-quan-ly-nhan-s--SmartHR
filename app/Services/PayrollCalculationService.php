@@ -434,6 +434,23 @@ class PayrollCalculationService
             'status' => PayrollPaymentWorkflowService::CALCULATED,
         ]);
 
+        // Tính lại từ vòng sự cố: xóa dấu vết issue / xác nhận cũ (giống remediateIssue).
+        if ($existing && $existing->status === PayrollPaymentWorkflowService::PAYROLL_ISSUE) {
+            $payload = array_merge($payload, [
+                'issue_report' => null,
+                'issue_reported_at' => null,
+                'confirmation_status' => 'pending',
+                'confirmed_at' => null,
+                'confirmation_token' => null,
+                'confirmation_deadline' => null,
+                'sent_at' => null,
+                'email_status' => 'pending',
+                'director_approved_by' => null,
+                'director_approved_name' => null,
+                'director_approved_at' => null,
+            ]);
+        }
+
         if ($existing) {
             $existing->fill($payload)->save();
 
