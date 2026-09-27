@@ -36,6 +36,7 @@ class Employee extends Model
         'education',
         'experience',
         'leave_balance',
+        'number_of_dependents',
         'position_id',
         'bank_name',
         'account_number',
@@ -55,6 +56,7 @@ class Employee extends Model
         'dob' => 'date',
         'start_date' => 'date',
         'terminated_at' => 'date',
+        'number_of_dependents' => 'integer',
     ];
 
     public static function workingStatuses(): array

@@ -7,9 +7,11 @@ use Illuminate\Http\Request;
 
 class EnsureAdminOrHr
 {
-    /** Kế toán chỉ được GHI các thao tác tính/chi lương, không ghi dữ liệu nhân sự. */
+    /** Kế toán chỉ được GHI các thao tác tính/gửi duyệt/chi lương, không ghi dữ liệu nhân sự. */
     private const ACCOUNTANT_WRITE_ROUTES = [
         'payroll.generate',
+        'payroll.review',
+        'payroll.review_all',
         'payroll.email.send_all',
         'payroll.email.send',
         'payroll.payment.confirm',

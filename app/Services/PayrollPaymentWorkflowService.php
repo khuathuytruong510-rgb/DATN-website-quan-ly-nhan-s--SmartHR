@@ -28,10 +28,10 @@ class PayrollPaymentWorkflowService
     /** Kế toán đang chuẩn bị bảng lương. */
     public const DRAFT = 'draft';
 
-    /** Kế toán đã tính xong, chờ HR kiểm tra dữ liệu nhân sự. */
+    /** Hệ thống đã tính xong, chờ Kế toán gửi Giám đốc duyệt. */
     public const CALCULATED = 'calculated';
 
-    /** HR đã kiểm tra/xác nhận dữ liệu bảng lương, chờ Giám đốc. */
+    /** Kế toán đã gửi duyệt (giữ mã DB hr_checked), chờ Giám đốc. */
     public const HR_CHECKED = 'hr_checked';
 
     /** @deprecated Dùng HR_CHECKED. */
@@ -110,9 +110,9 @@ class PayrollPaymentWorkflowService
     public function statusLabel(?string $status): string
     {
         return match ($status) {
-            self::DRAFT => 'Nháp — kế toán đang chuẩn bị',
-            self::CALCULATED, 'pending' => 'Kế toán đã tính — chờ HR kiểm tra',
-            self::HR_CHECKED, 'hr_approved', 'hr_reviewed' => 'HR đã kiểm tra dữ liệu — chờ Giám đốc',
+            self::DRAFT => 'Nháp — đang chuẩn bị',
+            self::CALCULATED, 'pending' => 'Hệ thống đã tính — chờ Kế toán gửi duyệt',
+            self::HR_CHECKED, 'hr_approved', 'hr_reviewed' => 'Kế toán đã gửi duyệt — chờ Giám đốc',
             self::DIRECTOR_APPROVED, 'waiting_confirmation', 'approved' => 'Giám đốc đã duyệt — chờ NV xác nhận',
             self::PAYROLL_ISSUE => 'Sự cố lương — chờ HR/Kế toán xử lý',
             self::EMPLOYEE_CONFIRMED => 'NV đã xác nhận — đủ điều kiện thanh toán',
@@ -142,9 +142,16 @@ class PayrollPaymentWorkflowService
         return in_array($status, self::directorApprovedStatuses(), true);
     }
 
-    public function canReviewByHr(Payroll $payroll): bool
+    /** Phiếu đã tính xong, Kế toán được gửi Giám đốc duyệt. */
+    public function canSubmitToDirector(Payroll $payroll): bool
     {
         return $this->isCalculated($payroll->status);
+    }
+
+    /** @deprecated Dùng canSubmitToDirector() — bước này do Kế toán thực hiện. */
+    public function canReviewByHr(Payroll $payroll): bool
+    {
+        return $this->canSubmitToDirector($payroll);
     }
 
     public function canFinalApprove(Payroll $payroll): bool
@@ -152,9 +159,15 @@ class PayrollPaymentWorkflowService
         return $this->isHrApproved($payroll->status);
     }
 
+    public function actorCanSubmitToDirector(?User $user, Payroll $payroll): bool
+    {
+        return $user && $user->canPayPayroll() && $this->canSubmitToDirector($payroll);
+    }
+
+    /** @deprecated Dùng actorCanSubmitToDirector() */
     public function actorCanReview(?User $user, Payroll $payroll): bool
     {
-        return $user && $user->canManageHr() && $this->canReviewByHr($payroll);
+        return $this->actorCanSubmitToDirector($user, $payroll);
     }
 
     public function actorCanFinalApprove(?User $user, Payroll $payroll): bool
@@ -206,7 +219,7 @@ class PayrollPaymentWorkflowService
     public function assertTransition(Payroll $payroll, string $to, ?User $actor = null): void
     {
         $allowed = match ($to) {
-            self::HR_CHECKED => $this->canReviewByHr($payroll) && $actor?->canManageHr(),
+            self::HR_CHECKED => $this->canSubmitToDirector($payroll) && $actor?->canPayPayroll(),
             self::DIRECTOR_APPROVED => $this->canFinalApprove($payroll) && $actor?->canFinalApprovePayroll(),
             self::EMPLOYEE_CONFIRMED => $this->canConfirm($payroll),
             self::PAYROLL_ISSUE => $this->canReportIssue($payroll),
@@ -352,9 +365,10 @@ class PayrollPaymentWorkflowService
     }
 
     /**
-     * HR kiểm tra dữ liệu nhân sự trên bảng lương (không phải phê duyệt tài chính).
+     * Kế toán kiểm tra phiếu đã tính → gửi Giám đốc duyệt.
+     * Giữ status DB `hr_checked` để tương thích dữ liệu cũ.
      */
-    public function reviewByHr(Payroll $payroll, ?User $actor = null): Payroll
+    public function submitToDirector(Payroll $payroll, ?User $actor = null): Payroll
     {
         $actor ??= Auth::user();
 
@@ -370,12 +384,89 @@ class PayrollPaymentWorkflowService
 
             ActivityLog::create([
                 'user_id' => $actor->id,
-                'action' => 'payroll_hr_checked',
+                'action' => 'payroll_submitted_to_director',
                 'meta' => 'payroll:'.$payroll->id,
             ]);
 
             return $payroll->fresh(['employee']);
         });
+    }
+
+    /** @deprecated Dùng submitToDirector() */
+    public function reviewByHr(Payroll $payroll, ?User $actor = null): Payroll
+    {
+        return $this->submitToDirector($payroll, $actor);
+    }
+
+    /**
+     * Kế toán gửi duyệt tất cả phiếu đã tính trong kỳ.
+     *
+     * @return array{ok: int, failed: int}
+     */
+    public function submitAllToDirector(int $month, int $year, User $actor): array
+    {
+        if (! $actor->canPayPayroll()) {
+            throw new RuntimeException('Chỉ kế toán được gửi bảng lương sang Giám đốc duyệt.');
+        }
+
+        $pending = Payroll::query()
+            ->where('month', $month)
+            ->where('year', $year)
+            ->whereIn('status', self::calculatedStatuses())
+            ->orderBy('id')
+            ->get();
+
+        $ok = 0;
+        $failed = 0;
+        foreach ($pending as $payroll) {
+            try {
+                $this->submitToDirector($payroll, $actor);
+                $ok++;
+            } catch (\Throwable) {
+                $failed++;
+            }
+        }
+
+        return compact('ok', 'failed');
+    }
+
+    /**
+     * Kế toán thanh toán tất cả phiếu NV đã xác nhận trong kỳ.
+     *
+     * @return array{ok: int, failed: int}
+     */
+    public function payAll(int $month, int $year, User $actor, array $data = []): array
+    {
+        if (! $actor->canPayPayroll()) {
+            throw new RuntimeException('Chỉ kế toán được thanh toán bảng lương.');
+        }
+
+        $pending = Payroll::query()
+            ->with('employee')
+            ->where('month', $month)
+            ->where('year', $year)
+            ->whereIn('status', self::payableStatuses())
+            ->orderBy('id')
+            ->get();
+
+        $method = $data['payment_method'] ?? 'cash';
+        $ok = 0;
+        $failed = 0;
+        foreach ($pending as $payroll) {
+            try {
+                $payload = ['payment_method' => $method];
+                if ($method === 'bank_transfer') {
+                    $payload['transaction_code'] = $data['transaction_code']
+                        ?? ('BULK-'.$payroll->id.'-'.now()->format('YmdHis'));
+                }
+                $this->markPaid($payroll, $payload, $actor);
+                $ok++;
+            } catch (\Throwable) {
+                $failed++;
+            }
+        }
+
+        return compact('ok', 'failed');
     }
 
     /**
@@ -432,34 +523,14 @@ class PayrollPaymentWorkflowService
         return $payroll->fresh(['employee']);
     }
 
-    /** Automatically complete outstanding HR and director steps for one payroll period. */
+    /**
+     * Legacy no-op: gửi duyệt (Kế toán) và phê duyệt (Giám đốc) là thao tác thủ công.
+     *
+     * @return array{reviewed: int, approved: int}
+     */
     public function autoFinalizePeriod(int $month, int $year): array
     {
-        $reviewed = 0;
-        $approved = 0;
-        $statuses = array_merge(self::calculatedStatuses(), self::hrCheckedStatuses());
-        $payrolls = Payroll::query()
-            ->where('month', $month)
-            ->where('year', $year)
-            ->whereIn('status', $statuses)
-            ->orderBy('id')
-            ->get();
-
-        foreach ($payrolls as $payroll) {
-            if ($this->isCalculated($payroll->status)) {
-                [$payroll, $wasReviewed] = $this->autoReviewBySystem($payroll);
-                if (! $payroll) {
-                    continue;
-                }
-                $reviewed += $wasReviewed ? 1 : 0;
-            }
-
-            if ($this->isHrChecked($payroll->status) && $this->autoApproveBySystem($payroll)) {
-                $approved++;
-            }
-        }
-
-        return compact('reviewed', 'approved');
+        return ['reviewed' => 0, 'approved' => 0];
     }
 
     /** @return array{0: ?Payroll, 1: bool} */

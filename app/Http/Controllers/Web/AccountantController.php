@@ -76,10 +76,25 @@ class AccountantController extends Controller
         }
 
         $payrolls = $query->paginate(15)->withQueryString();
+        $filterMonth = $month >= 1 && $month <= 12 ? $month : (int) now()->month;
+        $filterYear = $year >= 2000 && $year <= 2100 ? $year : (int) now()->year;
+        $workflow = app(PayrollPaymentWorkflowService::class);
 
         return view('accountant.payroll.index', [
             'payrolls' => $payrolls,
-            'workflow' => app(PayrollPaymentWorkflowService::class),
+            'workflow' => $workflow,
+            'filterMonth' => $filterMonth,
+            'filterYear' => $filterYear,
+            'pendingSubmitCount' => Payroll::query()
+                ->where('month', $filterMonth)
+                ->where('year', $filterYear)
+                ->whereIn('status', PayrollPaymentWorkflowService::calculatedStatuses())
+                ->count(),
+            'pendingPayCount' => Payroll::query()
+                ->where('month', $filterMonth)
+                ->where('year', $filterYear)
+                ->whereIn('status', PayrollPaymentWorkflowService::payableStatuses())
+                ->count(),
             'payrollYears' => Payroll::query()
                 ->select('year')
                 ->distinct()
@@ -224,6 +239,72 @@ class AccountantController extends Controller
         }
 
         return redirect()->route('accountant.payroll.index')->with('success', "Đã gửi {$sent} bảng lương. {$failed} thất bại.");
+    }
+
+    /** Kế toán gửi duyệt tất cả phiếu đã tính → Giám đốc. */
+    public function submitAllToDirector(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $user?->canPayPayroll()) {
+            abort(403, 'Chỉ kế toán được gửi duyệt bảng lương.');
+        }
+
+        $data = $request->validate([
+            'month' => ['required', 'integer', 'min:1', 'max:12'],
+            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
+        ]);
+
+        $workflow = app(PayrollPaymentWorkflowService::class);
+        $result = $workflow->submitAllToDirector((int) $data['month'], (int) $data['year'], $user);
+
+        if ($result['ok'] === 0 && $result['failed'] === 0) {
+            return back()->with('error', 'Không có phiếu nào đang chờ gửi Giám đốc duyệt.');
+        }
+
+        $msg = "Đã gửi duyệt {$result['ok']} phiếu sang Giám đốc.";
+        if ($result['failed'] > 0) {
+            $msg .= " {$result['failed']} phiếu lỗi/bỏ qua.";
+        }
+
+        return redirect()
+            ->route('accountant.payroll.index', ['month' => $data['month'], 'year' => $data['year']])
+            ->with('success', $msg);
+    }
+
+    /** Kế toán thanh toán tất cả phiếu NV đã xác nhận. */
+    public function payAll(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $user?->canPayPayroll()) {
+            abort(403, 'Chỉ kế toán được thanh toán bảng lương.');
+        }
+
+        $data = $request->validate([
+            'month' => ['required', 'integer', 'min:1', 'max:12'],
+            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
+            'payment_method' => ['nullable', 'in:cash,bank_transfer'],
+        ]);
+
+        $workflow = app(PayrollPaymentWorkflowService::class);
+        $result = $workflow->payAll(
+            (int) $data['month'],
+            (int) $data['year'],
+            $user,
+            ['payment_method' => $data['payment_method'] ?? 'cash']
+        );
+
+        if ($result['ok'] === 0 && $result['failed'] === 0) {
+            return back()->with('error', 'Không có phiếu nào đủ điều kiện thanh toán trong kỳ này.');
+        }
+
+        $msg = "Đã thanh toán {$result['ok']} phiếu.";
+        if ($result['failed'] > 0) {
+            $msg .= " {$result['failed']} phiếu lỗi/bỏ qua (thiếu STK hoặc không hợp lệ).";
+        }
+
+        return redirect()
+            ->route('accountant.payroll.index', ['month' => $data['month'], 'year' => $data['year']])
+            ->with('success', $msg);
     }
 
     public function payrollGenerate(

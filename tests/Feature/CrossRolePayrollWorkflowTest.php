@@ -127,23 +127,11 @@ class CrossRolePayrollWorkflowTest extends TestCase
 
         $this->actingAs($hr)->post(route('payroll.period.verify'), ['month' => 8, 'year' => 2026])->assertRedirect();
 
-        // 2. Chỉ KT tính; client không được gửi total_salary / status
-        $this->actingAs($aliceUser)->post(route('accountant.payroll.generate_post'), ['month' => '2026-08'])->assertForbidden();
-        $this->actingAs($hr)->post(route('payroll.generate'), ['month' => 8, 'year' => 2026])->assertForbidden();
-        $this->actingAs($gd)->post(route('payroll.generate'), ['month' => 8, 'year' => 2026])->assertForbidden();
-
-        $this->actingAs($kt)->post(route('accountant.payroll.generate_post'), [
-            'month' => '2026-08',
-            'status' => PayrollPaymentWorkflowService::PAID,
-            'total_salary' => 999999999,
-            'employee_id' => $bob->id,
-        ])->assertRedirect()->assertSessionHas('success');
-
+        // 2. HR xác nhận → hệ thống tự tính; client không ghi đè total_salary / status
         $alicePayroll = $this->aliceSlip($alice);
         $bobPayroll = $this->bobSlip($bob);
         $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $alicePayroll->status);
         $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $bobPayroll->status);
-        $this->assertNotEquals(999999999, (float) $alicePayroll->total_salary);
         $this->assertSame($alice->id, (int) $alicePayroll->employee_id);
         $this->assertNull($alicePayroll->paid_at);
 
@@ -156,11 +144,11 @@ class CrossRolePayrollWorkflowTest extends TestCase
         $this->pay($aliceUser, $alicePayroll)->assertForbidden();
         $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $alicePayroll->fresh()->status);
 
-        // 3. Chỉ HR kiểm tra; mass-assign bị bỏ
-        $this->actingAs($kt)->post(route('payroll.review', $alicePayroll))->assertForbidden();
+        // 3. Chỉ KT gửi duyệt; HR/GĐ/NV không gửi được
+        $this->actingAs($hr)->post(route('payroll.review', $alicePayroll))->assertForbidden();
         $this->actingAs($gd)->post(route('payroll.review', $alicePayroll))->assertForbidden();
         $this->actingAs($aliceUser)->post(route('payroll.review', $alicePayroll))->assertForbidden();
-        $this->actingAs($hr)->post(route('payroll.review', $alicePayroll), [
+        $this->actingAs($kt)->post(route('payroll.review', $alicePayroll), [
             'status' => PayrollPaymentWorkflowService::PAID,
             'total_salary' => 999999999,
             'employee_id' => $bob->id,
@@ -170,7 +158,7 @@ class CrossRolePayrollWorkflowTest extends TestCase
         $this->assertNotEquals(999999999, (float) $alicePayroll->total_salary);
         $this->assertSame($alice->id, (int) $alicePayroll->employee_id);
 
-        // Phá workflow lúc HR_CHECKED
+        // Phá workflow lúc đã gửi duyệt
         $this->actingAs($aliceUser)->post(route('me.payroll.confirm', $alicePayroll))->assertRedirect();
         $this->pay($kt, $alicePayroll)->assertRedirect();
         $this->pay($hr, $alicePayroll)->assertForbidden();
@@ -303,7 +291,7 @@ class CrossRolePayrollWorkflowTest extends TestCase
         $this->actingAs($kt)->post(route('accountant.payroll.generate_post'), ['month' => '2026-07'])->assertRedirect();
 
         $payroll = $this->aliceSlip($alice, 7);
-        $this->actingAs($hr)->post(route('payroll.review', $payroll))->assertRedirect();
+        $this->actingAs($kt)->post(route('payroll.review', $payroll))->assertRedirect();
         $this->actingAs($gd)->post(route('payroll.approve', $payroll->fresh()))->assertRedirect();
         $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $payroll->fresh()->status);
 
@@ -328,8 +316,8 @@ class CrossRolePayrollWorkflowTest extends TestCase
         $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $payroll->fresh()->status);
         $this->assertDatabaseMissing('salary_payments', ['payroll_id' => $payroll->id]);
 
-        // Phải đi lại: HR kiểm tra → GĐ duyệt → NV xác nhận → KT thanh toán
-        $this->actingAs($hr)->post(route('payroll.review', $payroll->fresh()))->assertRedirect();
+        // Phải đi lại: KT gửi duyệt → GĐ duyệt → NV xác nhận → KT thanh toán
+        $this->actingAs($kt)->post(route('payroll.review', $payroll->fresh()))->assertRedirect();
         $this->assertSame(PayrollPaymentWorkflowService::HR_CHECKED, $payroll->fresh()->status);
         $this->pay($kt, $payroll->fresh())->assertRedirect();
 
@@ -386,7 +374,7 @@ class CrossRolePayrollWorkflowTest extends TestCase
         $this->assertSame(PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, $bobConfirmed->fresh()->status);
 
         // KT không chiếm bước HR / GĐ trên cùng ID
-        $this->actingAs($kt)->post(route('payroll.review', $aliceChecked))->assertForbidden();
+        $this->actingAs($hr)->post(route('payroll.review', $aliceChecked))->assertForbidden();
         $this->actingAs($kt)->post(route('payroll.approve', $aliceChecked))->assertForbidden();
         $this->assertSame(PayrollPaymentWorkflowService::HR_CHECKED, $aliceChecked->fresh()->status);
 

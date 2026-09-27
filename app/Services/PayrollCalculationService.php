@@ -17,22 +17,188 @@ use Illuminate\Support\Facades\Schema;
 
 class PayrollCalculationService
 {
+    /**
+     * Thuế TNCN theo biểu lũy tiến từng phần (tháng).
+     * Luật thuế TNCN / Thông tư 111/2013/TT-BTC:
+     * 0–5tr: 5%; 5–10tr: 10%; 10–18tr: 15%; 18–32tr: 20%;
+     * 32–52tr: 25%; 52–80tr: 30%; >80tr: 35%.
+     */
     public function calculateTax(float $taxableIncome): float
     {
-        if ($taxableIncome <= 5000000) {
-            return 0;
-        } elseif ($taxableIncome <= 10000000) {
-            return ($taxableIncome - 5000000) * 0.05;
-        } elseif ($taxableIncome <= 18000000) {
-            return 250000 + (($taxableIncome - 10000000) * 0.10);
-        } elseif ($taxableIncome <= 32000000) {
-            return 1050000 + (($taxableIncome - 18000000) * 0.15);
-        } elseif ($taxableIncome <= 52000000) {
-            return 3150000 + (($taxableIncome - 32000000) * 0.20);
-        } elseif ($taxableIncome <= 80000000) {
-            return 7150000 + (($taxableIncome - 52000000) * 0.25);
-        } else {
-            return 14150000 + (($taxableIncome - 80000000) * 0.30);
+        return $this->calculateTaxBreakdown($taxableIncome)['tax'];
+    }
+
+    /**
+     * BHXH 8% + BHYT 1,5% + BHTN 1% trên mức đóng, có trần theo luật.
+     *
+     * @return array{
+     *     base: float,
+     *     bhxh_rate: float,
+     *     bhyt_rate: float,
+     *     bhtn_rate: float,
+     *     bhxh_bhyt_cap: float,
+     *     bhtn_cap: float,
+     *     bhxh_bhyt_base: float,
+     *     bhtn_base: float,
+     *     bhxh: float,
+     *     bhyt: float,
+     *     bhtn: float,
+     *     total: float,
+     *     rate: float,
+     *     employer_bhxh: float,
+     *     employer_bhyt: float,
+     *     employer_bhtn: float,
+     *     employer_total: float
+     * }
+     */
+    public function calculateInsuranceBreakdown(float $insuranceBase): array
+    {
+        $base = max(0.0, $insuranceBase);
+        $bhxhRate = max(0.0, (float) $this->payrollConfig('insurance.bhxh_rate', 0.08));
+        $bhytRate = max(0.0, (float) $this->payrollConfig('insurance.bhyt_rate', 0.015));
+        $bhtnRate = max(0.0, (float) $this->payrollConfig('insurance.bhtn_rate', 0.01));
+        $employerBhxhRate = max(0.0, (float) $this->payrollConfig('insurance.employer_bhxh_rate', 0.175));
+        $employerBhytRate = max(0.0, (float) $this->payrollConfig('insurance.employer_bhyt_rate', 0.03));
+        $employerBhtnRate = max(0.0, (float) $this->payrollConfig('insurance.employer_bhtn_rate', 0.01));
+        $multiplier = max(1, (int) $this->payrollConfig('insurance.cap_multiplier', 20));
+        $socialBase = max(0.0, (float) $this->payrollConfig('insurance.base_salary', 2_340_000));
+        $regionalMin = max(0.0, (float) $this->payrollConfig('insurance.regional_minimum_wage', 4_960_000));
+
+        $bhxhBhytCap = $multiplier * $socialBase;
+        $bhtnCap = $multiplier * $regionalMin;
+        $bhxhBhytBase = $bhxhBhytCap > 0 ? min($base, $bhxhBhytCap) : $base;
+        $bhtnBase = $bhtnCap > 0 ? min($base, $bhtnCap) : $base;
+
+        $bhxh = round($bhxhBhytBase * $bhxhRate, 2);
+        $bhyt = round($bhxhBhytBase * $bhytRate, 2);
+        $bhtn = round($bhtnBase * $bhtnRate, 2);
+        $total = round($bhxh + $bhyt + $bhtn, 2);
+        $nominalRate = $bhxhRate + $bhytRate + $bhtnRate;
+        $effectiveRate = $base > 0 ? $total / $base : $nominalRate;
+
+        $employerBhxh = round($bhxhBhytBase * $employerBhxhRate, 2);
+        $employerBhyt = round($bhxhBhytBase * $employerBhytRate, 2);
+        $employerBhtn = round($bhtnBase * $employerBhtnRate, 2);
+
+        return [
+            'base' => $base,
+            'bhxh_rate' => $bhxhRate,
+            'bhyt_rate' => $bhytRate,
+            'bhtn_rate' => $bhtnRate,
+            'bhxh_bhyt_cap' => $bhxhBhytCap,
+            'bhtn_cap' => $bhtnCap,
+            'bhxh_bhyt_base' => $bhxhBhytBase,
+            'bhtn_base' => $bhtnBase,
+            'bhxh' => $bhxh,
+            'bhyt' => $bhyt,
+            'bhtn' => $bhtn,
+            'total' => $total,
+            'rate' => $effectiveRate,
+            'employer_bhxh_rate' => $employerBhxhRate,
+            'employer_bhyt_rate' => $employerBhytRate,
+            'employer_bhtn_rate' => $employerBhtnRate,
+            'employer_bhxh' => $employerBhxh,
+            'employer_bhyt' => $employerBhyt,
+            'employer_bhtn' => $employerBhtn,
+            'employer_total' => round($employerBhxh + $employerBhyt + $employerBhtn, 2),
+        ];
+    }
+
+    public function calculateInsurance(float $insuranceBase): float
+    {
+        return $this->calculateInsuranceBreakdown($insuranceBase)['total'];
+    }
+
+    /**
+     * Chi tiết thuế theo từng bậc lũy tiến.
+     *
+     * @return array{
+     *     taxable_income: float,
+     *     tax: float,
+     *     segments: list<array{bracket: int, from: float, to: float|null, rate: float, taxable_in_bracket: float, tax: float}>
+     * }
+     */
+    public function calculateTaxBreakdown(float $taxableIncome): array
+    {
+        $taxableIncome = max(0.0, $taxableIncome);
+        $segments = [];
+        $tax = 0.0;
+        $previousCeiling = 0.0;
+        $bracket = 0;
+
+        foreach ($this->pitBrackets() as [$ceiling, $rate]) {
+            $bracket++;
+            $rate = max(0.0, (float) $rate);
+            $upper = $ceiling === null ? null : (float) $ceiling;
+            $segmentTaxable = $upper === null
+                ? max(0.0, $taxableIncome - $previousCeiling)
+                : max(0.0, min($taxableIncome, $upper) - $previousCeiling);
+
+            if ($segmentTaxable <= 0 && ($upper === null || $taxableIncome <= $previousCeiling)) {
+                break;
+            }
+
+            $segmentTax = round($segmentTaxable * $rate, 2);
+            if ($segmentTaxable > 0) {
+                $segments[] = [
+                    'bracket' => $bracket,
+                    'from' => $previousCeiling,
+                    'to' => $upper,
+                    'rate' => $rate,
+                    'taxable_in_bracket' => $segmentTaxable,
+                    'tax' => $segmentTax,
+                ];
+                $tax += $segmentTax;
+            }
+
+            if ($upper === null || $taxableIncome <= $upper) {
+                break;
+            }
+            $previousCeiling = $upper;
+        }
+
+        return [
+            'taxable_income' => $taxableIncome,
+            'tax' => round($tax, 2),
+            'segments' => $segments,
+        ];
+    }
+
+    /**
+     * @return list<array{0: int|float|null, 1: float}>
+     */
+    protected function pitBrackets(): array
+    {
+        $configured = $this->payrollConfig('pit_brackets', null);
+        if (is_array($configured) && $configured !== []) {
+            return $configured;
+        }
+
+        return [
+            [5_000_000, 0.05],
+            [10_000_000, 0.10],
+            [18_000_000, 0.15],
+            [32_000_000, 0.20],
+            [52_000_000, 0.25],
+            [80_000_000, 0.30],
+            [null, 0.35],
+        ];
+    }
+
+    protected function payrollConfig(string $key, mixed $default = null): mixed
+    {
+        if (! function_exists('config') || ! function_exists('app')) {
+            return $default;
+        }
+
+        try {
+            if (! app()->bound('config')) {
+                return $default;
+            }
+
+            return config('payroll.'.$key, $default);
+        } catch (\Throwable) {
+            return $default;
         }
     }
 
@@ -195,16 +361,26 @@ class PayrollCalculationService
      */
     protected function amountsFromPayroll(Payroll $payroll): array
     {
+        $daily = (float) ($payroll->daily_salary ?: ((float) $payroll->base_salary / $this->standardWorkingDays()));
+        $paidHolidayDays = (float) ($payroll->paid_holiday_days ?? 0);
+        $paidLeaveDays = (float) ($payroll->paid_leave_days ?? 0);
+        $workDays = (float) $payroll->working_days;
+        $actualWorking = (float) ($payroll->actual_working_salary ?? ($workDays * $daily));
+        $paidLeaveSalary = (float) ($payroll->paid_leave_salary ?? ($paidLeaveDays * $daily));
+        $paidHolidaySalary = (float) ($payroll->paid_holiday_salary ?? ($paidHolidayDays * $daily));
+
         return [
             'base_salary' => (float) $payroll->base_salary,
-            'daily_salary' => (float) ($payroll->daily_salary ?: ((float) $payroll->base_salary / $this->standardWorkingDays())),
+            'daily_salary' => $daily,
             'required_working_days' => (int) ($payroll->required_working_days ?: $this->standardWorkingDays()),
             'calendar_working_days' => $this->workingDaysInMonth(...$this->payrollMonthYear($payroll)),
-            'working_days' => (float) $payroll->working_days,
-            'paid_leave_days' => (float) ($payroll->paid_leave_days ?? 0),
+            'working_days' => $workDays,
+            'paid_leave_days' => $paidLeaveDays,
             'unpaid_leave_days' => (float) ($payroll->unpaid_leave_days ?? 0),
-            'paid_holiday_days' => (float) ($payroll->paid_holiday_days ?? 0),
-            'paid_holiday_salary' => (float) ($payroll->paid_holiday_days ?? 0) * (float) ($payroll->daily_salary ?: ((float) $payroll->base_salary / $this->standardWorkingDays())),
+            'paid_holiday_days' => $paidHolidayDays,
+            'actual_working_salary' => $actualWorking,
+            'paid_leave_salary' => $paidLeaveSalary,
+            'paid_holiday_salary' => $paidHolidaySalary,
             'holiday_work_salary' => (float) ($payroll->holiday_work_salary ?? 0),
             'weekly_rest_work_salary' => (float) ($payroll->weekly_rest_work_salary ?? 0),
             'working_salary' => (float) $payroll->working_salary,
@@ -215,9 +391,26 @@ class PayrollCalculationService
             'overtime_salary' => (float) ($payroll->overtime_salary ?? 0),
             'allowance' => (float) $payroll->allowance,
             'bonus' => (float) ($payroll->bonus ?? 0),
+            'gross_salary' => (float) (
+                $payroll->gross_salary
+                ?: (
+                    (float) $payroll->working_salary
+                    + (float) ($payroll->overtime_salary ?? 0)
+                    + (float) ($payroll->allowance ?? 0)
+                    + (float) ($payroll->bonus ?? 0)
+                )
+            ),
             'deduction' => (float) ($payroll->deduction ?? 0),
             'late_penalty_fee' => (float) ($payroll->late_penalty_fee ?? 0),
+            'insurance_base' => (float) ($payroll->insurance_base ?? $payroll->base_salary ?? 0),
+            'insurance_bhxh' => (float) ($payroll->insurance_bhxh ?? 0),
+            'insurance_bhyt' => (float) ($payroll->insurance_bhyt ?? 0),
+            'insurance_bhtn' => (float) ($payroll->insurance_bhtn ?? 0),
             'insurance' => (float) $payroll->insurance,
+            'personal_deduction_amount' => (float) ($payroll->personal_deduction_amount ?? 0),
+            'dependent_count' => (int) ($payroll->dependent_count ?? 0),
+            'dependent_deduction_amount' => (float) ($payroll->dependent_deduction_amount ?? 0),
+            'taxable_income' => (float) ($payroll->taxable_income ?? 0),
             'tax' => (float) $payroll->tax,
             'total_salary' => (float) $payroll->total_salary,
         ];
@@ -240,6 +433,23 @@ class PayrollCalculationService
         $payload = array_merge($this->buildAmounts($employee, $month, $year), [
             'status' => PayrollPaymentWorkflowService::CALCULATED,
         ]);
+
+        // Tính lại từ vòng sự cố: xóa dấu vết issue / xác nhận cũ (giống remediateIssue).
+        if ($existing && $existing->status === PayrollPaymentWorkflowService::PAYROLL_ISSUE) {
+            $payload = array_merge($payload, [
+                'issue_report' => null,
+                'issue_reported_at' => null,
+                'confirmation_status' => 'pending',
+                'confirmed_at' => null,
+                'confirmation_token' => null,
+                'confirmation_deadline' => null,
+                'sent_at' => null,
+                'email_status' => 'pending',
+                'director_approved_by' => null,
+                'director_approved_name' => null,
+                'director_approved_at' => null,
+            ]);
+        }
 
         if ($existing) {
             $existing->fill($payload)->save();
@@ -423,12 +633,19 @@ class PayrollCalculationService
         $bonus = $this->attendanceBonus($payableDays);
         $deduction = 0;
         $totalLatePenaltyFee = (float) $attendances->sum('late_penalty_fee');
+        // Mức đóng BH = lương cơ bản HĐ (không gồm OT / thưởng / phụ cấp ngoài thỏa thuận đóng BH).
         $insuranceBase = $baseSalary;
-        $insurance = $insuranceBase * $this->insuranceEmployeeRate();
+        $insuranceParts = $this->calculateInsuranceBreakdown($insuranceBase);
+        $insurance = $insuranceParts['total'];
         $gross = $workingSalary + $totalOvertimeSalary + $allowance + $bonus;
-        $familyDeduction = $this->familyDeduction($employee);
+        $dependents = $this->dependentCount($employee);
+        $personalDeduction = $this->personalDeduction();
+        $dependentDeduction = $dependents * $this->dependentDeduction();
+        $familyDeduction = $personalDeduction + $dependentDeduction;
+        // TNTT = tổng TN chịu thuế − BH bắt buộc NLĐ − giảm trừ gia cảnh (NQ 954/2020/UBTVQH14).
         $taxableIncome = max(0, $gross - $insurance - $familyDeduction);
-        $tax = $this->calculateTax($taxableIncome);
+        $taxParts = $this->calculateTaxBreakdown($taxableIncome);
+        $tax = $taxParts['tax'];
         $totalSalary = $this->calculateNetSalary($gross, $insurance + $deduction + $totalLatePenaltyFee, $tax);
 
         return [
@@ -440,6 +657,8 @@ class PayrollCalculationService
             'paid_leave_days' => $paidLeaveDays,
             'unpaid_leave_days' => $unpaidLeaveDays,
             'paid_holiday_days' => $paidHolidayDays,
+            'actual_working_salary' => round($actualWorkingSalary, 2),
+            'paid_leave_salary' => round($paidLeaveSalary, 2),
             'paid_holiday_salary' => round($paidHolidaySalary, 2),
             'holiday_work_salary' => round($holidayWorkSalary, 2),
             'weekly_rest_work_salary' => round($weeklyRestWorkSalary, 2),
@@ -451,9 +670,18 @@ class PayrollCalculationService
             'overtime_salary' => round($totalOvertimeSalary, 2),
             'allowance' => round($allowance, 2),
             'bonus' => round($bonus, 2),
+            'gross_salary' => round($gross, 2),
             'deduction' => round($deduction, 2),
             'late_penalty_fee' => round($totalLatePenaltyFee, 2),
+            'insurance_base' => round($insuranceBase, 2),
+            'insurance_bhxh' => $insuranceParts['bhxh'],
+            'insurance_bhyt' => $insuranceParts['bhyt'],
+            'insurance_bhtn' => $insuranceParts['bhtn'],
             'insurance' => round($insurance, 2),
+            'personal_deduction_amount' => round($personalDeduction, 2),
+            'dependent_count' => $dependents,
+            'dependent_deduction_amount' => round($dependentDeduction, 2),
+            'taxable_income' => round($taxableIncome, 2),
             'tax' => round($tax, 2),
             'total_salary' => round($totalSalary, 2),
         ];
@@ -509,16 +737,40 @@ class PayrollCalculationService
 
     public function insuranceEmployeeRate(): float
     {
-        return max(0, (float) config('payroll.insurance_employee_rate', 0.105));
+        $configured = $this->payrollConfig('insurance_employee_rate', null);
+        if ($configured !== null) {
+            return max(0, (float) $configured);
+        }
+
+        return max(0,
+            (float) $this->payrollConfig('insurance.bhxh_rate', 0.08)
+            + (float) $this->payrollConfig('insurance.bhyt_rate', 0.015)
+            + (float) $this->payrollConfig('insurance.bhtn_rate', 0.01)
+        );
     }
 
     public function familyDeduction(?Employee $employee = null): float
     {
-        $personal = max(0, (float) config('payroll.personal_deduction', 0));
-        $perDependent = max(0, (float) config('payroll.dependent_deduction', 4400000));
-        $dependents = (int) ($employee?->dependents ?? $employee?->number_of_dependents ?? 0);
+        $personal = $this->personalDeduction();
+        $perDependent = $this->dependentDeduction();
+        $dependents = $this->dependentCount($employee);
 
         return $personal + ($dependents * $perDependent);
+    }
+
+    public function personalDeduction(): float
+    {
+        return max(0, (float) $this->payrollConfig('personal_deduction', 11_000_000));
+    }
+
+    public function dependentDeduction(): float
+    {
+        return max(0, (float) $this->payrollConfig('dependent_deduction', 4_400_000));
+    }
+
+    public function dependentCount(?Employee $employee = null): int
+    {
+        return max(0, (int) ($employee?->number_of_dependents ?? $employee?->dependents ?? 0));
     }
 
     public function attendanceBonus(float $payableDays): float
@@ -544,36 +796,59 @@ class PayrollCalculationService
     public function explain(Payroll $payroll): array
     {
         $standardDays = $this->standardWorkingDays();
+        $hoursPerDay = $this->hoursPerDay();
         $dailySalary = (float) ($payroll->daily_salary ?: ((float) $payroll->base_salary / max(1, $standardDays)));
+        $hourSalary = $dailySalary / $hoursPerDay;
         [$month, $year] = $this->payrollMonthYear($payroll);
         $period = $this->periodMeta($month, $year);
         $workDays = (float) ($payroll->working_days ?? 0);
         $paidLeaveDays = (float) ($payroll->paid_leave_days ?? 0);
         $unpaidLeaveDays = (float) ($payroll->unpaid_leave_days ?? 0);
-        $leavePay = $paidLeaveDays * $dailySalary;
         $paidHolidayDays = (float) ($payroll->paid_holiday_days ?? 0);
-        $holidayPay = $paidHolidayDays * $dailySalary;
+        $leavePay = (float) ($payroll->paid_leave_salary ?? ($paidLeaveDays * $dailySalary));
+        $holidayPay = (float) ($payroll->paid_holiday_salary ?? ($paidHolidayDays * $dailySalary));
         $holidayWorkPay = (float) ($payroll->holiday_work_salary ?? 0);
         $weeklyRestPay = (float) ($payroll->weekly_rest_work_salary ?? 0);
         $storedWorking = (float) ($payroll->working_salary ?? 0);
-        $workPay = $storedWorking > 0
-            ? max(0, $storedWorking - $leavePay - $holidayPay)
-            : $workDays * $dailySalary;
-        $overtime = (float) ($payroll->overtime_salary ?? 0);
+        $workPay = (float) ($payroll->actual_working_salary ?? 0);
+        if ($workPay <= 0) {
+            $workPay = $storedWorking > 0
+                ? max(0, $storedWorking - $leavePay - $holidayPay)
+                : $workDays * $dailySalary;
+        }
+        $overtimeHourPay = (float) ($payroll->overtime_hour_salary ?? 0);
+        $overtimeDayPay = (float) ($payroll->overtime_day_salary ?? ($holidayWorkPay + $weeklyRestPay));
+        $overtime = (float) ($payroll->overtime_salary ?? ($overtimeDayPay + $overtimeHourPay));
         $allowance = (float) ($payroll->allowance ?? 0);
         $bonus = (float) ($payroll->bonus ?? 0);
-        $gross = $workPay + $leavePay + $holidayPay + $overtime + $allowance + $bonus;
-        $insurance = (float) ($payroll->insurance ?? 0);
-        $tax = (float) ($payroll->tax ?? 0);
+        $gross = (float) ($payroll->gross_salary ?? 0);
+        if ($gross <= 0) {
+            $gross = $workPay + $leavePay + $holidayPay + $overtime + $allowance + $bonus;
+        }
+
+        $insuranceBase = (float) ($payroll->insurance_base ?? $payroll->base_salary ?? 0);
+        $insuranceParts = $this->calculateInsuranceBreakdown($insuranceBase);
+        $insuranceBhxh = (float) ($payroll->insurance_bhxh ?? $insuranceParts['bhxh']);
+        $insuranceBhyt = (float) ($payroll->insurance_bhyt ?? $insuranceParts['bhyt']);
+        $insuranceBhtn = (float) ($payroll->insurance_bhtn ?? $insuranceParts['bhtn']);
+        $insurance = (float) ($payroll->insurance ?? ($insuranceBhxh + $insuranceBhyt + $insuranceBhtn));
+
+        $employee = $payroll->employee;
+        $dependents = (int) ($payroll->dependent_count ?? $this->dependentCount($employee));
+        $personalDeduction = (float) ($payroll->personal_deduction_amount ?? $this->personalDeduction());
+        $dependentUnit = $this->dependentDeduction();
+        $dependentDeductionTotal = (float) ($payroll->dependent_deduction_amount ?? ($dependents * $dependentUnit));
+        $familyDeduction = $personalDeduction + $dependentDeductionTotal;
+        $taxableIncome = (float) ($payroll->taxable_income ?? max(0, $gross - $insurance - $familyDeduction));
+        $taxParts = $this->calculateTaxBreakdown($taxableIncome);
+        $tax = (float) ($payroll->tax ?? $taxParts['tax']);
         $deduction = (float) ($payroll->deduction ?? 0);
         $late = (float) ($payroll->late_penalty_fee ?? 0);
         $totalDeductions = $insurance + $tax + $deduction + $late;
-        $insuranceRate = $this->insuranceEmployeeRate();
-        $familyDeduction = $this->familyDeduction($payroll->employee);
-        $taxableIncome = max(0, $gross - $insurance - $familyDeduction);
 
         return [
             'standard_days' => $standardDays,
+            'hours_per_day' => $hoursPerDay,
             'period_start' => $period['start_label'],
             'period_end' => $period['end_label'],
             'period_range' => $period['range_label'],
@@ -594,22 +869,42 @@ class PayrollCalculationService
             'unpaid_leave_days' => $unpaidLeaveDays,
             'payable_days' => $workDays + $paidLeaveDays + $paidHolidayDays,
             'daily_salary' => $dailySalary,
-            'hour_salary' => $dailySalary / $this->hoursPerDay(),
+            'hour_salary' => $hourSalary,
+            'overtime_hours' => (float) ($payroll->overtime_hours ?? 0),
             'overtime_hour_rate' => $this->overtimeHourRate(),
             'base_salary' => (float) ($payroll->base_salary ?? 0),
             'work_pay' => $workPay,
             'leave_pay' => $leavePay,
-            'overtime_day_pay' => (float) ($payroll->overtime_day_salary ?? 0),
-            'overtime_hour_pay' => (float) ($payroll->overtime_hour_salary ?? 0),
+            'overtime_day_pay' => $overtimeDayPay,
+            'overtime_hour_pay' => $overtimeHourPay,
             'overtime' => $overtime,
             'allowance' => $allowance,
             'bonus' => $bonus,
             'gross' => $gross,
-            'insurance_base' => (float) ($payroll->base_salary ?? 0),
-            'insurance_rate' => $insuranceRate,
+            'insurance_base' => $insuranceBase,
+            'insurance_bhxh_rate' => $insuranceParts['bhxh_rate'],
+            'insurance_bhyt_rate' => $insuranceParts['bhyt_rate'],
+            'insurance_bhtn_rate' => $insuranceParts['bhtn_rate'],
+            'insurance_bhxh_bhyt_cap' => $insuranceParts['bhxh_bhyt_cap'],
+            'insurance_bhtn_cap' => $insuranceParts['bhtn_cap'],
+            'insurance_bhxh_bhyt_base' => $insuranceParts['bhxh_bhyt_base'],
+            'insurance_bhtn_base' => $insuranceParts['bhtn_base'],
+            'insurance_bhxh' => $insuranceBhxh,
+            'insurance_bhyt' => $insuranceBhyt,
+            'insurance_bhtn' => $insuranceBhtn,
+            'insurance_rate' => $insuranceParts['rate'],
             'insurance' => $insurance,
+            'employer_bhxh' => $insuranceParts['employer_bhxh'],
+            'employer_bhyt' => $insuranceParts['employer_bhyt'],
+            'employer_bhtn' => $insuranceParts['employer_bhtn'],
+            'employer_insurance_total' => $insuranceParts['employer_total'],
+            'personal_deduction' => $personalDeduction,
+            'dependent_count' => $dependents,
+            'dependent_deduction_unit' => $dependentUnit,
+            'dependent_deduction' => $dependentDeductionTotal,
             'family_deduction' => $familyDeduction,
             'taxable_income' => $taxableIncome,
+            'tax_segments' => $taxParts['segments'],
             'tax' => $tax,
             'deduction' => $deduction,
             'late_penalty' => $late,

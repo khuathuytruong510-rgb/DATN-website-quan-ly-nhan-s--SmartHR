@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\PayrollPaymentWorkflowService;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class AccountantPortalGuardTest extends TestCase
@@ -90,7 +91,7 @@ class AccountantPortalGuardTest extends TestCase
 
     public function test_accountant_cannot_review_approve_leave_attendance_or_sign(): void
     {
-        ['accountant' => $kt, 'alice' => $alice, 'department' => $department] = $this->seedPeople();
+        ['hr' => $hr, 'accountant' => $kt, 'alice' => $alice, 'department' => $department] = $this->seedPeople();
         $payroll = $this->payroll($alice, PayrollPaymentWorkflowService::CALCULATED);
 
         $leave = LeaveRequest::create([
@@ -119,7 +120,7 @@ class AccountantPortalGuardTest extends TestCase
             'status' => Contract::STATUS_WAITING_DIRECTOR_SIGNATURE,
         ]);
 
-        $this->actingAs($kt)->post(route('payroll.review', $payroll))->assertForbidden();
+        $this->actingAs($hr)->post(route('payroll.review', $payroll))->assertForbidden();
         $this->actingAs($kt)->post(route('payroll.approve', $payroll))->assertForbidden();
         $this->actingAs($kt)->post(route('leave_requests.approve', $leave))->assertForbidden();
         $this->actingAs($kt)->put(route('attendance.update', $row), [
@@ -173,21 +174,18 @@ class AccountantPortalGuardTest extends TestCase
         ['hr' => $hr, 'accountant' => $kt, 'alice' => $alice, 'bob' => $bob] = $this->seedPeople();
         $this->lockPeriod($hr);
 
-        $draft = $this->payroll($alice, PayrollPaymentWorkflowService::DRAFT, [
-            'month' => 8,
-            'total_salary' => 1,
-        ]);
-        $this->actingAs($kt)->post(route('accountant.payroll.recalculate', $draft))->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $draft->fresh()->status);
-        $this->assertNotEquals(1, (float) $draft->fresh()->total_salary);
+        // HR xác nhận đã tự tính → dùng phiếu sẵn có (không tạo trùng unique employee/month/year).
+        $aliceSlip = Payroll::query()->where('employee_id', $alice->id)->where('month', 8)->where('year', 2026)->firstOrFail();
+        $bobSlip = Payroll::query()->where('employee_id', $bob->id)->where('month', 8)->where('year', 2026)->firstOrFail();
 
-        $calculated = $this->payroll($bob, PayrollPaymentWorkflowService::CALCULATED, [
-            'month' => 8,
-            'year' => 2026,
-            'total_salary' => 1,
-        ]);
-        $this->actingAs($kt)->post(route('accountant.payroll.recalculate', $calculated))->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $calculated->fresh()->status);
+        $aliceSlip->update(['status' => PayrollPaymentWorkflowService::DRAFT, 'total_salary' => 1]);
+        $this->actingAs($kt)->post(route('accountant.payroll.recalculate', $aliceSlip))->assertRedirect();
+        $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $aliceSlip->fresh()->status);
+        $this->assertNotEquals(1, (float) $aliceSlip->fresh()->total_salary);
+
+        $bobSlip->update(['total_salary' => 1]);
+        $this->actingAs($kt)->post(route('accountant.payroll.recalculate', $bobSlip))->assertRedirect();
+        $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $bobSlip->fresh()->status);
 
         $issue = Payroll::create([
             'employee_id' => $alice->id,
@@ -197,7 +195,9 @@ class AccountantPortalGuardTest extends TestCase
             'total_salary' => 1,
             'status' => PayrollPaymentWorkflowService::PAYROLL_ISSUE,
         ]);
-        $this->lockPeriod($hr, 7, 2026);
+        // Chỉ khóa kỳ 7 — không verify để tránh auto-tính ghi đè phiếu sự cố.
+        $this->actingAs($hr)->post(route('payroll.period.lock'), ['month' => 7, 'year' => 2026])->assertRedirect();
+        app(\App\Services\PayrollPeriodLockService::class)->markHrVerified(7, 2026, $hr);
         $this->actingAs($kt)->post(route('accountant.payroll.recalculate', $issue))->assertRedirect();
         $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $issue->fresh()->status);
 
@@ -219,8 +219,10 @@ class AccountantPortalGuardTest extends TestCase
         ['hr' => $hr, 'accountant' => $kt, 'alice' => $alice, 'bob' => $bob] = $this->seedPeople();
         $this->lockPeriod($hr);
 
-        $checked = $this->payroll($alice, PayrollPaymentWorkflowService::HR_CHECKED, ['total_salary' => 12345]);
-        $approved = $this->payroll($bob, PayrollPaymentWorkflowService::DIRECTOR_APPROVED, ['total_salary' => 54321]);
+        $checked = Payroll::query()->where('employee_id', $alice->id)->where('month', 8)->where('year', 2026)->firstOrFail();
+        $approved = Payroll::query()->where('employee_id', $bob->id)->where('month', 8)->where('year', 2026)->firstOrFail();
+        $checked->update(['status' => PayrollPaymentWorkflowService::HR_CHECKED, 'total_salary' => 12345]);
+        $approved->update(['status' => PayrollPaymentWorkflowService::DIRECTOR_APPROVED, 'total_salary' => 54321]);
 
         $this->actingAs($kt)->post(route('payroll.generate'), [
             'month' => 8,
@@ -318,11 +320,11 @@ class AccountantPortalGuardTest extends TestCase
 
     public function test_approve_keeps_status_when_email_cannot_send(): void
     {
-        ['hr' => $hr, 'director' => $director, 'alice' => $alice] = $this->seedPeople();
+        ['director' => $director, 'accountant' => $kt, 'alice' => $alice] = $this->seedPeople();
         $alice->update(['email' => 'not-an-email']);
         $payroll = $this->payroll($alice, PayrollPaymentWorkflowService::CALCULATED);
 
-        $this->actingAs($hr)->post(route('payroll.review', $payroll))->assertRedirect();
+        $this->actingAs($kt)->post(route('payroll.review', $payroll))->assertRedirect();
         $this->actingAs($director)->post(route('payroll.approve', $payroll->fresh()))->assertRedirect();
 
         $fresh = $payroll->fresh();
@@ -372,5 +374,57 @@ class AccountantPortalGuardTest extends TestCase
             ->assertSee('Thanh toán lương')
             ->assertSee('Bob KT')
             ->assertDontSee('Alice KT');
+    }
+
+    public function test_accountant_bulk_submit_and_pay_all_for_period(): void
+    {
+        Mail::fake();
+        ['hr' => $hr, 'director' => $director, 'accountant' => $kt, 'alice' => $alice, 'bob' => $bob, 'aliceUser' => $aliceUser, 'bobUser' => $bobUser] = $this->seedPeople();
+
+        $aliceSlip = $this->payroll($alice, PayrollPaymentWorkflowService::CALCULATED);
+        $bobSlip = $this->payroll($bob, PayrollPaymentWorkflowService::CALCULATED);
+
+        $this->actingAs($kt)
+            ->get(route('accountant.payroll.index', ['month' => 8, 'year' => 2026]))
+            ->assertOk()
+            ->assertSee('Gửi duyệt tất cả');
+
+        $this->actingAs($hr)->post(route('accountant.payroll.submit_all'), [
+            'month' => 8,
+            'year' => 2026,
+        ])->assertForbidden();
+
+        $this->actingAs($kt)->post(route('accountant.payroll.submit_all'), [
+            'month' => 8,
+            'year' => 2026,
+        ])->assertRedirect();
+
+        $this->assertSame(PayrollPaymentWorkflowService::HR_CHECKED, $aliceSlip->fresh()->status);
+        $this->assertSame(PayrollPaymentWorkflowService::HR_CHECKED, $bobSlip->fresh()->status);
+
+        $this->actingAs($director)->post(route('payroll.approve_all'), [
+            'month' => 8,
+            'year' => 2026,
+        ])->assertRedirect();
+
+        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $aliceSlip->fresh()->status);
+        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $bobSlip->fresh()->status);
+
+        $this->actingAs($aliceUser)->post(route('me.payroll.confirm', $aliceSlip->fresh()))->assertRedirect();
+        $this->actingAs($bobUser)->post(route('me.payroll.confirm', $bobSlip->fresh()))->assertRedirect();
+
+        $this->actingAs($kt)
+            ->get(route('accountant.payroll.index', ['month' => 8, 'year' => 2026]))
+            ->assertOk()
+            ->assertSee('Thanh toán tất cả');
+
+        $this->actingAs($kt)->post(route('accountant.payroll.pay_all'), [
+            'month' => 8,
+            'year' => 2026,
+            'payment_method' => 'cash',
+        ])->assertRedirect();
+
+        $this->assertSame(PayrollPaymentWorkflowService::PAID, $aliceSlip->fresh()->status);
+        $this->assertSame(PayrollPaymentWorkflowService::PAID, $bobSlip->fresh()->status);
     }
 }
