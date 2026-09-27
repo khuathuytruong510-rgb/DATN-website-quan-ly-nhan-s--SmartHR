@@ -74,7 +74,7 @@ class PayrollPeriodAutoLockTest extends TestCase
         $this->actingAs($hr)
             ->get(route('payroll.index', ['month' => 8, 'year' => 2026]))
             ->assertOk()
-            ->assertSee('Đã kiểm tra nguồn — gửi kế toán tính')
+            ->assertSee('Xác nhận tất cả — gửi kế toán')
             ->assertSee('Yêu cầu mở khóa');
     }
 }

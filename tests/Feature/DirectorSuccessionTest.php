@@ -48,6 +48,12 @@ class DirectorSuccessionTest extends TestCase
             'is_accountant' => false,
             'is_director' => false,
         ]);
+        $accountant = User::factory()->create([
+            'is_hr' => false,
+            'is_admin' => false,
+            'is_accountant' => true,
+            'is_director' => false,
+        ]);
 
         $board = Department::create([
             'name' => 'Ban Giám đốc',
@@ -88,7 +94,7 @@ class DirectorSuccessionTest extends TestCase
             'employee_code' => 'CNTT0002',
         ]);
 
-        return compact('admin', 'outgoing', 'incoming', 'hr', 'outgoingEmployee', 'incomingEmployee', 'staff');
+        return compact('admin', 'outgoing', 'incoming', 'hr', 'accountant', 'outgoingEmployee', 'incomingEmployee', 'staff');
     }
 
     public function test_admin_transfers_director_role_without_renaming_old_account(): void
@@ -411,7 +417,7 @@ class DirectorSuccessionTest extends TestCase
 
     public function test_approved_payroll_keeps_old_director_after_succession(): void
     {
-        ['admin' => $admin, 'outgoing' => $outgoing, 'incoming' => $incoming, 'hr' => $hr, 'staff' => $staff] = $this->seedActors();
+        ['admin' => $admin, 'outgoing' => $outgoing, 'incoming' => $incoming, 'hr' => $hr, 'staff' => $staff, 'accountant' => $accountant] = $this->seedActors();
 
         $payroll = Payroll::create([
             'employee_id' => $staff->id,
@@ -421,7 +427,7 @@ class DirectorSuccessionTest extends TestCase
             'status' => PayrollPaymentWorkflowService::CALCULATED,
         ]);
 
-        $this->actingAs($hr)->post(route('payroll.review', $payroll))->assertRedirect();
+        $this->actingAs($accountant)->post(route('payroll.review', $payroll))->assertRedirect();
         $this->actingAs($outgoing)->post(route('payroll.approve', $payroll))->assertRedirect();
 
         $approved = $payroll->fresh();
@@ -457,7 +463,7 @@ class DirectorSuccessionTest extends TestCase
 
     public function test_new_director_approves_later_payroll_old_director_cannot(): void
     {
-        ['admin' => $admin, 'outgoing' => $outgoing, 'incoming' => $incoming, 'hr' => $hr, 'staff' => $staff] = $this->seedActors();
+        ['admin' => $admin, 'outgoing' => $outgoing, 'incoming' => $incoming, 'hr' => $hr, 'staff' => $staff, 'accountant' => $accountant] = $this->seedActors();
 
         $this->actingAs($admin)->post(route('director_succession.store'), [
             'incoming_user_id' => $incoming->id,
@@ -475,7 +481,7 @@ class DirectorSuccessionTest extends TestCase
             'status' => PayrollPaymentWorkflowService::CALCULATED,
         ]);
 
-        $this->actingAs($hr)->post(route('payroll.review', $september))->assertRedirect();
+        $this->actingAs($accountant)->post(route('payroll.review', $september))->assertRedirect();
 
         $this->actingAs($outgoing->fresh())
             ->post(route('payroll.approve', $september))
@@ -498,17 +504,14 @@ class DirectorSuccessionTest extends TestCase
             ->assertOk()
             ->assertSee('Nguyen Van A')
             ->assertSee('nva@example.com')
-            ->assertSee('Ngoài SmartHR')
-            ->assertSee('Không xóa dữ liệu Giám đốc cũ')
-            ->assertSee('Cấp quyền Director cho người mới')
+            ->assertSee('Cập nhật theo quyết định')
+            ->assertSee('Số quyết định (ngoài hệ thống)')
             ->assertSee('Vai trò hệ thống sau khi chuyển giao')
             ->assertSee('Còn làm việc')
             ->assertSee('Nghỉ việc')
             ->assertSee('Tạm nghỉ')
             ->assertSee('Lịch sử nhiệm kỳ Giám đốc')
-            ->assertSee('Chưa có trong danh sách')
-            ->assertSee('Tạo hồ sơ nhân sự mới')
-            ->assertSee('Trường hợp B');
+            ->assertSee('Cập nhật người giữ chức');
     }
 
     public function test_external_appointee_needs_hr_profile_then_admin_account(): void

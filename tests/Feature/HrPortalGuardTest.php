@@ -100,7 +100,7 @@ class HrPortalGuardTest extends TestCase
             ->assertOk()
             ->assertSee('Nguyen Van HR')
             ->assertSee('Đã chốt — HR đang kiểm tra')
-            ->assertSee('Đã kiểm tra nguồn — gửi kế toán tính')
+            ->assertSee('Xác nhận tất cả — gửi kế toán')
             ->assertDontSee('Thực nhận')
             ->assertDontSee('Chưa có dữ liệu bảng lương');
     }
@@ -130,7 +130,7 @@ class HrPortalGuardTest extends TestCase
         $this->assertSame(PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, $payable->fresh()->status);
     }
 
-    public function test_hr_review_ignores_client_status_and_totals(): void
+    public function test_hr_cannot_submit_payroll_to_director(): void
     {
         ['hr' => $hr, 'employee' => $employee] = $this->seedPeople();
         $payroll = $this->payroll($employee, PayrollPaymentWorkflowService::CALCULATED, ['total_salary' => 8800000]);
@@ -139,13 +139,11 @@ class HrPortalGuardTest extends TestCase
             'status' => PayrollPaymentWorkflowService::PAID,
             'total_salary' => 999999999,
             'employee_id' => 999,
-        ])->assertRedirect();
+        ])->assertForbidden();
 
         $fresh = $payroll->fresh();
-        $this->assertSame(PayrollPaymentWorkflowService::HR_CHECKED, $fresh->status);
+        $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $fresh->status);
         $this->assertEquals(8800000, (float) $fresh->total_salary);
-        $this->assertSame($employee->id, (int) $fresh->employee_id);
-        $this->assertNull($fresh->paid_at);
     }
 
     public function test_hr_cannot_delete_payroll_after_hr_checked(): void

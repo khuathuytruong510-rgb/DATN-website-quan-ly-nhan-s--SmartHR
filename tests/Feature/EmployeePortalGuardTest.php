@@ -233,9 +233,9 @@ class EmployeePortalGuardTest extends TestCase
         $this->assertSame(PayrollPaymentWorkflowService::PAYROLL_ISSUE, $payroll->fresh()->status);
     }
 
-    public function test_issue_loop_returns_to_hr_then_director_before_confirm(): void
+    public function test_issue_loop_returns_to_accountant_then_director_before_confirm(): void
     {
-        ['aliceUser' => $alice, 'alice' => $emp, 'hr' => $hr, 'director' => $director] = $this->seedPeople();
+        ['aliceUser' => $alice, 'alice' => $emp, 'hr' => $hr, 'director' => $director, 'accountant' => $accountant] = $this->seedPeople();
         $workflow = app(PayrollPaymentWorkflowService::class);
         $payroll = $this->payroll($emp, PayrollPaymentWorkflowService::DIRECTOR_APPROVED);
 
@@ -246,7 +246,7 @@ class EmployeePortalGuardTest extends TestCase
         $this->actingAs($alice)->post(route('me.payroll.confirm', $payroll->fresh()))->assertRedirect();
         $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $payroll->fresh()->status);
 
-        $this->actingAs($hr)->post(route('payroll.review', $payroll->fresh()))->assertRedirect();
+        $this->actingAs($accountant)->post(route('payroll.review', $payroll->fresh()))->assertRedirect();
         $this->actingAs($director)->post(route('payroll.approve', $payroll->fresh()))->assertRedirect();
         $this->actingAs($alice)->post(route('me.payroll.confirm', $payroll->fresh()))->assertRedirect();
         $this->assertSame(PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, $payroll->fresh()->status);
@@ -258,7 +258,7 @@ class EmployeePortalGuardTest extends TestCase
         $workflow = app(PayrollPaymentWorkflowService::class);
         $payroll = $this->payroll($emp, PayrollPaymentWorkflowService::CALCULATED);
 
-        $workflow->reviewByHr($payroll->fresh(), $hr);
+        $workflow->submitToDirector($payroll->fresh(), $accountant);
         $this->assertSame('111122223333', $payroll->fresh()->payout_account_number);
 
         $this->actingAs($alice)->post(route('me.payroll.bank_change'), [
@@ -648,7 +648,7 @@ class EmployeePortalGuardTest extends TestCase
         $this->assertSame(PayrollPaymentWorkflowService::PAID, $paid->fresh()->status);
 
         try {
-            $workflow->reviewByHr($paid->fresh(), $hr);
+            $workflow->submitToDirector($paid->fresh(), $accountant);
             $this->fail('PAID không được quay về HR_CHECKED.');
         } catch (\RuntimeException) {
         }

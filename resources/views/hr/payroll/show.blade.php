@@ -11,10 +11,10 @@
             <a href="{{ route('payroll.salary_history', $payroll) }}" class="btn">Lịch sử lương</a>
 
             @php $user = auth()->user(); @endphp
-            @if($workflow->actorCanReview($user, $payroll))
+            @if($workflow->actorCanSubmitToDirector($user, $payroll))
                 <form method="POST" action="{{ route('payroll.review', $payroll) }}">
                     @csrf
-                    <button type="submit" class="btn primary" data-confirm="Xác nhận đã kiểm tra dữ liệu bảng lương này?">Kiểm tra dữ liệu</button>
+                    <button type="submit" class="btn primary" data-confirm="Gửi phiếu này sang Giám đốc duyệt?">Gửi duyệt</button>
                 </form>
             @endif
             @if($workflow->actorCanFinalApprove($user, $payroll))

@@ -188,9 +188,9 @@ class PayrollAuthorizationHardeningTest extends TestCase
         $workflow->markPaid($payroll->fresh(), ['payment_method' => 'cash'], $accountant);
     }
 
-    public function test_issue_loop_requires_hr_then_director_before_confirm(): void
+    public function test_issue_loop_requires_accountant_then_director_before_confirm(): void
     {
-        ['hr' => $hr, 'director' => $director, 'aliceUser' => $aliceUser, 'alicePayroll' => $payroll] = $this->seedPeople();
+        ['hr' => $hr, 'director' => $director, 'accountant' => $accountant, 'aliceUser' => $aliceUser, 'alicePayroll' => $payroll] = $this->seedPeople();
         $workflow = app(PayrollPaymentWorkflowService::class);
 
         $workflow->reportIssue($payroll->fresh(), 'Sai số', $aliceUser);
@@ -216,7 +216,7 @@ class PayrollAuthorizationHardeningTest extends TestCase
             ->post(route('payroll.approve', $payroll->fresh()))
             ->assertForbidden();
 
-        $this->actingAs($hr)->post(route('payroll.review', $payroll->fresh()))->assertRedirect();
+        $this->actingAs($accountant)->post(route('payroll.review', $payroll->fresh()))->assertRedirect();
         $this->actingAs($director)->post(route('payroll.approve', $payroll->fresh()))->assertRedirect();
 
         $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $payroll->fresh()->status);
@@ -335,7 +335,7 @@ class PayrollAuthorizationHardeningTest extends TestCase
 
     public function test_second_approve_issue_and_sign_do_not_repeat(): void
     {
-        ['hr' => $hr, 'director' => $director, 'aliceUser' => $aliceUser, 'alice' => $alice] = $this->seedPeople();
+        ['director' => $director, 'accountant' => $accountant, 'aliceUser' => $aliceUser, 'alice' => $alice] = $this->seedPeople();
         $workflow = app(PayrollPaymentWorkflowService::class);
         $contracts = app(\App\Services\ContractService::class);
 
@@ -348,7 +348,7 @@ class PayrollAuthorizationHardeningTest extends TestCase
             'status' => PayrollPaymentWorkflowService::CALCULATED,
         ]);
 
-        $workflow->reviewByHr($checked, $hr);
+        $workflow->submitToDirector($checked, $accountant);
         $workflow->approve($checked->fresh(), $director);
 
         try {

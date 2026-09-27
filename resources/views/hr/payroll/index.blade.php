@@ -23,11 +23,11 @@
                             Chỉ phiếu nhân viên đã xác nhận. Kế toán thanh toán → salary_payment → Đã trả. Không thanh toán phiếu chưa xác nhận hoặc đã trả.
                         @elseif(!empty($hrWorkOnly))
                             HR đối chiếu hợp đồng (lương CB, phụ cấp), ngày công, giờ làm, tăng ca và nghỉ phép.
-                            Quy trình kỳ: Khóa kỳ → HR xác nhận nguồn → Kế toán tính → HR kiểm tra phiếu → Giám đốc duyệt → NV xác nhận → Kế toán thanh toán.
+                            Quy trình: Hệ thống tự khóa kỳ → HR xác nhận nguồn (tự tính lương) → Kế toán gửi duyệt → Giám đốc duyệt → NV xác nhận → Kế toán thanh toán.
                             Kỳ lương từ {{ $periodMeta['start_label'] ?? '01/'.sprintf('%02d/%d', $month, $year) }} đến {{ $periodMeta['end_label'] ?? '' }}.
                             {{ $periodMeta['formula_label'] ?? '' }}
                         @else
-                            Khóa kỳ → HR xác nhận nguồn → Kế toán tính lương → HR kiểm tra phiếu đã tính → Giám đốc phê duyệt → Nhân viên xác nhận → Kế toán thanh toán.
+                            Hệ thống tự khóa kỳ → HR xác nhận nguồn (hệ thống tự tính) → Kế toán gửi duyệt → Giám đốc phê duyệt → Nhân viên xác nhận → Kế toán thanh toán.
                         @endif
                     </p>
                 </div>
@@ -35,9 +35,7 @@
                 @php
                     $user = auth()->user();
                     $canGenerate = $user->canPayPayroll() && empty($paymentFocus);
-                    $pendingHrCount = $payrolls->whereIn('status', \App\Services\PayrollPaymentWorkflowService::calculatedStatuses())->count();
                     $pendingDirectorCount = $payrolls->whereIn('status', \App\Services\PayrollPaymentWorkflowService::hrCheckedStatuses())->count();
-                    $canBulkHrReview = $user->canManageHr();
                     $canBulkFinalApprove = $user->canFinalApprovePayroll();
                     $periodLocked = (bool) optional($periodLock ?? null)->is_locked;
                     $periodVerified = (bool) optional($periodLock ?? null)->hr_verified_at;
@@ -172,9 +170,9 @@
                             @else
                                 <p class="mb-2 fw-semibold">
                                     @if($periodVerified)
-                                        Đã chốt + HR đã xác nhận nguồn — Kế toán được tính
+                                        Đã chốt + HR đã xác nhận — hệ thống tự tính, chờ Kế toán gửi duyệt
                                     @else
-                                        Đã chốt — HR đang kiểm tra
+                                        Đã chốt — HR đang kiểm tra nguồn
                                     @endif
                                 </p>
                                 <p class="text-muted mb-2" style="font-size:12px;">
@@ -190,11 +188,11 @@
                                     <div class="d-flex gap-2 flex-wrap align-items-end">
                                         @unless($periodVerified)
                                             <form method="POST" action="{{ route('payroll.period.verify') }}"
-                                                  data-confirm="Xác nhận đã kiểm tra nguồn kỳ {{ sprintf('%02d/%d', $month, $year) }} và gửi Kế toán tính lương?">
+                                                  data-confirm="Xác nhận tất cả nguồn kỳ {{ sprintf('%02d/%d', $month, $year) }}? Hệ thống sẽ tự tính lương và chuyển sang Kế toán.">
                                                 @csrf
                                                 <input type="hidden" name="month" value="{{ $month }}">
                                                 <input type="hidden" name="year" value="{{ $year }}">
-                                                <button type="submit" class="btn btn-success">Đã kiểm tra nguồn — gửi kế toán tính</button>
+                                                <button type="submit" class="btn btn-success">Xác nhận tất cả — gửi kế toán</button>
                                             </form>
                                         @endunless
                                         <form method="POST" action="{{ route('payroll.period.unlock') }}"
@@ -226,35 +224,16 @@
                         </p>
                     @endif
 
-                    @if($canBulkHrReview && $pendingHrCount > 0)
-                        <form method="POST" action="{{ route('payroll.review_all') }}"
-                              data-confirm="Xác nhận đã kiểm tra dữ liệu nhân sự trên {{ $pendingHrCount }} bảng lương tháng {{ sprintf('%02d/%d', $month, $year) }}? Sau bước này Giám đốc sẽ phê duyệt cuối.">
-                            @csrf
-                            <input type="hidden" name="month" value="{{ $month }}">
-                            <input type="hidden" name="year" value="{{ $year }}">
-                            <button type="submit" class="btn btn-success"
-                                    title="HR kiểm tra dữ liệu tất cả phiếu kế toán đã tính">
-                                <i class="bi bi-check2-all"></i>
-                                Kiểm tra phiếu đã tính
-                                ({{ $pendingHrCount }})
-                            </button>
-                        </form>
-                    @endif
-
-                    @if($canBulkFinalApprove)
+                    @if($canBulkFinalApprove && $pendingDirectorCount > 0)
                         <form method="POST" action="{{ route('payroll.approve_all') }}"
-                              data-confirm="Bạn đang phê duyệt {{ $pendingDirectorCount }} phiếu lương của tháng {{ sprintf('%02d/%d', $month, $year) }}. Sau khi phê duyệt, các phiếu sẽ chuyển sang chờ nhân viên xác nhận.&#10;&#10;Bạn có chắc chắn tiếp tục?">
+                              data-confirm="Duyệt tất cả {{ $pendingDirectorCount }} phiếu lương tháng {{ sprintf('%02d/%d', $month, $year) }}? Sau khi duyệt, phiếu chuyển sang chờ nhân viên xác nhận.">
                             @csrf
                             <input type="hidden" name="month" value="{{ $month }}">
                             <input type="hidden" name="year" value="{{ $year }}">
                             <button type="submit" class="btn btn-success"
-                                    @disabled($pendingDirectorCount < 1)
-                                    title="{{ $pendingDirectorCount < 1 ? 'Không có phiếu chờ phê duyệt cuối' : 'Giám đốc phê duyệt cuối các phiếu HR đã kiểm tra' }}">
+                                    title="Giám đốc duyệt tất cả phiếu Kế toán đã gửi">
                                 <i class="bi bi-check2-all"></i>
-                                Phê duyệt cuối
-                                @if($pendingDirectorCount > 0)
-                                    ({{ $pendingDirectorCount }})
-                                @endif
+                                Duyệt tất cả ({{ $pendingDirectorCount }})
                             </button>
                         </form>
                     @endif
@@ -519,7 +498,7 @@
 
                                     @php
                                         $user = auth()->user();
-                                        $canHrReview = $workflow->actorCanReview($user, $payroll);
+                                        $canHrReview = $workflow->actorCanSubmitToDirector($user, $payroll);
                                         $canFinalApprove = $workflow->actorCanFinalApprove($user, $payroll);
                                         $canPay = $user->canPayPayroll() && $workflow->canPay($payroll);
                                     @endphp
@@ -527,8 +506,8 @@
                                     @if($canHrReview)
                                         <form method="POST" action="{{ route('payroll.review', $payroll) }}" class="d-inline">
                                             @csrf
-                                            <button type="submit" class="btn btn-sm btn-success" title="Kiểm tra dữ liệu" data-confirm="Xác nhận đã kiểm tra dữ liệu nhân sự trên bảng lương của {{ optional($payroll->employee)->name }}?">
-                                                Kiểm tra dữ liệu
+                                            <button type="submit" class="btn btn-sm btn-success" title="Gửi duyệt" data-confirm="Gửi phiếu của {{ optional($payroll->employee)->name }} sang Giám đốc duyệt?">
+                                                Gửi duyệt
                                             </button>
                                         </form>
                                     @elseif($canFinalApprove)

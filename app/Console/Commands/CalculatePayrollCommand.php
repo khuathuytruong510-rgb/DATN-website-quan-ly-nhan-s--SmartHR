@@ -42,8 +42,15 @@ class CalculatePayrollCommand extends Command
             return self::SUCCESS;
         }
 
+        // Chỉ tự tính khi HR đã xác nhận nguồn (không tự verify hộ HR).
         if (! $locks->isHrVerified($month, $year)) {
-            $locks->autoVerify($month, $year);
+            $this->warn(sprintf(
+                'Bỏ qua kỳ %02d/%d vì HR chưa xác nhận nguồn. Hệ thống sẽ tự tính ngay sau khi HR xác nhận.',
+                $month,
+                $year
+            ));
+
+            return self::SUCCESS;
         }
 
         try {

@@ -11,9 +11,29 @@
 <div class="page-head">
     <div>
         <h1>Bảng lương</h1>
+        <p class="muted" style="margin:4px 0 0;">Hệ thống tự tính sau khi HR xác nhận nguồn → Kế toán kiểm tra gửi Giám đốc → GĐ duyệt → NV xác nhận → Thanh toán.</p>
     </div>
-    <div class="actions">
-        <a class="btn primary" href="{{ route('accountant.payroll.generate') }}">Tính lương</a>
+    <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a class="btn" href="{{ route('accountant.payroll.generate') }}">Xem / tính lại kỳ</a>
+        @if(($pendingSubmitCount ?? 0) > 0)
+        <form method="POST" action="{{ route('accountant.payroll.submit_all') }}"
+              data-confirm="Gửi duyệt tất cả {{ $pendingSubmitCount }} phiếu tháng {{ sprintf('%02d/%d', $filterMonth, $filterYear) }} sang Giám đốc?">
+            @csrf
+            <input type="hidden" name="month" value="{{ $filterMonth }}">
+            <input type="hidden" name="year" value="{{ $filterYear }}">
+            <button class="btn primary" type="submit">Gửi duyệt tất cả ({{ $pendingSubmitCount }})</button>
+        </form>
+        @endif
+        @if(($pendingPayCount ?? 0) > 0)
+        <form method="POST" action="{{ route('accountant.payroll.pay_all') }}"
+              data-confirm="Thanh toán tất cả {{ $pendingPayCount }} phiếu đã xác nhận tháng {{ sprintf('%02d/%d', $filterMonth, $filterYear) }} (mặc định tiền mặt)?">
+            @csrf
+            <input type="hidden" name="month" value="{{ $filterMonth }}">
+            <input type="hidden" name="year" value="{{ $filterYear }}">
+            <input type="hidden" name="payment_method" value="cash">
+            <button class="btn primary" type="submit" style="background:#166534;">Thanh toán tất cả ({{ $pendingPayCount }})</button>
+        </form>
+        @endif
     </div>
 </div>
 
@@ -23,19 +43,19 @@
         <select name="month" aria-label="Tháng">
             <option value="">Tất cả tháng</option>
             @for($month = 1; $month <= 12; $month++)
-                <option value="{{ $month }}" @selected((string) request('month') === (string) $month)>Tháng {{ $month }}</option>
+                <option value="{{ $month }}" @selected((string) request('month', now()->month) === (string) $month)>Tháng {{ $month }}</option>
             @endfor
         </select>
         <select name="year" aria-label="Năm">
             <option value="">Tất cả năm</option>
             @foreach($payrollYears as $year)
-                <option value="{{ $year }}" @selected((string) request('year') === (string) $year)>{{ $year }}</option>
+                <option value="{{ $year }}" @selected((string) request('year', now()->year) === (string) $year)>{{ $year }}</option>
             @endforeach
         </select>
         <select name="status">
             <option value="">Tất cả trạng thái</option>
-            <option value="calculated" {{ request('status')=='calculated' ? 'selected' : '' }}>Kế toán đã tính — chờ HR</option>
-            <option value="hr_checked" {{ request('status')=='hr_checked' ? 'selected' : '' }}>HR đã kiểm tra — chờ Giám đốc</option>
+            <option value="calculated" {{ request('status')=='calculated' ? 'selected' : '' }}>Đã tính — chờ gửi duyệt</option>
+            <option value="hr_checked" {{ request('status')=='hr_checked' ? 'selected' : '' }}>Đã gửi duyệt — chờ Giám đốc</option>
             <option value="director_approved" {{ request('status')=='director_approved' ? 'selected' : '' }}>Giám đốc đã duyệt — chờ NV</option>
             <option value="payroll_issue" {{ request('status')=='payroll_issue' ? 'selected' : '' }}>Sự cố lương</option>
             <option value="employee_confirmed" {{ request('status')=='employee_confirmed' ? 'selected' : '' }}>NV đã xác nhận — chờ TT</option>
@@ -46,7 +66,7 @@
     </form>
 
     @if($payrolls->count() === 0)
-        <div class="empty">Chưa có bảng lương. Hãy tạo bảng lương mới.</div>
+        <div class="empty">Chưa có bảng lương. Chờ HR xác nhận nguồn kỳ để hệ thống tự tính.</div>
     @else
         <table>
             <thead>
@@ -62,13 +82,19 @@
                 @foreach($payrolls as $p)
                     <tr>
                         <td>{{ $p->display_month }}</td>
-                        <td>{{ optional($p->employee)->name }}<br></td>
+                        <td>{{ optional($p->employee)->name }}</td>
                         <td>{{ number_format($p->total_salary ?? 0,0, '.', ',') }} VNĐ</td>
                         <td>
                             <span class="badge">{{ $workflow->statusLabel($p->status) }}</span>
                         </td>
-                        <td style="text-align:right; display:flex; gap:8px; justify-content:flex-end;">
+                        <td style="text-align:right; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
                             <a class="btn" href="{{ route('accountant.payroll.show', $p) }}">Xem</a>
+                            @if($workflow->actorCanSubmitToDirector(auth()->user(), $p))
+                            <form method="POST" action="{{ route('payroll.review', $p) }}" style="display:inline;">
+                                @csrf
+                                <button class="btn primary" type="submit">Gửi duyệt</button>
+                            </form>
+                            @endif
                             @if(in_array($p->status, \App\Services\PayrollPaymentWorkflowService::recalculableStatuses(), true))
                             <form method="POST" action="{{ route('accountant.payroll.recalculate', $p) }}" style="display:inline;">
                                 @csrf

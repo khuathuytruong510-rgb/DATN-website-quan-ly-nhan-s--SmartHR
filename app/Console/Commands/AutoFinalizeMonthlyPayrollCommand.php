@@ -11,38 +11,13 @@ class AutoFinalizeMonthlyPayrollCommand extends Command
 {
     protected $signature = 'payroll:auto-finalize-monthly {--date= : Ngày tham chiếu Y-m-d (mặc định hôm nay)}';
 
-    protected $description = 'Tự hoàn tất các bước HR và Giám đốc còn chờ trong kỳ lương tháng trước';
+    protected $description = 'Legacy: không còn tự gửi duyệt / tự phê duyệt — Kế toán và Giám đốc thao tác thủ công';
 
     public function handle(PayrollPaymentWorkflowService $workflow, PayrollPeriodLockService $locks): int
     {
-        try {
-            $asOf = $this->option('date') ? Carbon::parse((string) $this->option('date')) : now();
-        } catch (\Throwable) {
-            $this->error('Ngày tham chiếu không hợp lệ. Dùng định dạng Y-m-d.');
-
-            return self::FAILURE;
-        }
-
-        $period = $asOf->copy()->startOfMonth()->subMonth();
-        $month = (int) $period->month;
-        $year = (int) $period->year;
-
-        if (! $locks->isLocked($month, $year)
-            || ! $locks->isHrVerified($month, $year)
-            || $locks->hasPendingUnlockRequest($month, $year)) {
-            $this->warn(sprintf('Bỏ qua tự chốt kỳ %02d/%d vì kỳ chưa khóa/kiểm tra hoặc đang chờ mở khóa.', $month, $year));
-
-            return self::SUCCESS;
-        }
-
-        $result = $workflow->autoFinalizePeriod($month, $year);
-        $this->info(sprintf(
-            'Kỳ %02d/%d: hệ thống kiểm tra HR %d phiếu và tự phê duyệt %d phiếu; chưa thanh toán.',
-            $month,
-            $year,
-            $result['reviewed'],
-            $result['approved']
-        ));
+        // Quy trình mới: hệ thống chỉ tự khóa kỳ + tự tính sau khi HR xác nhận.
+        // Gửi duyệt (Kế toán) và phê duyệt (Giám đốc) là thao tác thủ công.
+        $this->info('Bỏ qua auto-finalize: Kế toán gửi duyệt và Giám đốc phê duyệt thủ công.');
 
         return self::SUCCESS;
     }

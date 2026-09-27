@@ -406,6 +406,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/accountant/payroll', [\App\Http\Controllers\Web\AccountantController::class, 'payrollIndex'])->name('accountant.payroll.index');
         Route::get('/accountant/payroll/generate', [\App\Http\Controllers\Web\AccountantController::class, 'payrollGenerate'])->name('accountant.payroll.generate');
         Route::post('/accountant/payroll/generate', [\App\Http\Controllers\Web\AccountantController::class, 'generatePayroll'])->name('accountant.payroll.generate_post');
+        Route::post('/accountant/payroll/submit-all', [\App\Http\Controllers\Web\AccountantController::class, 'submitAllToDirector'])->name('accountant.payroll.submit_all');
+        Route::post('/accountant/payroll/pay-all', [\App\Http\Controllers\Web\AccountantController::class, 'payAll'])->name('accountant.payroll.pay_all');
         Route::get('/accountant/payroll/send', [\App\Http\Controllers\Web\AccountantController::class, 'payrollSend'])->name('accountant.payroll.send');
         Route::post('/accountant/payroll/send-all', [\App\Http\Controllers\Web\AccountantController::class, 'sendAllPayrolls'])->name('accountant.payroll.send_all');
         Route::get('/accountant/payroll/feedback', [\App\Http\Controllers\Web\AccountantController::class, 'payrollFeedback'])->name('accountant.payroll.feedback');
