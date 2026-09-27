@@ -50,8 +50,10 @@ class ContractController extends ApiController
             'employee_id' => 'required|exists:employees,id',
             'title' => 'required|string|max:255',
             'salary' => 'required|numeric|min:0',
-            'start_date' => 'required|date',
+            'start_date' => 'required|date|after_or_equal:today',
             'end_date' => 'required|date|after_or_equal:start_date',
+        ], [
+            'start_date.after_or_equal' => 'Ngày bắt đầu hợp đồng không được ở trong quá khứ.',
         ]);
 
         if ($validator->fails()) {

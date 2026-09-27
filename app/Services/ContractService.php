@@ -25,11 +25,17 @@ class ContractService
     public function createContract(User $actor, array $data): Contract
     {
         return DB::transaction(function () use ($actor, $data): Contract {
+            $startDate = isset($data['start_date']) ? Carbon::parse($data['start_date'])->startOfDay() : null;
+            if ($startDate?->lt(now()->startOfDay())) {
+                throw new \RuntimeException('Ngày bắt đầu hợp đồng không được ở trong quá khứ.');
+            }
+
             $employee = Employee::findOrFail($data['employee_id']);
             $this->assertSalaryAboveFloor($employee, (float) ($data['base_salary'] ?? 0));
             $contract = Contract::create($this->buildPayload($actor, $employee, $data, null));
             $this->syncStatus($contract);
             $this->log($contract, $actor, 'created', 'Tạo hợp đồng', ['contract_code' => $contract->contract_code]);
+            $this->notifyAdminEmployeeNeedsAccount($contract, $actor);
 
             return $contract->fresh();
         });
@@ -550,7 +556,9 @@ class ContractService
             'employee_signed_at' => $contract?->employee_signed_at,
             'director_signed_at' => $contract?->director_signed_at,
             'contract_template_id' => $template?->id ?? $data['contract_template_id'] ?? $contract?->contract_template_id,
-            'workplace' => $data['workplace'] ?? $contract?->workplace,
+            'workplace' => filled($data['workplace'] ?? null)
+                ? $data['workplace']
+                : ($contract?->workplace ?: 'Trường Cao đẳng FPT Polytechnic'),
             'working_schedule' => $data['working_schedule'] ?? $contract?->working_schedule,
             'benefits' => $data['benefits'] ?? $contract?->benefits,
             'allowed_unpaid_leave_days_per_month' => (int) ($data['allowed_unpaid_leave_days_per_month'] ?? $contract?->allowed_unpaid_leave_days_per_month ?? 1),
@@ -744,6 +752,27 @@ class ContractService
                 'new_base_salary' => $newBase,
             ],
             'is_read' => false,
+        ]);
+    }
+
+    protected function notifyAdminEmployeeNeedsAccount(Contract $contract, User $actor): void
+    {
+        $employee = $contract->employee;
+        if (! $employee || $employee->user_id) {
+            return;
+        }
+
+        Notification::create([
+            'sender_id' => $actor->id,
+            'target' => 'admin',
+            'title' => 'Nhân viên chưa có tài khoản',
+            'message' => 'Nhân viên '.$employee->name.' vừa được tạo hợp đồng nhưng chưa có tài khoản. Vui lòng tạo tài khoản nhân viên.',
+            'is_read' => false,
+            'data' => [
+                'employee_id' => $employee->id,
+                'contract_id' => $contract->id,
+                'type' => 'employee_account_creation',
+            ],
         ]);
     }
 

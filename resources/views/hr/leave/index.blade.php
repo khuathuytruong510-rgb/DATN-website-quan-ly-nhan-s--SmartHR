@@ -10,6 +10,24 @@
     .badge.rejected { background: #fee2e2; color: var(--danger); }
     .badge.pending { background: #fef3c7; color: #92400e; }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .leave-table-wrap { overflow-x: auto; border-radius: 12px; }
+    .leave-table { min-width: 1320px; width: 100%; table-layout: auto; }
+    .leave-table th, .leave-table td { padding: 14px 12px; vertical-align: middle; }
+    .leave-table th { white-space: nowrap; }
+    .leave-table .employee-cell { min-width: 150px; }
+    .leave-table .type-cell { min-width: 170px; }
+    .leave-table .date-cell { min-width: 105px; white-space: nowrap; }
+    .leave-table .days-cell { min-width: 80px; white-space: nowrap; text-align: center; }
+    .leave-table .reason-cell { min-width: 210px; max-width: 280px; line-height: 1.45; }
+    .leave-table .urgent-cell { min-width: 150px; }
+    .leave-table .status-cell { min-width: 155px; }
+    .leave-table .action-cell { min-width: 190px; }
+    .leave-table .action-cell .actions { flex-wrap: nowrap; }
+    .leave-table .action-cell .btn { white-space: nowrap; }
+    @media (max-width: 768px) {
+        .leave-table-wrap { margin: 0 -8px; }
+        .leave-table { min-width: 1180px; }
+    }
 </style>
 
 <div class="page-head">
@@ -59,7 +77,8 @@
 
 @if($leaveRequests->count())
     <div class="card">
-        <table>
+        <div class="leave-table-wrap">
+        <table class="leave-table">
             <thead>
                 <tr>
                     <th>NHÂN VIÊN</th>
@@ -76,24 +95,24 @@
             <tbody>
                 @foreach($leaveRequests as $leave)
                     <tr>
-                        <td><strong>{{ optional($leave->employee)->name }}</strong></td>
-                        <td>{{ $leave->type_label }}</td>
-                        <td>{{ \Carbon\Carbon::parse($leave->start_date)->format('d/m/Y') }}</td>
-                        <td>{{ \Carbon\Carbon::parse($leave->end_date)->format('d/m/Y') }}</td>
-                        <td>
+                        <td class="employee-cell"><strong>{{ optional($leave->employee)->name }}</strong></td>
+                        <td class="type-cell">{{ $leave->type_label }}</td>
+                        <td class="date-cell">{{ \Carbon\Carbon::parse($leave->start_date)->format('d/m/Y') }}</td>
+                        <td class="date-cell">{{ \Carbon\Carbon::parse($leave->end_date)->format('d/m/Y') }}</td>
+                        <td class="days-cell">
                             @if($leave->half_day)
                                 <span style="color: #1976d2; font-weight: bold;">{{ $leave->days }} (1/2 ngày)</span>
                             @else
                                 {{ $leave->days }}
                             @endif
                         </td>
-                        <td>
+                        <td class="reason-cell">
                             {{ $leave->reason ?? 'Không có lý do' }}
                             @if($leave->document_path)
                                 <div><a href="{{ route('leave_requests.document', $leave) }}">{{ $leave->document_name ?: 'Tải minh chứng' }}</a></div>
                             @endif
                         </td>
-                        <td>
+                        <td class="urgent-cell">
                             @if($leave->is_urgent)
                                 <span style="color: #d32f2f; font-weight: bold; background: #ffebee; padding: 2px 8px; border-radius: 4px;">Khẩn cấp</span>
                                 @if($leave->urgent_reason)
@@ -105,7 +124,7 @@
                                 -
                             @endif
                         </td>
-                        <td>
+                        <td class="status-cell">
                             <span class="badge 
                                 @if($leave->status === 'approved') approved
                                 @elseif($leave->status === 'rejected') rejected
@@ -129,7 +148,7 @@
                                 </div>
                             @endif
                         </td>
-                        <td>
+                        <td class="action-cell">
                             <div class="actions">
                                 @if($leave->status === 'pending' && \App\Support\RequestApprover::canReview($currentUser, $leave->employee))
                                     <form method="POST" action="{{ route('leave_requests.approve', $leave) }}" style="display:inline">
@@ -157,6 +176,7 @@
                 @endforeach
             </tbody>
         </table>
+        </div>
     </div>
 
     <div class="pagination">

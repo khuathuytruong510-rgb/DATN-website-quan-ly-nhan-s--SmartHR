@@ -95,6 +95,7 @@
                 <label>Họ tên</label>
                 <input type="text" id="employeeName" readonly value="{{ optional($contract->employee)->name ?? '' }}">
             </div>
+            <input type="hidden" name="employee_email" id="employeeEmail" value="{{ old('employee_email', optional($contract->employee)->email ?? '') }}">
             <div class="field">
                 <label>Phòng ban</label>
                 <input type="text" id="employeeDepartment" readonly value="{{ optional(optional($contract->employee)->department)->name ?? '' }}">
@@ -132,7 +133,7 @@
             </div>
             <div class="field">
                 <label>Ngày bắt đầu <span class="text-danger">*</span></label>
-                <input type="date" name="start_date" value="{{ old('start_date', optional($contract->start_date)->format('Y-m-d')) }}" required>
+                <input type="date" name="start_date" value="{{ old('start_date', optional($contract->start_date)->format('Y-m-d')) }}" @unless($isEdit) min="{{ now()->toDateString() }}" @endunless required>
                 @error('start_date')<span class="error">{{ $message }}</span>@enderror
             </div>
             <div class="field">
@@ -191,7 +192,7 @@
             </div>
             <div class="field">
                 <label>Nơi làm việc</label>
-                <input type="text" name="workplace" value="{{ old('workplace', $contract->workplace) }}">
+                <input type="text" name="workplace" value="{{ old('workplace', $contract->workplace ?: 'Trường Cao đẳng FPT Polytechnic') }}">
             </div>
             <div class="field">
                 <label>Phúc lợi</label>
@@ -457,6 +458,7 @@
                 .then(data => {
                     if (document.getElementById('employeeCode')) document.getElementById('employeeCode').value = data.employee_code || '';
                     if (document.getElementById('employeeName')) document.getElementById('employeeName').value = data.name || '';
+                    if (document.getElementById('employeeEmail')) document.getElementById('employeeEmail').value = data.email || '';
                     if (document.getElementById('employeeDepartment')) document.getElementById('employeeDepartment').value = data.department?.name || '';
                     if (document.getElementById('employeePosition')) document.getElementById('employeePosition').value = data.position || '';
                     const base = data.position_base_salary || 0;
@@ -479,7 +481,27 @@
     noEndDate?.addEventListener('change', function () {
         if (endDateInput) { endDateInput.disabled = this.checked; if (this.checked) endDateInput.value = ''; }
     });
-    if (noEndDate?.checked && endDateInput) endDateInput.disabled = true;
+
+    function syncEndDateForContractType() {
+        if (!contractTypeSelect || !noEndDate || !endDateInput) return;
+        const requiresEndDate = ['probation', 'fixed_term', 'internship', 'seasonal'].includes(contractTypeSelect.value);
+        if (requiresEndDate) {
+            noEndDate.checked = false;
+            endDateInput.disabled = false;
+            endDateInput.required = true;
+        } else if (contractTypeSelect.value === 'indefinite') {
+            noEndDate.checked = true;
+            endDateInput.value = '';
+            endDateInput.disabled = true;
+            endDateInput.required = false;
+        } else {
+            endDateInput.disabled = noEndDate.checked;
+            endDateInput.required = false;
+        }
+    }
+
+    contractTypeSelect?.addEventListener('change', syncEndDateForContractType);
+    syncEndDateForContractType();
 
     // Status badge
     statusSelect?.addEventListener('change', function () { updateStatusBadge(this.value); });

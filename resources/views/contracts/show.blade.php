@@ -142,7 +142,7 @@
                     <form action="{{ route('contracts.reject_signature', $contract) }}" method="POST" class="mb-2">
                         @csrf
                         <button type="submit" class="btn btn-warning w-100"
-                            data-confirm="Cập nhật lương hợp đồng theo bảng lương tháng {{ $payroll->month }}/{{ $payroll->year }}?">
+                            data-confirm="Cập nhật lương hợp đồng theo bảng lương gần nhất?">
                             🔄 Đồng bộ lương hợp đồng
                         </button>
                     </form>

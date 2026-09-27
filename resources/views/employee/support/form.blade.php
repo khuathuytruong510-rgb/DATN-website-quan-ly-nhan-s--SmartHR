@@ -27,13 +27,23 @@
             @error('subject')<div class="error">{{ $message }}</div>@enderror
         </div>
 
+        @if(($targetEmployee ?? $employee)->id !== $employee->id)
+            <input type="hidden" name="employee_id" value="{{ ($targetEmployee ?? $employee)->id }}">
+            <div class="callout info">
+                Yêu cầu chỉnh sửa hồ sơ: <strong>{{ ($targetEmployee ?? $employee)->name }}</strong>
+                @if(($targetEmployee ?? $employee)->employee_code)
+                    (<code>{{ ($targetEmployee ?? $employee)->employee_code }}</code>)
+                @endif
+            </div>
+        @endif
+
         <div class="field">
             <label>Loại</label>
             <select name="type">
                 <option value="attendance">Lỗi chấm công</option>
                 <option value="payroll">Lỗi bảng lương</option>
                 <option value="document">Yêu cầu giấy tờ</option>
-                <option value="personnel">Thông tin nhân sự</option>
+                <option value="personnel" selected>Thông tin nhân sự</option>
                 <option value="other">Khác</option>
             </select>
             @error('type')<div class="error">{{ $message }}</div>@enderror

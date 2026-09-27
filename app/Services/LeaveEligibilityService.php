@@ -224,13 +224,24 @@ class LeaveEligibilityService
      */
     public function laborLawAnnualDays(Employee $employee): int
     {
-        $start = $employee->start_date ?? $this->activeContract($employee)?->start_date;
+        $contract = $this->activeContract($employee);
+        $start = $employee->start_date ?? $contract?->start_date;
         if (! $start) {
             return 12;
         }
 
         $start = Carbon::parse($start)->startOfDay();
-        $months = max(0, (int) $start->diffInMonths(now()->startOfDay()));
+        $today = now()->startOfDay();
+        if ($contract?->start_date) {
+            $contractStart = Carbon::parse($contract->start_date)->startOfDay();
+            if ($contractStart->year === $today->year
+                && $start->year === $contractStart->year
+                && $start->month === $contractStart->month) {
+                return max(0, 12 - $contractStart->month + 1);
+            }
+        }
+
+        $months = max(0, (int) $start->diffInMonths($today));
         if ($months < 12) {
             return $months;
         }
@@ -244,6 +255,10 @@ class LeaveEligibilityService
     {
         $legal = $this->laborLawAnnualDays($employee);
         $profile = (int) ($employee->leave_balance ?: 0);
+
+        if ($legal < 12) {
+            return min($legal, $profile ?: $legal);
+        }
 
         return max($legal, $profile ?: $legal);
     }

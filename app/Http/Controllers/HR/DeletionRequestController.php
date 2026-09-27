@@ -57,8 +57,20 @@ class DeletionRequestController extends Controller
         ]);
     }
 
-    public function create(Request $request): View
+    public function create(Request $request): View|RedirectResponse
     {
+        $user = auth()->user();
+        if ($user
+            && ! $user->is_admin
+            && ! $user->is_super_admin
+            && ! $user->canManageHr()
+            && $request->query('kind') === DeletionRequest::KIND_EMPLOYEE
+            && $request->filled('target')) {
+            return redirect()->route('me.support_requests.create', [
+                'employee_id' => $request->integer('target'),
+            ]);
+        }
+
         $this->assertManager();
 
         $kind = $request->query('kind');
@@ -90,6 +102,23 @@ class DeletionRequestController extends Controller
             'kind' => $kind,
             'target' => $target,
         ]);
+    }
+
+    public function legacyCreate(Request $request): View|RedirectResponse
+    {
+        $user = $request->user();
+        if ($user
+            && ! $user->is_admin
+            && ! $user->is_super_admin
+            && ! $user->canManageHr()
+            && $request->query('kind') === DeletionRequest::KIND_EMPLOYEE
+            && $request->filled('target')) {
+            return redirect()->route('me.support_requests.create', [
+                'employee_id' => $request->integer('target'),
+            ]);
+        }
+
+        return $this->create($request);
     }
 
     public function store(Request $request): RedirectResponse

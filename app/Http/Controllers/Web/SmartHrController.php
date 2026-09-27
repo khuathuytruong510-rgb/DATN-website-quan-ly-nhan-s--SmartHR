@@ -614,8 +614,8 @@ class SmartHrController extends Controller
 
         if ($data['role'] === 'director' && User::query()->where('is_director', true)->exists()) {
             return redirect()
-                ->route('director_succession.index')
-                ->with('error', 'Đã có người giữ vai trò Giám đốc. Sau quyết định của doanh nghiệp, hãy cập nhật người giữ chức tại đây — không tạo thêm tài khoản Director và không đổi tên tài khoản cũ.');
+                ->route('accounts.index')
+                ->with('error', 'Đã có người giữ vai trò Giám đốc. Không thể tạo thêm tài khoản Director.');
         }
 
         $user = User::create(array_merge([
@@ -647,8 +647,8 @@ class SmartHrController extends Controller
 
         if ($linkEmployee) {
             return redirect()
-                ->route('director_succession.index')
-                ->with('success', 'Đã kết nối tài khoản với hồ sơ '.$linkEmployee->name.'. Chọn người này trong danh sách để cập nhật người giữ chức Giám đốc — không đổi tên tài khoản cũ.');
+                ->route('accounts.index')
+                ->with('success', 'Đã kết nối tài khoản với hồ sơ '.$linkEmployee->name.'.');
         }
 
         return redirect()->route('accounts.index')->with('success', 'Tạo tài khoản thành công.');
@@ -689,8 +689,8 @@ class SmartHrController extends Controller
         $leavingDirector = $data['role'] !== 'director' && $user->is_director;
         if ($becomingDirector || $leavingDirector) {
             return redirect()
-                ->route('director_succession.index')
-                ->with('error', 'Không cấp hoặc thu hồi role Giám đốc bằng cách sửa tài khoản. Hãy cập nhật người giữ chức để giữ lịch sử nhiệm kỳ và phê duyệt.');
+                ->route('accounts.index')
+                ->with('error', 'Không thể cấp hoặc thu hồi role Giám đốc bằng cách sửa tài khoản.');
         }
 
         if ($user->is_super_admin && $data['role'] !== 'super_admin'
@@ -896,8 +896,8 @@ class SmartHrController extends Controller
         $wantsDirector = $request->boolean('is_director');
         if ($wantsDirector !== (bool) $user->is_director) {
             return redirect()
-                ->route('director_succession.index')
-                ->with('error', 'Role Giám đốc phải đi theo người đang giữ chức. Dùng trang Cập nhật người giữ chức Giám đốc, không tick phân quyền trực tiếp.');
+                ->route('permissions.index')
+                ->with('error', 'Không thể thay đổi role Giám đốc trực tiếp trong phần phân quyền.');
         }
 
         if ($user->is_super_admin && ! $wantsSuperAdmin
@@ -972,10 +972,8 @@ class SmartHrController extends Controller
 
     public function destroyDepartment(Department $department): RedirectResponse
     {
-        return redirect()->route('deletion_requests.create', [
-            'kind' => 'department',
-            'target' => $department->id,
-        ])->with('info', 'Xóa phòng ban phải qua Giám đốc duyệt. Vui lòng nhập lý do và gửi yêu cầu.');
+        return redirect()->route('deletion_requests.create_department', $department)
+            ->with('info', 'Xóa phòng ban phải qua Giám đốc duyệt. Vui lòng nhập lý do và gửi yêu cầu.');
     }
 
     public function employees(Request $request)
@@ -1125,10 +1123,8 @@ class SmartHrController extends Controller
             abort(403, 'Xóa nhân viên phải qua Giám đốc duyệt.');
         }
 
-        return redirect()->route('deletion_requests.create', [
-            'kind' => 'employee',
-            'target' => $employee->id,
-        ])->with('info', 'Xóa nhân viên phải qua Giám đốc duyệt. Vui lòng nhập lý do và gửi yêu cầu.');
+        return redirect()->route('deletion_requests.create_employee', $employee)
+            ->with('info', 'Xóa nhân viên phải qua Giám đốc duyệt. Vui lòng nhập lý do và gửi yêu cầu.');
     }
 
     public function contracts(Request $request): View
@@ -2337,6 +2333,7 @@ class SmartHrController extends Controller
             return response()->json([
                 'id' => $employee->id,
                 'name' => $employee->name,
+                'email' => $employee->email,
                 'employee_code' => $employee->employee_code,
                 'position' => $position,
                 'position_id' => $employee->position_id,
@@ -2535,8 +2532,8 @@ class SmartHrController extends Controller
             abort(403);
         }
 
-        if ($contract->director_signed_at || $contract->isContentLocked()) {
-            return back()->with('error', 'Không xóa hợp đồng đã khóa hoặc đã ký số.');
+        if ($contract->status !== Contract::STATUS_DRAFT) {
+            return back()->with('error', 'Chỉ được xóa hợp đồng đang ở trạng thái nháp.');
         }
 
         $contract->delete();

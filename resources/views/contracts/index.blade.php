@@ -211,6 +211,16 @@
                                        title="Gia hạn thời hạn, giữ nguyên nội dung hợp đồng">
                                         🔄 Gia hạn
                                     </a>
+                                    @if($contract->status === \App\Models\Contract::STATUS_DRAFT)
+                                        <form action="{{ route('contracts.destroy', $contract) }}" method="POST" class="d-inline">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                data-confirm="Xóa hợp đồng nháp {{ $contract->contract_code }}? Thao tác này không thể hoàn tác.">
+                                                Xóa
+                                            </button>
+                                        </form>
+                                    @endif
                                     @if($hasMismatch && ! $contract->isContentLocked())
                                         <form action="{{ route('contracts.sync_salary', $contract) }}" method="POST" class="d-inline">
                                             @csrf

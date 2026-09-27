@@ -632,7 +632,6 @@
                         <a class="{{ request()->routeIs('accounts.*') ? 'active' : '' }}" href="{{ route('accounts.index') }}"><i class="bi bi-people"></i>Quản lý tài khoản</a>
                         <a class="{{ request()->routeIs('admin.notifications.*') ? 'active' : '' }}" href="{{ route('admin.notifications.index') }}"><i class="bi bi-bell"></i>Thông báo</a>
                         <a class="{{ request()->routeIs('permissions.*') ? 'active' : '' }}" href="{{ route('permissions.index') }}"><i class="bi bi-shield-lock"></i>Phân quyền</a>
-                        <a class="{{ request()->routeIs('director_succession.*') ? 'active' : '' }}" href="{{ route('director_succession.index') }}"><i class="bi bi-person-badge"></i>Người giữ chức GĐ</a>
                         <a class="{{ request()->routeIs('system_logs.*') ? 'active' : '' }}" href="{{ route('system_logs.index') }}"><i class="bi bi-journal-text"></i>Nhật ký hệ thống</a>
                         <a class="{{ request()->routeIs('settings.*') ? 'active' : '' }}" href="{{ route('settings.index') }}"><i class="bi bi-gear"></i>Cấu hình hệ thống</a>
                         @if($user->is_super_admin)

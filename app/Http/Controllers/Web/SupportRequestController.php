@@ -25,11 +25,15 @@ class SupportRequestController extends Controller
         return view('employee.support.index', compact('requests'));
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $employee = $this->currentEmployee();
+        $targetEmployee = $employee;
+        if (auth()->user()?->canActAsDirector() && $request->filled('employee_id')) {
+            $targetEmployee = Employee::findOrFail($request->integer('employee_id'));
+        }
 
-        return view('employee.support.form', compact('employee'));
+        return view('employee.support.form', compact('employee', 'targetEmployee'));
     }
 
     public function store(Request $request)
@@ -41,10 +45,16 @@ class SupportRequestController extends Controller
             'subject' => ['required', 'string', 'max:255'],
             'message' => ['required', 'string'],
             'type' => ['required', 'in:payroll,attendance,document,personnel,other'],
+            'employee_id' => ['nullable', 'integer', 'exists:employees,id'],
             'attachment' => ['nullable', 'file', 'max:5120'],
         ]);
 
-        $this->service->submit($employee, $user, $data, $request->file('attachment'));
+        $targetEmployee = $employee;
+        if ($user->canActAsDirector() && ! empty($data['employee_id'])) {
+            $targetEmployee = Employee::findOrFail($data['employee_id']);
+        }
+
+        $this->service->submit($targetEmployee, $user, $data, $request->file('attachment'));
 
         return redirect()->route('me.support_requests')->with(
             'success',

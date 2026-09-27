@@ -72,6 +72,7 @@
                     <div id="face-guide" class="absolute inset-x-0 bottom-0 bg-black/50 text-white text-sm px-3 py-2">Đang mở camera...</div>
                 </div>
                 <div class="flex flex-col gap-3">
+                    <img id="face-preview" class="hidden w-full h-40 object-cover rounded-lg border border-gray-200" alt="Ảnh khuôn mặt đã chụp">
                     <label class="block text-sm font-medium text-gray-700">Ghi chú (tùy chọn)</label>
                     <textarea id="attendance-notes" class="w-full px-3 py-2 border border-gray-300 rounded-md" rows="3" placeholder="Ví dụ: Làm việc tại văn phòng"></textarea>
                     <button id="retry-camera-btn" type="button" class="w-full bg-slate-700 hover:bg-slate-800 text-white font-semibold py-3 px-4 rounded-lg">
@@ -140,6 +141,7 @@
 
 @push('scripts')
 <script src="/vendor/leaflet/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 
 <script>
     // Global variables
@@ -181,13 +183,11 @@
         loadFaceProfile();
         initializeFaceCamera();
         document.getElementById('retry-camera-btn')?.addEventListener('click', initializeFaceCamera);
-        document.getElementById('register-face-btn')?.addEventListener('click', function () {
-            captureFaceImage();
-            registerFace();
+        document.getElementById('register-face-btn')?.addEventListener('click', async function () {
+            if (await captureFaceImage()) registerFace();
         });
-        document.getElementById('punch-face-btn')?.addEventListener('click', function () {
-            captureFaceImage();
-            submitFaceAttendance();
+        document.getElementById('punch-face-btn')?.addEventListener('click', async function () {
+            if (await captureFaceImage()) submitFaceAttendance();
         });
     });
 
@@ -814,6 +814,8 @@
     // Face attendance helpers
     let faceStream = null;
     let faceCapturedImage = null;
+    let faceCapturedEmbedding = null;
+    let faceModelsReady = null;
 
     async function loadFaceProfile() {
         try {
@@ -845,6 +847,7 @@
 
     async function initializeFaceCamera() {
         try {
+            await loadFaceModels();
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 throw new Error('Trình duyệt không hỗ trợ camera');
             }
@@ -863,13 +866,52 @@
         }
     }
 
-    function captureFaceImage() {
+    async function loadFaceModels() {
+        if (faceModelsReady) return faceModelsReady;
+        if (!window.faceapi) throw new Error('Không tải được thư viện nhận diện khuôn mặt');
+
+        faceModelsReady = Promise.all([
+            faceapi.nets.tinyFaceDetector.loadFromUri('/models/face-api'),
+            faceapi.nets.faceLandmark68Net.loadFromUri('/models/face-api'),
+            faceapi.nets.faceRecognitionNet.loadFromUri('/models/face-api'),
+        ]);
+        await faceModelsReady;
+    }
+
+    async function captureFaceImage() {
         const video = document.getElementById('face-video');
         const canvas = document.getElementById('face-canvas');
         const preview = document.getElementById('face-preview');
 
         if (!video || !canvas || !preview) {
-            return;
+            return false;
+        }
+        if (!video.videoWidth || !video.videoHeight) {
+            showFaceMessage('Camera chưa sẵn sàng. Vui lòng chờ vài giây rồi thử lại.');
+            return false;
+        }
+
+        try {
+            await loadFaceModels();
+            const detections = await faceapi
+                .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
+                .withFaceLandmarks()
+                .withFaceDescriptors();
+
+            if (detections.length !== 1) {
+                faceCapturedEmbedding = null;
+                showFaceMessage(detections.length === 0
+                    ? 'Không phát hiện khuôn mặt. Hãy nhìn thẳng camera và đủ ánh sáng.'
+                    : 'Chỉ được có một khuôn mặt trong khung hình.');
+                return false;
+            }
+
+            faceCapturedEmbedding = Array.from(detections[0].descriptor);
+        } catch (error) {
+            console.error('Face detection error:', error);
+            faceCapturedEmbedding = null;
+            showFaceMessage('Không thể nhận diện khuôn mặt. Hãy tải lại trang và thử lại.');
+            return false;
         }
 
         canvas.width = video.videoWidth;
@@ -883,12 +925,13 @@
         preview.classList.remove('hidden');
 
         document.getElementById('register-face-btn').disabled = false;
-        document.getElementById('face-status-message').textContent = 'Đã chụp ảnh. Bạn có thể đăng ký hoặc chấm công bằng khuôn mặt.';
+        document.getElementById('face-status-message').textContent = 'Đã nhận diện khuôn mặt. Bạn có thể đăng ký hoặc chấm công.';
+        return true;
     }
 
     async function registerFace() {
-        if (!faceCapturedImage) {
-            showFaceMessage('Vui lòng chụp ảnh trước khi đăng ký.');
+        if (!faceCapturedImage || !faceCapturedEmbedding) {
+            showFaceMessage('Vui lòng để camera nhận diện khuôn mặt trước khi đăng ký.');
             return;
         }
 
@@ -901,7 +944,10 @@
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                 },
                 credentials: 'include',
-                body: JSON.stringify({ face_image: faceCapturedImage }),
+                body: JSON.stringify({
+                    face_image: faceCapturedImage,
+                    face_embedding: JSON.stringify(faceCapturedEmbedding),
+                }),
             });
             const data = await response.json();
 
@@ -920,8 +966,47 @@
     }
 
     async function submitFaceAttendance() {
-        showFaceMessage('Chấm công bằng ảnh tĩnh không được phép. Hãy dùng camera để nhận diện khuôn mặt thật.', false);
-        return;
+        if (!faceCapturedEmbedding) {
+            showFaceMessage('Vui lòng để camera nhận diện khuôn mặt trước khi chấm công.');
+            return;
+        }
+
+        if (!locationAvailable || currentLatitude === undefined || currentLongitude === undefined) {
+            showFaceMessage('Chưa xác định được vị trí. Hãy bật GPS và thử lại.');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/employee/attendance/face', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    face_embedding: JSON.stringify(faceCapturedEmbedding),
+                    latitude: currentLatitude,
+                    longitude: currentLongitude,
+                    notes: document.getElementById('attendance-notes')?.value || null,
+                }),
+            });
+            const data = await response.json();
+
+            if (!data.success) {
+                showFaceMessage(data.message || 'Khuôn mặt không khớp. Vui lòng thử lại.');
+                return;
+            }
+
+            showFaceMessage(data.message || 'Chấm công thành công.', true);
+            document.getElementById('attendance-notes').value = '';
+            loadTodayAttendance();
+            setTimeout(() => loadAttendanceHistory(), 500);
+        } catch (error) {
+            console.error('Face attendance error:', error);
+            showFaceMessage('Không thể gửi xác minh khuôn mặt. Vui lòng thử lại.');
+        }
     }
 
     function showFaceMessage(message, success = false) {

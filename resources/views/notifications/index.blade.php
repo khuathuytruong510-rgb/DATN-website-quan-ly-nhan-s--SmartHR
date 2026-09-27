@@ -97,14 +97,25 @@
                                 <a href="{{ route('accounts.index') }}" class="btn primary">Mở quản lý tài khoản</a>
                             </div>
                         @endif
+                        @if(data_get($notification->data, 'type') === 'employee_account_creation' && (auth()->user()->is_admin || auth()->user()->is_super_admin))
+                            @php
+                                $employeeId = data_get($notification->data, 'employee_id');
+                                $employeeEmail = $employeeId ? optional(\App\Models\Employee::find($employeeId))->email : null;
+                            @endphp
+                            @if($employeeId && $employeeEmail)
+                                <div class="actions" style="margin-top:10px;">
+                                    <span class="muted" style="font-size:13px;">Email: <strong>{{ $employeeEmail }}</strong></span>
+                                    <a href="{{ route('accounts.create', ['employee' => $employeeId]) }}" class="btn primary">Tạo tài khoản</a>
+                                </div>
+                            @endif
+                        @endif
                         @if(data_get($notification->data, 'type') === 'contract_create_account' && (auth()->user()?->is_admin || auth()->user()?->is_super_admin))
                             @php
                                 $createEmpId = data_get($notification->data, 'employee_id');
                                 $createContractId = data_get($notification->data, 'contract_id');
-                                $createEmail = data_get($notification->data, 'employee_email');
                             @endphp
                             <div class="actions" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-                                <span class="muted" style="font-size:13px;">Email: <strong>{{ $createEmail ?: '—' }}</strong> · MK mặc định: <code>123456</code></span>
+                                <span class="muted" style="font-size:13px;">Email: <strong>{{ data_get($notification->data, 'employee_email') ?: '—' }}</strong> · MK mặc định: <code>123456</code></span>
                                 @if($createEmpId && $createContractId)
                                     <a href="{{ route('accounts.create', ['employee' => $createEmpId, 'contract' => $createContractId]) }}" class="btn primary">Tạo tài khoản &amp; gửi email</a>
                                 @endif

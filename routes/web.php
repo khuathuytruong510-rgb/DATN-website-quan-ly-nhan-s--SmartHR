@@ -57,9 +57,6 @@ Route::middleware('auth')->group(function () {
     Route::middleware(\App\Http\Middleware\EnsureAdmin::class)->group(function () {
         Route::get('/permissions', [SmartHrController::class, 'permissions'])->name('permissions.index');
         Route::put('/permissions/{user}', [SmartHrController::class, 'updatePermissions'])->name('permissions.update');
-        Route::get('/director-succession', [\App\Http\Controllers\Web\DirectorSuccessionController::class, 'index'])->name('director_succession.index');
-        Route::get('/director-succession/nguoi-moi', [\App\Http\Controllers\Web\DirectorSuccessionController::class, 'prepareNew'])->name('director_succession.prepare_new');
-        Route::post('/director-succession', [\App\Http\Controllers\Web\DirectorSuccessionController::class, 'store'])->name('director_succession.store');
         Route::get('/system-logs', [SmartHrController::class, 'systemLogs'])->name('system_logs.index');
         Route::get('/settings', [SmartHrController::class, 'settings'])->name('settings.index');
         Route::get('/admin/notifications', [NotificationController::class, 'adminIndex'])->name('admin.notifications.index');
@@ -175,7 +172,7 @@ Route::middleware('auth')->group(function () {
 
         // Yêu cầu xóa nhân viên / phòng ban — HR tạo, Giám đốc duyệt, HR thực hiện
         Route::get('/deletion-requests', [\App\Http\Controllers\HR\DeletionRequestController::class, 'index'])->name('deletion_requests.index');
-        Route::get('/deletion-requests/create', [\App\Http\Controllers\HR\DeletionRequestController::class, 'create'])->name('deletion_requests.create');
+        Route::get('/deletion-requests/create', [\App\Http\Controllers\HR\DeletionRequestController::class, 'legacyCreate'])->name('deletion_requests.create');
         Route::post('/deletion-requests', [\App\Http\Controllers\HR\DeletionRequestController::class, 'store'])->name('deletion_requests.store');
         Route::get('/deletion-requests/{deletionRequest}', [\App\Http\Controllers\HR\DeletionRequestController::class, 'show'])->name('deletion_requests.show');
         Route::post('/deletion-requests/{deletionRequest}/approve', [\App\Http\Controllers\HR\DeletionRequestController::class, 'approve'])->name('deletion_requests.approve');

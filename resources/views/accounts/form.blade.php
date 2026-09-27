@@ -8,7 +8,7 @@
             <h1>Tạo tài khoản</h1>
         </div>
         <div class="page-actions">
-            <a class="btn" href="{{ !empty($contract) ? route('admin.notifications.index') : (!empty($linkEmployee) ? route('director_succession.index') : route('accounts.index')) }}">Quay lại</a>
+            <a class="btn" href="{{ !empty($contract) ? route('admin.notifications.index') : route('accounts.index') }}">Quay lại</a>
         </div>
     </div>
 

@@ -26,6 +26,8 @@
         @if(auth()->user()?->canManageHr() && \App\Support\RequestApprover::hrMayManage(auth()->user(), $employee))
             <a class="btn" href="{{ route('transfers.create', ['employee' => $employee->id]) }}">Điều chuyển phòng ban</a>
             <a class="btn" href="{{ route('employees.edit', $employee) }}">Sửa thông tin</a>
+        @elseif($directorView)
+            <a class="btn primary" href="{{ route('me.support_requests.create', ['employee_id' => $employee->id]) }}">Gửi yêu cầu sửa thông tin</a>
         @endif
         <a class="btn link" href="{{ route('employees.index') }}">Quay lại</a>
     </div>
