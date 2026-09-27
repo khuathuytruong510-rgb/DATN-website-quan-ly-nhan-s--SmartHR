@@ -79,7 +79,7 @@ class OvertimeRequestService
 
     public function assign(User $actor, array $data): OvertimeRequest
     {
-        if (! $actor->is_hr) {
+        if (! $actor->canManageHr()) {
             throw new RuntimeException('Chỉ HR được chỉ định tăng ca.');
         }
 

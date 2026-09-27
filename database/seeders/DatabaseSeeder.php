@@ -32,6 +32,7 @@ class DatabaseSeeder extends Seeder
             'api_token' => Str::random(60),
             'avatar' => '/images/avatars/truong.svg',
             'is_admin' => true,
+            'is_super_admin' => false,
             'is_hr' => false,
             'is_accountant' => false,
             'is_director' => false,

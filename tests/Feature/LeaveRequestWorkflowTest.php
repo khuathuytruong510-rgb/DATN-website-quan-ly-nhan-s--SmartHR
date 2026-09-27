@@ -9,6 +9,8 @@ use App\Models\LeaveRequest;
 use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class LeaveRequestWorkflowTest extends TestCase
@@ -54,7 +56,8 @@ class LeaveRequestWorkflowTest extends TestCase
         $this->actingAs($user)
             ->get(route('me.leave_requests.create'))
             ->assertOk()
-            ->assertDontSee('Nghỉ thai sản')
+            ->assertDontSee('value="maternity"')
+            ->assertSee('Nghỉ thai sản (vợ sinh con)')
             ->assertSee('Nghỉ phép năm');
     }
 
@@ -74,6 +77,157 @@ class LeaveRequestWorkflowTest extends TestCase
         $this->assertLessThan($datePos, $typePos);
         $this->assertStringContainsString('leave-quota-card', $html);
         $this->assertStringContainsString('113', $html);
+    }
+
+    public function test_spouse_birth_leave_days_follow_birth_rules_and_working_calendar(): void
+    {
+        $eligibility = app(\App\Services\LeaveEligibilityService::class);
+
+        $this->assertSame(['days' => 5, 'end_date' => '2026-09-08'], $eligibility->spouseBirthSchedule('2026-09-01', 1));
+        $this->assertSame(['days' => 5, 'end_date' => '2026-09-12'], $eligibility->spouseBirthSchedule('2026-09-08', 1));
+        $this->assertSame(['days' => 7, 'end_date' => '2026-09-15'], $eligibility->spouseBirthSchedule('2026-09-08', 1, true));
+        $this->assertSame(['days' => 10, 'end_date' => '2026-09-18'], $eligibility->spouseBirthSchedule('2026-09-08', 2));
+        $this->assertSame(['days' => 14, 'end_date' => '2026-09-23'], $eligibility->spouseBirthSchedule('2026-09-08', 2, true));
+        $this->assertSame(['days' => 13, 'end_date' => '2026-09-22'], $eligibility->spouseBirthSchedule('2026-09-08', 3));
+        $this->assertSame(['days' => 17, 'end_date' => '2026-09-26'], $eligibility->spouseBirthSchedule('2026-09-08', 3, true));
+    }
+
+    public function test_spouse_birth_schedule_uses_company_holidays_from_payroll_calendar(): void
+    {
+        \Illuminate\Support\Facades\DB::table('holidays')->insert([
+            'date' => '2026-09-03',
+            'name' => 'Ngày nghỉ công ty',
+            'type' => 'company',
+            'is_paid' => true,
+            'work_rate' => 1,
+            'source' => 'company',
+            'is_substitute' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $eligibility = app(\App\Services\LeaveEligibilityService::class);
+        $this->assertSame(['days' => 5, 'end_date' => '2026-09-09'], $eligibility->spouseBirthSchedule('2026-09-01', 1));
+        $this->assertContains('2026-09-03', $eligibility->spouseBirthCalendarOptions(2026, 2026)['holidayDates']);
+    }
+
+    public function test_spouse_birth_submission_recomputes_end_date_and_stores_private_proof(): void
+    {
+        Storage::fake('local');
+        ['user' => $user, 'employee' => $employee] = $this->people();
+
+        $leave = app(\App\Services\LeaveRequestService::class)->submit($employee, $user, [
+            'type' => \App\Support\LeaveTypes::SPOUSE_BIRTH,
+            'start_date' => '2026-09-08',
+            'end_date' => '2026-09-09',
+            'children_count' => 2,
+            'birth_complication' => true,
+            'document' => UploadedFile::fake()->create('giay-khai-sinh.pdf', 64, 'application/pdf'),
+        ]);
+
+        $this->assertSame('2026-09-23', $leave->end_date->toDateString());
+        $this->assertSame(14.0, $leave->days);
+        $this->assertSame('Vợ sinh con', $leave->reason);
+        $this->assertSame(2, $leave->children_count);
+        $this->assertTrue($leave->birth_complication);
+        $this->assertSame('giay-khai-sinh.pdf', $leave->document_name);
+        Storage::disk('local')->assertExists($leave->document_path);
+    }
+
+    public function test_employee_spouse_birth_form_uses_server_end_date_and_protects_proof_download(): void
+    {
+        Storage::fake('local');
+        ['hr' => $hr, 'user' => $user, 'employee' => $employee] = $this->people();
+
+        $this->actingAs($user)->post(route('me.leave_requests.store'), [
+            'type' => \App\Support\LeaveTypes::SPOUSE_BIRTH,
+            'start_date' => '2026-09-08',
+            'end_date' => '2026-09-09',
+            'children_count' => 2,
+            'birth_complication' => 1,
+            'document' => UploadedFile::fake()->create('giay-khai-sinh.pdf', 64, 'application/pdf'),
+        ])->assertRedirect(route('me.leave_requests'));
+
+        $leave = LeaveRequest::where('employee_id', $employee->id)->firstOrFail();
+        $this->assertSame('2026-09-23', $leave->end_date->toDateString());
+        $this->assertSame(14.0, $leave->days);
+        $this->assertDatabaseHas('leave_requests', [
+            'id' => $leave->id,
+            'children_count' => 2,
+            'birth_complication' => 1,
+            'reason' => 'Vợ sinh con',
+        ]);
+
+        $this->actingAs($hr)->get(route('leave_requests.document', $leave))
+            ->assertOk()
+            ->assertDownload('giay-khai-sinh.pdf');
+        $this->actingAs($user)->get(route('me.leave_requests.document', $leave))
+            ->assertOk()
+            ->assertDownload('giay-khai-sinh.pdf');
+
+        $otherUser = User::factory()->create();
+        Employee::create([
+            'name' => 'Other Employee',
+            'email' => $otherUser->email,
+            'user_id' => $otherUser->id,
+            'position' => 'Dev',
+            'department_id' => $employee->department_id,
+            'status' => 'active',
+            'employee_code' => 'IT02',
+        ]);
+        $this->actingAs($otherUser)->get(route('me.leave_requests.document', $leave))->assertForbidden();
+    }
+
+    public function test_hr_can_create_spouse_birth_leave_with_server_computed_dates(): void
+    {
+        Storage::fake('local');
+        ['hr' => $hr, 'employee' => $employee] = $this->people();
+
+        $this->actingAs($hr)->get(route('leave_requests.create'))
+            ->assertOk()
+            ->assertSee('children_count')
+            ->assertSee('document');
+
+        $this->actingAs($hr)->post(route('leave_requests.store'), [
+            'employee_id' => $employee->id,
+            'type' => \App\Support\LeaveTypes::SPOUSE_BIRTH,
+            'start_date' => '2026-09-08',
+            'end_date' => '2026-09-09',
+            'children_count' => 1,
+            'reason' => 'Vợ sinh con',
+        ])->assertRedirect(route('leave_requests.index'));
+
+        $leave = LeaveRequest::where('employee_id', $employee->id)->firstOrFail();
+        $this->assertSame('2026-09-12', $leave->end_date->toDateString());
+        $this->assertSame(5.0, $leave->days);
+    }
+
+    public function test_approved_spouse_birth_attendance_skips_public_holidays_and_weekly_rest_days(): void
+    {
+        ['hr' => $hr, 'user' => $user, 'employee' => $employee] = $this->people();
+        $leave = app(\App\Services\LeaveRequestService::class)->submit($employee, $user, [
+            'type' => \App\Support\LeaveTypes::SPOUSE_BIRTH,
+            'start_date' => '2026-09-01',
+            'end_date' => '2026-09-01',
+            'children_count' => 1,
+            'birth_complication' => false,
+        ]);
+
+        $this->assertSame('2026-09-08', $leave->end_date->toDateString());
+        app(\App\Services\LeaveRequestService::class)->approve($leave, $hr);
+
+        $attendance = \App\Models\Attendance::where('notes', 'leave:'.$leave->id);
+        $this->assertSame(5, $attendance->count());
+        $this->assertDatabaseMissing('attendances', [
+            'employee_id' => $employee->id,
+            'date' => '2026-09-01',
+            'notes' => 'leave:'.$leave->id,
+        ]);
+        $this->assertDatabaseMissing('attendances', [
+            'employee_id' => $employee->id,
+            'date' => '2026-09-06',
+            'notes' => 'leave:'.$leave->id,
+        ]);
     }
 
     public function test_annual_entitlement_uses_labor_law_seniority_minimum(): void

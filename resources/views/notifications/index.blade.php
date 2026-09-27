@@ -7,10 +7,10 @@
         <div>
             <h1>Thông báo</h1>
         </div>
-        @if (auth()->user()->is_hr || auth()->user()->is_director)
+        @if (auth()->user()->canManageHr() || auth()->user()->canActAsDirector())
             <a href="{{ route('notifications.create') }}" class="btn primary">Tạo thông báo</a>
         @endif
-        @if (auth()->user()->is_admin && ! auth()->user()->is_hr)
+        @if ((auth()->user()->is_admin || auth()->user()->is_super_admin) && ! auth()->user()->canManageHr())
             <a href="{{ route('accounts.index') }}" class="btn">Quản lý tài khoản</a>
         @endif
     </div>
@@ -72,7 +72,7 @@
                                 <a href="{{ route('leave_requests.index') }}" class="btn primary">Mở đăng ký tăng ca</a>
                             </div>
                         @endif
-                        @if((data_get($notification->data, 'type') === 'support_request' || data_get($notification->data, 'type') === 'support_feedback') && data_get($notification->data, 'support_request_id') && (auth()->user()?->canManageHr() || auth()->user()?->is_director))
+                        @if((data_get($notification->data, 'type') === 'support_request' || data_get($notification->data, 'type') === 'support_feedback') && data_get($notification->data, 'support_request_id') && (auth()->user()?->canManageHr() || auth()->user()?->canActAsDirector()))
                             <div class="actions" style="margin-top:10px;">
                                 <a href="{{ route('support_requests.show', data_get($notification->data, 'support_request_id')) }}" class="btn primary">{{ data_get($notification->data, 'type') === 'support_feedback' ? 'Xem phản hồi hỗ trợ' : 'Mở yêu cầu hỗ trợ' }}</a>
                             </div>
@@ -87,17 +87,17 @@
                                 <a href="{{ route('attendance.index') }}" class="btn primary">Mở chấm công</a>
                             </div>
                         @endif
-                        @if((data_get($notification->data, 'type') === 'deletion_request' || data_get($notification->data, 'type') === 'transfer_request' || data_get($notification->data, 'type') === 'transfer_feedback') && data_get($notification->data, 'deletion_request_id') && (auth()->user()->is_hr || auth()->user()->is_director))
+                        @if((data_get($notification->data, 'type') === 'deletion_request' || data_get($notification->data, 'type') === 'transfer_request' || data_get($notification->data, 'type') === 'transfer_feedback') && data_get($notification->data, 'deletion_request_id') && (auth()->user()->canManageHr() || auth()->user()->canActAsDirector()))
                             <div class="actions" style="margin-top:10px;">
                                 <a href="{{ route('deletion_requests.show', data_get($notification->data, 'deletion_request_id')) }}" class="btn primary">{{ data_get($notification->data, 'type') === 'transfer_feedback' ? 'Xem phản hồi điều chuyển' : (data_get($notification->data, 'type') === 'transfer_request' ? 'Mở yêu cầu chuyển' : 'Mở đề nghị nghỉ việc') }}</a>
                             </div>
                         @endif
-                        @if(data_get($notification->data, 'type') === 'account_deletion' && auth()->user()->is_admin)
+                        @if(data_get($notification->data, 'type') === 'account_deletion' && (auth()->user()->is_admin || auth()->user()->is_super_admin))
                             <div class="actions" style="margin-top:10px;">
                                 <a href="{{ route('accounts.index') }}" class="btn primary">Mở quản lý tài khoản</a>
                             </div>
                         @endif
-                        @if(data_get($notification->data, 'type') === 'contract_create_account' && auth()->user()?->is_admin)
+                        @if(data_get($notification->data, 'type') === 'contract_create_account' && (auth()->user()?->is_admin || auth()->user()?->is_super_admin))
                             @php
                                 $createEmpId = data_get($notification->data, 'employee_id');
                                 $createContractId = data_get($notification->data, 'contract_id');
@@ -122,7 +122,7 @@
                                 @endif
                             </div>
                         @endif
-                        @if($isIssue && ! auth()->user()->is_admin)
+                        @if($isIssue && ! auth()->user()->is_admin && ! auth()->user()->is_super_admin)
                             <div class="actions" style="margin-top:10px;">
                                 @if($payrollId)
                                     <a href="{{ route('payroll.issues.fix_form', $payrollId) }}" class="btn primary">Khắc phục</a>

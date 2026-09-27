@@ -62,7 +62,12 @@
                             @endif
                         </td>
                         <td>{{ $leave->type_label }}</td>
-                        <td>{{ $leave->reason ?? '-' }}@if($leave->is_urgent) <span style="color:#d32f2f;">(Khẩn cấp)</span>@endif</td>
+                        <td>
+                            {{ $leave->reason ?? '-' }}@if($leave->is_urgent) <span style="color:#d32f2f;">(Khẩn cấp)</span>@endif
+                            @if($leave->document_path)
+                                <div><a href="{{ route('me.leave_requests.document', $leave) }}">{{ $leave->document_name ?: 'Minh chứng' }}</a></div>
+                            @endif
+                        </td>
                         <td>
                             <span class="badge {{ $leave->status }}">
                                 {{ match($leave->status) {

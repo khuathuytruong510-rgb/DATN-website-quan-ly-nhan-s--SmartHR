@@ -9,7 +9,7 @@
 </div>
 
 <div class="card">
-    <form method="POST" action="{{ $leaveRequest->exists ? route('leave_requests.update', $leaveRequest) : route('leave_requests.store') }}" data-confirm="Xác nhận gửi? Hệ thống sẽ kiểm tra điều kiện nghỉ phép trên hợp đồng và luật lao động trước khi chuyển duyệt.">
+    <form method="POST" action="{{ $leaveRequest->exists ? route('leave_requests.update', $leaveRequest) : route('leave_requests.store') }}" enctype="multipart/form-data" data-confirm="Xác nhận gửi? Hệ thống sẽ kiểm tra điều kiện nghỉ phép trên hợp đồng và luật lao động trước khi chuyển duyệt.">
         @csrf
         @if($leaveRequest->exists)
             @method('PUT')
@@ -32,6 +32,8 @@
             @error('type')<span class="error">{{ $message }}</span>@enderror
         </div>
 
+        @include('components.spouse_birth_leave_fields')
+
         @include('components.leave_quota_card', ['guides' => []])
 
         <div class="row g-3">
@@ -51,7 +53,7 @@
             </div>
         </div>
 
-        <div class="field">
+        <div class="field" id="half-day-field">
             <label class="check-row">
                 <input type="checkbox" name="half_day" value="1" {{ old('half_day', $leaveRequest->half_day) ? 'checked' : '' }} id="half_day" />
                 Nghỉ 1/2 ngày
@@ -60,7 +62,7 @@
 
         <div class="field">
             <label class="form-label">Lý do</label>
-            <textarea class="form-control" name="reason">{{ old('reason', $leaveRequest->reason) }}</textarea>
+            <textarea class="form-control" id="leave-reason" name="reason">{{ old('reason', $leaveRequest->type === \App\Support\LeaveTypes::SPOUSE_BIRTH ? 'Vợ sinh con' : $leaveRequest->reason) }}</textarea>
             @error('reason')<span class="error">{{ $message }}</span>@enderror
         </div>
 

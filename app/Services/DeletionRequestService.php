@@ -10,7 +10,9 @@ use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
 class DeletionRequestService
@@ -126,11 +128,27 @@ class DeletionRequestService
         });
     }
 
-    public function submit(User $actor, string $kind, int $targetId, string $reason): DeletionRequest
+    public function submitEmployee(Employee $employee, User $actor, ?string $reason = null, ?UploadedFile $document = null): DeletionRequest
     {
-        $target = $this->resolveTarget($kind, $targetId);
+        return $this->submit($actor, DeletionRequest::KIND_EMPLOYEE, $employee->id, $reason, $document);
+    }
 
-        return DB::transaction(function () use ($actor, $kind, $target, $reason): DeletionRequest {
+    public function submitDepartment(Department $department, User $actor, ?string $reason = null, ?UploadedFile $document = null): DeletionRequest
+    {
+        return $this->submit($actor, DeletionRequest::KIND_DEPARTMENT, $department->id, $reason, $document);
+    }
+
+    public function submit(User $actor, string $kind, int $targetId, ?string $reason, ?UploadedFile $document = null): DeletionRequest
+    {
+        if (! $reason && ! $document) {
+            throw new RuntimeException('Vui lòng nhập lý do hoặc đính kèm hồ sơ đề nghị.');
+        }
+
+        $target = $this->resolveTarget($kind, $targetId);
+        $documentPath = $document?->store('deletion-requests', 'public');
+
+        try {
+            return DB::transaction(function () use ($actor, $kind, $target, $reason, $document, $documentPath): DeletionRequest {
             $model = get_class($target);
 
             $pendingExists = DeletionRequest::where('requestable_type', $model)
@@ -150,8 +168,11 @@ class DeletionRequestService
                     'requestable_id' => $target->id,
                     'requestable_type' => $model,
                     'name' => (string) ($target->name ?? ('#'.$target->id)),
-                    'payload' => $target->getAttributes(),
-                    'reason' => $reason,
+                    'payload' => array_merge($target->getAttributes(), array_filter([
+                        'document_path' => $documentPath,
+                        'document_name' => $document?->getClientOriginalName(),
+                    ])),
+                    'reason' => $reason ?: 'Đính kèm hồ sơ đề nghị xóa.',
                     'status' => DeletionRequest::STATUS_PENDING,
                     'submitted_by' => $actor->id,
                 ]);
@@ -168,12 +189,19 @@ class DeletionRequestService
             $this->notify(
                 $actor,
                 'Yêu cầu xóa '.mb_strtolower($this->label($kind)).' — '.$request->name,
-                $actor->name.' đề nghị xóa '.mb_strtolower($this->label($kind)).' "'.$request->name.'". Lý do: '.$reason.' — đang chờ Giám đốc duyệt.',
+                $actor->name.' đề nghị xóa '.mb_strtolower($this->label($kind)).' "'.$request->name.'". Lý do: '.$request->reason.' — đang chờ Giám đốc duyệt.',
                 ['deletion_request_id' => $request->id, 'kind' => $kind, 'type' => 'deletion_request_pending']
             );
 
             return $request->fresh(['submittedBy']);
-        });
+            });
+        } catch (\Throwable $e) {
+            if ($documentPath) {
+                Storage::disk('public')->delete($documentPath);
+            }
+
+            throw $e;
+        }
     }
 
     public function approve(User $actor, DeletionRequest $request, ?string $note = null): DeletionRequest
@@ -303,17 +331,17 @@ class DeletionRequestService
 
     public static function actorCanView(?User $user): bool
     {
-        return $user !== null && ($user->is_hr || $user->is_admin || $user->is_director);
+        return $user !== null && ($user->canManageHr() || $user->is_admin || $user->canActAsDirector());
     }
 
     public static function actorCanManage(?User $user): bool
     {
-        return $user !== null && ($user->is_hr || $user->is_admin);
+        return $user !== null && ($user->canManageHr() || $user->is_admin);
     }
 
     public static function actorCanApprove(?User $user): bool
     {
-        return $user !== null && $user->is_director;
+        return $user !== null && $user->canActAsDirector();
     }
 
     public static function syncDepartmentCount(?int $departmentId): void

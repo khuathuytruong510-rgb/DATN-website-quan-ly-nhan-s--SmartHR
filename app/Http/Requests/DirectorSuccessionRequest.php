@@ -12,7 +12,7 @@ class DirectorSuccessionRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return (bool) $this->user()?->is_admin;
+        return (bool) ($this->user()?->is_admin || $this->user()?->is_super_admin);
     }
 
     public function rules(): array

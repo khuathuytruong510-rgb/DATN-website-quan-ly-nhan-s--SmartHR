@@ -26,15 +26,15 @@
             <div class="mb-3">
                 <label for="target" class="form-label">Đối tượng</label>
                 <select name="target" id="target" class="form-control" required>
-                    @if ($user->is_director)
+                    @if ($user->canActAsDirector())
                         <option value="employee">Nhân viên</option>
                         <option value="hr">HR</option>
                         <option value="all">Tất cả</option>
-                    @elseif ($user->is_hr)
+                    @elseif ($user->canManageHr())
                         <option value="employee">Nhân viên</option>
                     @endif
                 </select>
-                @if ($user->is_director)
+                @if ($user->canActAsDirector())
                 @endif
             </div>
 

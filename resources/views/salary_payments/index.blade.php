@@ -14,7 +14,7 @@
                 <div>
                     <a href="{{ route('payroll.index') }}" class="btn btn-primary">
                         <i class="bi bi-wallet2"></i>
-                        {{ auth()->user()?->is_accountant ? 'Đến bảng lương / thanh toán' : 'Đến bảng lương' }}
+                        {{ auth()->user()?->canPayPayroll() ? 'Đến bảng lương / thanh toán' : 'Đến bảng lương' }}
                     </a>
                 </div>
             </div>
@@ -139,7 +139,7 @@
                                     <a href="{{ route('salary_payments.show', $p) }}" class="btn btn-outline-primary" title="Xem chi tiết">
                                         <i class="bi bi-eye"></i>
                                     </a>
-                                    @if($p->status === 'pending' && auth()->user()?->is_accountant)
+                                    @if($p->status === 'pending' && auth()->user()?->canPayPayroll())
                                         <a href="{{ route('salary_payments.edit', $p) }}" class="btn btn-outline-warning" title="Chỉnh sửa">
                                             <i class="bi bi-pencil"></i>
                                         </a>

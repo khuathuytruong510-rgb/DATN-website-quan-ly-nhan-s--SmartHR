@@ -9,6 +9,28 @@
 </div>
 
 <div class="card">
+    @if(!$attendance->exists)
+        <form method="GET" action="{{ route('attendance.create') }}" class="filter-form" style="margin-bottom:24px;">
+            <div class="field-group">
+                <label class="form-label" for="department_id">Phòng ban</label>
+                <select id="department_id" name="department_id">
+                    <option value="">Tất cả phòng ban</option>
+                    @foreach($departments as $department)
+                        <option value="{{ $department->id }}" @selected(($employeeFilters['department_id'] ?? '') == $department->id)>{{ $department->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="field-group">
+                <label class="form-label" for="employee_code">Mã nhân viên</label>
+                <input type="search" id="employee_code" name="employee_code" value="{{ $employeeFilters['employee_code'] ?? '' }}" placeholder="Nhập mã nhân viên">
+            </div>
+            <div class="actions-row">
+                <button class="btn" type="submit">Lọc nhân viên</button>
+                <a class="btn link" href="{{ route('attendance.create') }}">Bỏ lọc</a>
+            </div>
+        </form>
+    @endif
+
     <form method="POST" action="{{ $attendance->exists ? route('attendance.update', $attendance) : route('attendance.store') }}">
         @csrf
         @if($attendance->exists)
@@ -20,7 +42,7 @@
             <select name="employee_id" required>
                 <option value="">-- Chọn nhân viên --</option>
                 @foreach($employees as $employee)
-                    <option value="{{ $employee->id }}" {{ old('employee_id', $attendance->employee_id) == $employee->id ? 'selected' : '' }}>{{ $employee->name }}</option>
+                    <option value="{{ $employee->id }}" {{ old('employee_id', $attendance->employee_id) == $employee->id ? 'selected' : '' }}>{{ $employee->name }}{{ $employee->employee_code ? ' — ' . $employee->employee_code : '' }}</option>
                 @endforeach
             </select>
             @error('employee_id')<span class="error">{{ $message }}</span>@enderror

@@ -8,7 +8,9 @@ class ProcessSalaryPaymentRequest extends FormRequest
 {
     public function authorize()
     {
-        return auth()->check() && auth()->user()->hasRole('accountant') || auth()->user()->hasRole('admin');
+        $user = auth()->user();
+
+        return $user !== null && $user->canPayPayroll();
     }
 
     public function rules()

@@ -204,7 +204,7 @@ class AccountantController extends Controller
                 'sent_at' => now(),
                 'sent_by' => Auth::id(),
                 'email_status' => 'sent',
-                'confirmation_deadline' => now()->addDays(7),
+                'confirmation_deadline' => PayrollPaymentWorkflowService::confirmationDeadlineFor($p),
             ];
 
             if ($p->confirmation_status !== 'confirmed') {

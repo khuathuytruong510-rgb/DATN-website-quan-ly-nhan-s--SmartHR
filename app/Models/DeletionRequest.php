@@ -17,6 +17,7 @@ class DeletionRequest extends Model
     public const STATUS_APPLIED = 'applied';
     public const STATUS_REJECTED = 'rejected';
     public const STATUS_CANCELLED = 'cancelled';
+    public const PENDING = self::STATUS_PENDING;
 
     protected $fillable = [
         'code',

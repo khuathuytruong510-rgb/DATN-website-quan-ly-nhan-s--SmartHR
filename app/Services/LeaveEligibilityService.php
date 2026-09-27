@@ -8,11 +8,15 @@ use App\Models\LeaveRequest;
 use App\Support\LeaveTypes;
 use App\Traits\HasLeaveLimit;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 class LeaveEligibilityService
 {
     use HasLeaveLimit;
+
+    private array $spouseBirthHolidayMaps = [];
 
     public function activeContract(Employee $employee): ?Contract
     {
@@ -25,9 +29,20 @@ class LeaveEligibilityService
     /**
      * @return array{ok: bool, message: ?string, days: float, contract: ?Contract, quota: array}
      */
-    public function assertEligible(Employee $employee, string $type, string $startDate, string $endDate, bool $halfDay, ?int $excludeId = null): array
+    public function assertEligible(
+        Employee $employee,
+        string $type,
+        string $startDate,
+        string $endDate,
+        bool $halfDay,
+        ?int $excludeId = null,
+        ?int $childrenCount = null,
+        bool $birthComplication = false
+    ): array
     {
-        $days = $this->calculateLeaveDays($startDate, $endDate, $halfDay);
+        $days = $type === LeaveTypes::SPOUSE_BIRTH
+            ? $this->spouseBirthSchedule($startDate, (int) $childrenCount, $birthComplication)['days']
+            : $this->calculateLeaveDays($startDate, $endDate, $halfDay);
         $contract = $this->activeContract($employee);
         $quota = $this->quotaSummary($employee, $excludeId);
 
@@ -59,6 +74,95 @@ class LeaveEligibilityService
             'contract' => $contract,
             'quota' => $quota,
         ];
+    }
+
+    /** @return array{days: int, end_date: string} */
+    public function spouseBirthSchedule(string $startDate, int $childrenCount, bool $birthComplication = false): array
+    {
+        if ($childrenCount < 1 || $childrenCount > 255) {
+            throw new RuntimeException('Số con phải từ 1 đến 255.');
+        }
+
+        $baseDays = $childrenCount === 1
+            ? ($birthComplication ? 7 : 5)
+            : ($birthComplication ? 14 : 10);
+        $days = $baseDays + (max(0, $childrenCount - 2) * 3);
+        $offWeekdays = config('payroll.off_weekdays', [Carbon::SUNDAY]);
+        $cursor = Carbon::parse($startDate)->startOfDay();
+        $remaining = $days;
+
+        while ($remaining > 0) {
+            $monthKey = $cursor->format('Y-m');
+            $isWeeklyOff = in_array((int) $cursor->dayOfWeek, $offWeekdays, true);
+            $isHoliday = isset($this->spouseBirthHolidayMap((int) $cursor->month, (int) $cursor->year)[$cursor->toDateString()]);
+            if (! $isWeeklyOff && ! $isHoliday) {
+                $remaining--;
+            }
+
+            if ($remaining > 0) {
+                $cursor->addDay();
+            }
+        }
+
+        return ['days' => $days, 'end_date' => $cursor->toDateString()];
+    }
+
+    /** @return array{holidayDates: list<string>, offWeekdays: list<int>} */
+    public function spouseBirthCalendarOptions(int $fromYear, int $toYear): array
+    {
+        $holidayDates = [];
+        $calendar = app(VietnamHolidayCalendar::class);
+        for ($year = $fromYear; $year <= $toYear; $year++) {
+            foreach ($calendar->buildYear($year) as $holiday) {
+                $holidayDates[$holiday['date']] = true;
+            }
+        }
+
+        if (Schema::hasTable('holidays')) {
+            $storedDates = DB::table('holidays')
+                ->whereBetween('date', [sprintf('%04d-01-01', $fromYear), sprintf('%04d-12-31', $toYear)])
+                ->pluck('date');
+            foreach ($storedDates as $date) {
+                $holidayDates[Carbon::parse($date)->toDateString()] = true;
+            }
+        }
+
+        return [
+            'holidayDates' => array_keys($holidayDates),
+            'offWeekdays' => array_values(config('payroll.off_weekdays', [Carbon::SUNDAY])),
+        ];
+    }
+
+    public function isSpouseBirthWorkingDay(Carbon $date): bool
+    {
+        if (in_array((int) $date->dayOfWeek, config('payroll.off_weekdays', [Carbon::SUNDAY]), true)) {
+            return false;
+        }
+
+        return ! isset($this->spouseBirthHolidayMap((int) $date->month, (int) $date->year)[$date->toDateString()]);
+    }
+
+    /** @return array<string, mixed> */
+    private function spouseBirthHolidayMap(int $month, int $year): array
+    {
+        $key = sprintf('%04d-%02d', $year, $month);
+        if (array_key_exists($key, $this->spouseBirthHolidayMaps)) {
+            return $this->spouseBirthHolidayMaps[$key];
+        }
+
+        $holidays = app(VietnamHolidayCalendar::class)->mapForMonth($month, $year);
+        if (Schema::hasTable('holidays')) {
+            DB::table('holidays')
+                ->whereYear('date', $year)
+                ->whereMonth('date', $month)
+                ->pluck('date')
+                ->each(function ($date) use (&$holidays): void {
+                    $dateKey = Carbon::parse($date)->toDateString();
+                    $holidays[$dateKey] = $holidays[$dateKey] ?? ['date' => $dateKey];
+                });
+        }
+
+        return $this->spouseBirthHolidayMaps[$key] = $holidays;
     }
 
     public function quotaSummary(Employee $employee, ?int $excludeId = null): array
@@ -215,6 +319,16 @@ class LeaveEligibilityService
                 ),
             ];
         }
+
+        $guides[LeaveTypes::SPOUSE_BIRTH] = [
+            'label' => LeaveTypes::label(LeaveTypes::SPOUSE_BIRTH),
+            'capped' => false,
+            'allowed' => null,
+            'used' => null,
+            'remaining' => null,
+            'unit' => 'ngày làm việc/theo lần sinh',
+            'basis' => '5 ngày một con; 7 ngày nếu sinh mổ hoặc con dưới 32 tuần; 10/14 ngày khi sinh đôi; từ con thứ 3 cộng 3 ngày mỗi con.',
+        ];
 
         return $guides;
     }

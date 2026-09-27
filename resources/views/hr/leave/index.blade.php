@@ -50,7 +50,7 @@
 
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
     <div style="flex: 1;"></div>
-    @if(auth()->user()?->is_hr)
+    @if(auth()->user()?->canManageHr())
     <a href="{{ route('leave_requests.create') }}" class="btn primary btn-create">+ Tạo Đơn Xin Nghỉ</a>
     @endif
 </div>
@@ -87,7 +87,12 @@
                                 {{ $leave->days }}
                             @endif
                         </td>
-                        <td>{{ $leave->reason ?? 'Không có lý do' }}</td>
+                        <td>
+                            {{ $leave->reason ?? 'Không có lý do' }}
+                            @if($leave->document_path)
+                                <div><a href="{{ route('leave_requests.document', $leave) }}">{{ $leave->document_name ?: 'Tải minh chứng' }}</a></div>
+                            @endif
+                        </td>
                         <td>
                             @if($leave->is_urgent)
                                 <span style="color: #d32f2f; font-weight: bold; background: #ffebee; padding: 2px 8px; border-radius: 4px;">Khẩn cấp</span>
@@ -139,7 +144,7 @@
                                 @elseif($leave->status === 'pending' && \App\Support\RequestApprover::needsDirector($leave->employee))
                                     <span class="muted">Chờ Giám đốc duyệt</span>
                                 @endif
-                                @if($currentUser->is_hr && $leave->status === 'pending')
+                                @if($currentUser->canManageHr() && $leave->status === 'pending')
                                     <form method="POST" action="{{ route('leave_requests.destroy', $leave) }}" style="display:inline" data-confirm="Xóa đơn nghỉ phép đang chờ duyệt?">
                                         @csrf
                                         @method('DELETE')

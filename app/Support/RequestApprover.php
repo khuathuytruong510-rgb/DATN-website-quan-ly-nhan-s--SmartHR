@@ -52,11 +52,11 @@ class RequestApprover
     /** HR không quản lý hồ sơ / yêu cầu của Giám đốc (vẫn quản lý Trợ lý, Thư ký Ban Giám đốc). */
     public static function hrMayManage(?User $actor, ?Employee $employee): bool
     {
-        if (! $actor?->is_hr || ! $employee) {
+        if (! $actor?->canManageHr() || ! $employee) {
             return false;
         }
 
-        return ! self::isDirectorProfile($employee);
+        return $actor->isSuperAdmin() || ! self::isDirectorProfile($employee);
     }
 
     public static function canReview(?User $actor, ?Employee $employee): bool
@@ -65,15 +65,19 @@ class RequestApprover
             return false;
         }
 
+        if ($actor->isSuperAdmin()) {
+            return true;
+        }
+
         if (self::isDirectorEmployee($employee)) {
             return false;
         }
 
         if (self::needsDirector($employee)) {
-            return (bool) $actor->is_director;
+            return $actor->canActAsDirector();
         }
 
-        return (bool) $actor->is_hr;
+        return $actor->canManageHr();
     }
 
     public static function queueLabel(?Employee $employee): string

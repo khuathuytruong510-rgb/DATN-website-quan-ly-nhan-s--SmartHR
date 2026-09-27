@@ -18,7 +18,7 @@ class SalaryHistoryController extends Controller
             abort(403);
         }
 
-        if ($user->is_admin || $user->is_director || $user->is_hr || $user->is_accountant) {
+        if ($user->isStaffUser()) {
             return;
         }
 

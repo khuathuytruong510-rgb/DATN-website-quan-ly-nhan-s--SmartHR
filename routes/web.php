@@ -103,6 +103,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/me/benefits', [EmployeeController::class, 'benefits'])->name('me.benefits')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/leave-requests', [EmployeeController::class, 'leaveIndex'])->name('me.leave_requests')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/leave-requests/create', [EmployeeController::class, 'leaveCreate'])->name('me.leave_requests.create')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
+    Route::get('/me/leave-requests/{leaveRequest}/document', [SmartHrController::class, 'leaveDocument'])->name('me.leave_requests.document')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::post('/me/leave-requests', [EmployeeController::class, 'leaveStore'])->name('me.leave_requests.store')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::post('/me/leave-requests/{leaveRequest}/cancel', [EmployeeController::class, 'cancelLeave'])->name('me.leave_requests.cancel')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
     Route::get('/me/notifications', [EmployeeController::class, 'notifications'])->name('me.notifications')->middleware(\App\Http\Middleware\EnsureNotAdminOrHr::class);
@@ -333,6 +334,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/leave-requests', [SmartHrController::class, 'leaveRequests'])->name('leave_requests.index');
         Route::get('/leave-requests/create', [SmartHrController::class, 'createLeaveRequest'])->name('leave_requests.create');
         Route::post('/leave-requests', [SmartHrController::class, 'storeLeaveRequest'])->name('leave_requests.store');
+        Route::get('/leave-requests/{leaveRequest}/document', [SmartHrController::class, 'leaveDocument'])->name('leave_requests.document');
         Route::post('/leave-requests/{leaveRequest}/approve', [SmartHrController::class, 'approveLeaveRequest'])->name('leave_requests.approve');
         Route::post('/leave-requests/{leaveRequest}/reject', [SmartHrController::class, 'rejectLeaveRequest'])->name('leave_requests.reject');
         Route::delete('/leave-requests/{leaveRequest}', [SmartHrController::class, 'destroyLeaveRequest'])->name('leave_requests.destroy');

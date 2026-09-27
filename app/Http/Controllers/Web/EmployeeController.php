@@ -314,7 +314,7 @@ class EmployeeController extends Controller
             'leaveLimit' => $eligibility->quotaSummary($employee),
             'leaveTypes' => LeaveTypes::available($employee),
             'defaultType' => LeaveTypes::default($employee),
-        ]);
+        ] + $eligibility->spouseBirthCalendarOptions(now()->year - 1, now()->year + 2));
     }
 
     public function leaveStore(Request $request)
@@ -327,10 +327,13 @@ class EmployeeController extends Controller
 
         $data = $request->validate([
             'start_date' => ['required', 'date'],
-            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'end_date' => ['required_unless:type,'.LeaveTypes::SPOUSE_BIRTH, 'nullable', 'date', 'after_or_equal:start_date'],
             'half_day' => ['nullable', 'boolean'],
             'type' => ['required', LeaveTypes::validationRule($employee)],
             'reason' => ['nullable', 'string'],
+            'children_count' => ['required_if:type,'.LeaveTypes::SPOUSE_BIRTH, 'nullable', 'integer', 'min:1', 'max:255'],
+            'birth_complication' => ['nullable', 'boolean'],
+            'document' => ['nullable', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png'],
             'is_urgent' => ['nullable', 'boolean'],
             'urgent_reason' => ['required_if:is_urgent,1', 'nullable', 'string', 'max:500'],
         ]);

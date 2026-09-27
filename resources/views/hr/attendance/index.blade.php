@@ -7,7 +7,7 @@
     'buttonRoute' => auth()->user()?->canManageHr() ? route('attendance.create') : null,
 ])
 
-@if(!empty($adjustmentRequests) && $adjustmentRequests->isNotEmpty() && (auth()->user()?->is_hr || auth()->user()?->is_director || auth()->user()?->is_admin))
+@if(!empty($adjustmentRequests) && $adjustmentRequests->isNotEmpty() && (auth()->user()?->canManageHr() || auth()->user()?->canActAsDirector() || auth()->user()?->is_admin))
 <div class="card" style="margin-bottom:16px;">
     <h2>Yêu cầu điều chỉnh chấm công</h2>
     <table>
@@ -52,7 +52,7 @@
 </div>
 @endif
 
-@if(!empty($faceRegistrations) && $faceRegistrations->isNotEmpty() && (auth()->user()?->is_hr || auth()->user()?->is_director || auth()->user()?->is_admin))
+@if(!empty($faceRegistrations) && $faceRegistrations->isNotEmpty() && (auth()->user()?->canManageHr() || auth()->user()?->canActAsDirector() || auth()->user()?->is_admin))
 <div class="card" style="margin-bottom:16px;">
     <h2>Đăng ký khuôn mặt chờ duyệt</h2>
     <table>

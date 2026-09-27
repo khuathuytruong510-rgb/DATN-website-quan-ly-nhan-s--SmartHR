@@ -74,7 +74,7 @@ class PayrollController extends Controller
 
     public function generate(Request $request, PayrollCalculationService $service)
     {
-        if (! request()->user()?->is_accountant) {
+        if (! request()->user()?->canPayPayroll()) {
             abort(403, 'Chỉ kế toán được tính lương.');
         }
 
@@ -87,7 +87,7 @@ class PayrollController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        $target = $request->user()?->is_accountant
+        $target = $request->user()?->canPayPayroll()
             ? redirect()->route('accountant.payroll.index')
             : redirect()->route('payroll.index', ['month' => $month, 'year' => $year]);
 
@@ -115,7 +115,7 @@ class PayrollController extends Controller
     public function fixIssueForm(Payroll $payroll)
     {
         $user = request()->user();
-        if (! $user || ! $user->is_hr) {
+        if (! $user?->canManageHr()) {
             abort(403, 'Chỉ HR được nhập số khắc phục. Kế toán tính lại từ dữ liệu nguồn sau khi HR xử lý sự cố.');
         }
 
@@ -139,7 +139,7 @@ class PayrollController extends Controller
     public function fixIssueSave(Request $request, Payroll $payroll)
     {
         $user = $request->user();
-        if (! $user || ! $user->is_hr) {
+        if (! $user?->canManageHr()) {
             abort(403, 'Chỉ HR được nhập số khắc phục. Kế toán tính lại từ dữ liệu nguồn sau khi HR xử lý sự cố.');
         }
 
@@ -169,7 +169,7 @@ class PayrollController extends Controller
     public function review(Payroll $payroll)
     {
         $user = request()->user();
-        if (! $user || ! $user->is_hr) {
+        if (! $user?->canManageHr()) {
             abort(403, 'Chỉ HR được kiểm tra dữ liệu bảng lương.');
         }
 
@@ -185,7 +185,7 @@ class PayrollController extends Controller
     public function reviewAll(Request $request)
     {
         $user = $request->user();
-        if (! $user || ! $user->is_hr) {
+        if (! $user?->canManageHr()) {
             abort(403, 'Chỉ HR được kiểm tra dữ liệu bảng lương.');
         }
 
@@ -255,7 +255,7 @@ class PayrollController extends Controller
     public function approveAll(Request $request)
     {
         $user = $request->user();
-        if (! $user || ! $user->is_director) {
+        if (! $user?->canFinalApprovePayroll()) {
             abort(403, 'Chỉ Giám đốc được phê duyệt cuối bảng lương.');
         }
 
@@ -343,7 +343,7 @@ class PayrollController extends Controller
 
     public function destroy(Payroll $payroll)
     {
-        if (! request()->user()?->is_hr) {
+        if (! request()->user()?->canManageHr()) {
             abort(403, 'Chỉ HR được xóa phiếu lương chưa vào vòng duyệt.');
         }
 
@@ -359,7 +359,7 @@ class PayrollController extends Controller
     public function lockPeriod(Request $request)
     {
         $user = $request->user();
-        if (! $user?->is_hr) {
+        if (! $user?->canManageHr()) {
             abort(403, 'Chỉ HR được chốt dữ liệu kỳ lương.');
         }
 
@@ -382,7 +382,7 @@ class PayrollController extends Controller
     public function unlockPeriod(Request $request)
     {
         $user = $request->user();
-        if (! $user?->is_hr) {
+        if (! $user?->canManageHr()) {
             abort(403, 'Chỉ HR được mở khóa kỳ lương.');
         }
 

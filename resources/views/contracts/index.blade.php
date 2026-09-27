@@ -222,13 +222,13 @@
                                         </form>
                                     @endif
                                 @endif
-                                @if(auth()->user()?->is_hr && $contract->isAwaitingHrSend())
+                                @if(auth()->user()?->canManageHr() && $contract->isAwaitingHrSend())
                                     <form action="{{ route('contracts.send_for_signature', $contract) }}" method="POST" class="d-inline">
                                         @csrf
                                         <button class="btn btn-sm btn-warning" type="submit">Gửi ký</button>
                                     </form>
                                 @endif
-                                @if(auth()->user()?->is_director && $contract->isPendingDirectorEsign())
+                                @if(auth()->user()?->canActAsDirector() && $contract->isPendingDirectorEsign())
                                     <form action="{{ route('contracts.sign', $contract) }}" method="POST" class="d-inline"
                                         data-confirm="Xác nhận ký {{ $contract->contract_code }} phía doanh nghiệp? Đây là mô phỏng, chưa phải chứng thư số pháp lý.">
                                         @csrf

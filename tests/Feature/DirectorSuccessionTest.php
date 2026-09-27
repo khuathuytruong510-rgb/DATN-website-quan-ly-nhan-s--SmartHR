@@ -21,6 +21,7 @@ class DirectorSuccessionTest extends TestCase
         $admin = User::factory()->create([
             'name' => 'Admin',
             'is_admin' => true,
+            'is_super_admin' => true,
             'is_hr' => false,
             'is_accountant' => false,
             'is_director' => false,
@@ -159,6 +160,236 @@ class DirectorSuccessionTest extends TestCase
         $this->assertFalse($incoming->fresh()->is_director);
     }
 
+    public function test_admin_has_limited_system_controls_and_only_super_admin_can_manage_super_admins(): void
+    {
+        ['admin' => $superAdmin, 'incoming' => $incoming] = $this->seedActors();
+        $admin = User::factory()->create([
+            'name' => 'Admin thường',
+            'is_admin' => true,
+            'is_super_admin' => false,
+            'is_hr' => false,
+            'is_accountant' => false,
+            'is_director' => false,
+        ]);
+        $this->assertTrue($superAdmin->fresh()->is_super_admin);
+
+        $this->actingAs($superAdmin)->get(route('accounts.create'))
+            ->assertOk()
+            ->assertSeeText('Siêu Admin')
+            ->assertSee('Quyền Siêu Admin');
+
+        $this->actingAs($admin)->get(route('accounts.create'))
+            ->assertOk()
+            ->assertDontSeeText('Siêu Admin');
+        $this->actingAs($admin)->post(route('accounts.store'), [
+            'name' => 'Another Super Admin',
+            'email' => 'super-admin@example.com',
+            'password' => 'Secret123',
+            'password_confirmation' => 'Secret123',
+            'role' => 'super_admin',
+        ])->assertForbidden();
+
+        $this->actingAs($admin)->get(route('permissions.index'))->assertOk();
+        $this->actingAs($admin)->get(route('settings.index'))->assertOk();
+        $this->actingAs($admin)->get(route('system_logs.index'))->assertOk();
+        $this->actingAs($admin)->get(route('admin.notifications.index'))->assertOk();
+        $this->actingAs($admin)->get(route('director_succession.index'))->assertOk();
+        $this->actingAs($admin)->get(route('employees.index'))->assertForbidden();
+        $this->actingAs($admin)->get(route('accountant.dashboard'))->assertForbidden();
+        $this->actingAs($admin)->put(route('permissions.update', $incoming), [
+            'is_admin' => 1,
+            'is_super_admin' => 1,
+        ])->assertForbidden();
+        $this->actingAs($admin)->put(route('accounts.update', $admin), [])->assertForbidden();
+        $this->actingAs($admin)->post(route('accounts.toggle_lock', $superAdmin))->assertForbidden();
+        $this->actingAs($admin)->delete(route('accounts.destroy', $superAdmin))->assertForbidden();
+
+        $this->actingAs($superAdmin)->post(route('accounts.toggle_lock', $admin))->assertRedirect(route('accounts.index'));
+        $this->assertTrue($admin->fresh()->is_locked);
+        $this->actingAs($superAdmin)->post(route('accounts.toggle_lock', $admin))->assertRedirect(route('accounts.index'));
+        $this->assertFalse($admin->fresh()->is_locked);
+
+        $this->actingAs($superAdmin)->post(route('accounts.store'), [
+            'name' => 'Another Super Admin',
+            'email' => 'super-admin@example.com',
+            'password' => 'Secret123',
+            'password_confirmation' => 'Secret123',
+            'role' => 'super_admin',
+        ])->assertRedirect(route('accounts.index'));
+
+        $created = User::where('email', 'super-admin@example.com')->firstOrFail();
+        $this->assertTrue($created->is_admin);
+        $this->assertTrue($created->is_super_admin);
+    }
+
+    public function test_current_admin_can_bootstrap_a_separate_super_admin_without_changing_role(): void
+    {
+        $admin = User::factory()->create([
+            'name' => 'Current Admin',
+            'email' => 'current-admin@example.com',
+            'is_admin' => true,
+            'is_super_admin' => false,
+            'is_hr' => false,
+            'is_accountant' => false,
+            'is_director' => false,
+        ]);
+
+        $this->actingAs($admin)->get(route('accounts.create'))
+            ->assertOk()
+            ->assertSeeText('Siêu Admin');
+
+        $this->actingAs($admin)->post(route('accounts.store'), [
+            'name' => 'Separate Super Admin',
+            'email' => 'separate-super@example.com',
+            'password' => 'Secret123',
+            'password_confirmation' => 'Secret123',
+            'role' => 'super_admin',
+        ])->assertRedirect(route('accounts.index'));
+
+        $admin->refresh();
+        $created = User::where('email', 'separate-super@example.com')->firstOrFail();
+        $this->assertTrue($admin->is_admin);
+        $this->assertFalse($admin->is_super_admin);
+        $this->assertTrue($created->is_admin);
+        $this->assertTrue($created->is_super_admin);
+
+        $this->actingAs($admin)->get(route('accounts.create'))
+            ->assertOk()
+            ->assertDontSeeText('Siêu Admin');
+        $this->actingAs($admin)->post(route('accounts.store'), [
+            'name' => 'Another Super Admin',
+            'email' => 'another-super@example.com',
+            'password' => 'Secret123',
+            'password_confirmation' => 'Secret123',
+            'role' => 'super_admin',
+        ])->assertForbidden();
+    }
+
+    public function test_super_admin_cannot_remove_the_final_super_admin_role(): void
+    {
+        ['admin' => $superAdmin] = $this->seedActors();
+
+        $this->actingAs($superAdmin)
+            ->put(route('permissions.update', $superAdmin), [
+                'is_admin' => 1,
+                'is_super_admin' => 0,
+                'is_director' => 0,
+                'is_hr' => 0,
+                'is_accountant' => 0,
+            ])
+            ->assertSessionHas('error', 'Phải duy trì ít nhất một tài khoản Siêu Admin.');
+
+        $this->assertTrue($superAdmin->fresh()->is_super_admin);
+        $this->assertTrue($superAdmin->fresh()->is_admin);
+    }
+
+    public function test_permissions_list_filters_by_name_email_and_role(): void
+    {
+        ['admin' => $admin, 'outgoing' => $outgoing, 'incoming' => $incoming, 'hr' => $hr] = $this->seedActors();
+        $ordinaryAdmin = User::factory()->create([
+            'name' => 'Admin thường',
+            'email' => 'ordinary-admin@example.com',
+            'is_admin' => true,
+            'is_super_admin' => false,
+            'is_director' => false,
+            'is_hr' => false,
+            'is_accountant' => false,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('permissions.index', ['search' => 'tvb@example.com', 'role' => 'director']))
+            ->assertOk()
+            ->assertSee($incoming->email)
+            ->assertDontSee($outgoing->email)
+            ->assertDontSee($hr->email);
+
+        $this->actingAs($admin)
+            ->get(route('permissions.index', ['role' => 'hr']))
+            ->assertOk()
+            ->assertSee($hr->email)
+            ->assertDontSee($incoming->email);
+
+        $this->actingAs($admin)
+            ->get(route('permissions.index', ['role' => 'admin']))
+            ->assertOk()
+            ->assertSee($ordinaryAdmin->email)
+            ->assertDontSee($admin->email);
+
+        $this->actingAs($admin)
+            ->get(route('permissions.index', ['role' => 'super_admin']))
+            ->assertOk()
+            ->assertSee($admin->email)
+            ->assertDontSee($ordinaryAdmin->email);
+
+        $this->actingAs($admin)
+            ->get(route('permissions.index', ['role' => 'none']))
+            ->assertOk()
+            ->assertSee($incoming->email)
+            ->assertDontSee($outgoing->email)
+            ->assertDontSee($hr->email);
+    }
+
+    public function test_permissions_update_preserves_active_filters(): void
+    {
+        ['admin' => $admin, 'incoming' => $incoming] = $this->seedActors();
+        $departmentId = (string) $incoming->employee->department_id;
+
+        $this->actingAs($admin)
+            ->put(route('permissions.update', $incoming), [
+                'is_admin' => 0,
+                'is_hr' => 1,
+                'is_accountant' => 0,
+                'search' => 'tvb@example.com',
+                'role' => 'hr',
+                'department_id' => $departmentId,
+            ])
+            ->assertRedirect(route('permissions.index', [
+                'search' => 'tvb@example.com',
+                'role' => 'hr',
+                'department_id' => $departmentId,
+            ]));
+    }
+
+    public function test_permissions_list_filters_by_department_and_unassigned_department(): void
+    {
+        ['admin' => $admin, 'outgoing' => $outgoing, 'incoming' => $incoming, 'hr' => $hr] = $this->seedActors();
+        $departmentId = $incoming->employee->department_id;
+
+        $this->actingAs($admin)
+            ->get(route('permissions.index', ['department_id' => $departmentId]))
+            ->assertOk()
+            ->assertSee($incoming->email)
+            ->assertDontSee($outgoing->email)
+            ->assertDontSee($hr->email);
+
+        $this->actingAs($admin)
+            ->get(route('permissions.index', ['department_id' => 'none']))
+            ->assertOk()
+            ->assertSee($hr->email)
+            ->assertDontSee($incoming->email)
+            ->assertDontSee($outgoing->email);
+    }
+
+    public function test_account_list_filters_by_department_and_unassigned_department(): void
+    {
+        ['admin' => $admin, 'outgoing' => $outgoing, 'incoming' => $incoming, 'hr' => $hr] = $this->seedActors();
+        $departmentId = $incoming->employee->department_id;
+
+        $this->actingAs($admin)
+            ->get(route('accounts.index', ['department_id' => $departmentId]))
+            ->assertOk()
+            ->assertSee($incoming->email)
+            ->assertDontSee($outgoing->email)
+            ->assertDontSee($hr->email);
+
+        $this->actingAs($admin)
+            ->get(route('accounts.index', ['department_id' => 'none']))
+            ->assertOk()
+            ->assertSee($hr->email)
+            ->assertDontSee($incoming->email)
+            ->assertDontSee($outgoing->email);
+    }
+
     public function test_old_director_account_cannot_be_deleted(): void
     {
         ['admin' => $admin, 'outgoing' => $outgoing, 'incoming' => $incoming] = $this->seedActors();
@@ -295,7 +526,7 @@ class DirectorSuccessionTest extends TestCase
 
         $this->actingAs($admin)
             ->get(route('employees.create', ['for_director' => 1]))
-            ->assertForbidden();
+            ->assertOk();
 
         $this->actingAs($hr)
             ->post(route('employees.store'), [

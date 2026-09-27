@@ -21,7 +21,8 @@ class ActivityLog extends Model
     {
         return match ($this->action) {
             'change_password' => 'Đổi mật khẩu',
-            'payroll_confirmed', 'payroll_auto_ready' => 'Xác nhận bảng lương',
+            'payroll_confirmed' => 'Xác nhận bảng lương',
+            'payroll_auto_ready' => 'Hệ thống tự xác nhận bảng lương',
             'payroll_issue_reported' => 'Báo sai sót bảng lương',
             'payroll_issue_remediated' => 'Xử lý sự cố bảng lương',
             'attendance_check_in' => 'Chấm công vào',
@@ -44,6 +45,7 @@ class ActivityLog extends Model
             'payroll_period_locked' => 'Chốt kỳ lương',
             'payroll_period_auto_locked' => 'Hệ thống chốt kỳ lương',
             'payroll_period_hr_verified' => 'HR xác nhận kiểm tra nguồn kỳ lương',
+            'payroll_period_auto_hr_verified' => 'Hệ thống xác nhận kiểm tra nguồn kỳ lương',
             'payroll_period_unlock_requested' => 'HR yêu cầu mở khóa kỳ lương',
             'payroll_period_unlock_rejected' => 'Giám đốc từ chối mở khóa kỳ lương',
             'payroll_period_unlocked' => 'Giám đốc duyệt mở khóa kỳ lương',
@@ -59,6 +61,9 @@ class ActivityLog extends Model
             'employees_transferred' => 'Chuyển nhân viên sang phòng ban khác',
             'payroll_hr_checked' => 'HR kiểm tra bảng lương',
             'payroll_final_approved' => 'Giám đốc duyệt bảng lương',
+            'payroll_auto_calculated' => 'Hệ thống tự tính bảng lương',
+            'payroll_auto_hr_checked' => 'Hệ thống tự kiểm tra bước HR',
+            'payroll_auto_final_approved' => 'Hệ thống tự phê duyệt bảng lương',
             'director_succession' => 'Cập nhật người giữ chức Giám đốc',
             'contract_expiry_handled' => 'Xử lý hợp đồng sắp hết hạn',
             default => $this->humanizeAction($this->action),

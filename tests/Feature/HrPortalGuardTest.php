@@ -58,6 +58,22 @@ class HrPortalGuardTest extends TestCase
         $this->actingAs($hr)->get(route('me.dashboard'))->assertRedirect(route('dashboard'));
     }
 
+    public function test_super_admin_can_access_hr_and_accountant_portals_without_role_flags(): void
+    {
+        $this->seedPeople();
+        $superAdmin = User::factory()->create([
+            'is_admin' => false,
+            'is_super_admin' => true,
+            'is_hr' => false,
+            'is_accountant' => false,
+            'is_director' => false,
+        ]);
+
+        $this->actingAs($superAdmin)->get(route('employees.index'))->assertOk();
+        $this->actingAs($superAdmin)->get(route('accountant.dashboard'))->assertOk();
+        $this->actingAs($superAdmin)->get(route('payroll.index'))->assertOk()->assertSee('Thực nhận');
+    }
+
     public function test_hr_sees_source_payroll_preview_before_accountant_calculates(): void
     {
         ['hr' => $hr, 'employee' => $employee] = $this->seedPeople();

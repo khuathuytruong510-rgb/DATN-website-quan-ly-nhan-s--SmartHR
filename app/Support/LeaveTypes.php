@@ -4,6 +4,8 @@ namespace App\Support;
 
 class LeaveTypes
 {
+    public const SPOUSE_BIRTH = 'spouse_birth';
+
     public static function all(): array
     {
         return config('leave.types', []);
@@ -27,6 +29,13 @@ class LeaveTypes
     public static function default(?\App\Models\Employee $employee = null): string
     {
         $keys = self::keys($employee);
+
+        if ($employee?->isFemale() && in_array('maternity', $keys, true)) {
+            return 'maternity';
+        }
+        if ($employee && in_array('annual', $keys, true)) {
+            return 'annual';
+        }
 
         return $keys[0] ?? 'annual';
     }

@@ -18,6 +18,7 @@
             <p id="leave-quota-remaining" style="margin:0;font-size:22px;font-weight:800;">—</p>
         </div>
     </div>
+    <p class="muted" id="leave-quota-request" style="margin:12px 0 0;"></p>
     <p class="muted" id="leave-quota-basis" style="margin:12px 0 0;display:none;"></p>
 </div>
 @once
@@ -71,6 +72,9 @@ window.SmartHrLeaveQuota = {
             return guides[typeSelect.value] || null;
         }
         function requestedDays() {
+            if (typeSelect.value === 'spouse_birth') {
+                return Number(document.getElementById('spouse-birth-days')?.value || 0);
+            }
             return self.daysBetween(opts.startInput?.value, opts.endInput?.value, !!opts.halfDay?.checked);
         }
         function sync() {

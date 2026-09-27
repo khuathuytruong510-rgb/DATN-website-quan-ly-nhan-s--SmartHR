@@ -605,12 +605,14 @@
     @auth
         @php
             $authUser = auth()->user();
-            $portalRole = $authUser->is_admin ? 'admin'
+            $portalRole = $authUser->is_super_admin ? 'super_admin'
+                : ($authUser->is_admin ? 'admin'
                 : ($authUser->is_hr ? 'hr'
                 : ($authUser->is_director ? 'director'
-                : ($authUser->is_accountant ? 'accountant' : 'employee')));
+                : ($authUser->is_accountant ? 'accountant' : 'employee'))));
             $portalLabel = match ($portalRole) {
-                'admin' => 'Cổng quản trị',
+                'super_admin' => 'Cổng Siêu Admin',
+                'admin' => 'Cổng Admin',
                 'hr' => 'Cổng nhân sự',
                 'director' => 'Cổng giám đốc',
                 'accountant' => 'Cổng kế toán',
@@ -625,14 +627,37 @@
                 <p class="brand-subtitle">{{ $portalLabel }}</p>
                 <nav class="nav">
                     @php $user = $authUser; @endphp
-                    @if ($user->is_admin)
+                    @if ($user->is_admin || $user->is_super_admin)
                         <a class="{{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}"><i class="bi bi-house"></i>Dashboard</a>
-                        <a class="{{ request()->routeIs('admin.notifications.*') ? 'active' : '' }}" href="{{ route('admin.notifications.index') }}"><i class="bi bi-bell"></i>Thông báo</a>
                         <a class="{{ request()->routeIs('accounts.*') ? 'active' : '' }}" href="{{ route('accounts.index') }}"><i class="bi bi-people"></i>Quản lý tài khoản</a>
+                        <a class="{{ request()->routeIs('admin.notifications.*') ? 'active' : '' }}" href="{{ route('admin.notifications.index') }}"><i class="bi bi-bell"></i>Thông báo</a>
                         <a class="{{ request()->routeIs('permissions.*') ? 'active' : '' }}" href="{{ route('permissions.index') }}"><i class="bi bi-shield-lock"></i>Phân quyền</a>
                         <a class="{{ request()->routeIs('director_succession.*') ? 'active' : '' }}" href="{{ route('director_succession.index') }}"><i class="bi bi-person-badge"></i>Người giữ chức GĐ</a>
                         <a class="{{ request()->routeIs('system_logs.*') ? 'active' : '' }}" href="{{ route('system_logs.index') }}"><i class="bi bi-journal-text"></i>Nhật ký hệ thống</a>
                         <a class="{{ request()->routeIs('settings.*') ? 'active' : '' }}" href="{{ route('settings.index') }}"><i class="bi bi-gear"></i>Cấu hình hệ thống</a>
+                        @if($user->is_super_admin)
+                            <details class="nav-group" {{ request()->routeIs('employees.*') || request()->routeIs('departments.*') || request()->routeIs('contracts.*') || request()->routeIs('attendance.*') || request()->routeIs('payroll.*') || request()->routeIs('accountant.*') ? 'open' : '' }}>
+                                <summary class="nav-summary"><i class="bi bi-grid"></i>Toàn bộ chức năng</summary>
+                                <a class="{{ request()->routeIs('employees.*') ? 'active' : '' }}" href="{{ route('employees.index') }}">Nhân viên</a>
+                                <a class="{{ request()->routeIs('departments.*') ? 'active' : '' }}" href="{{ route('departments.index') }}">Phòng ban</a>
+                                <a class="{{ request()->routeIs('positions.*') ? 'active' : '' }}" href="{{ route('positions.index') }}">Chức vụ</a>
+                                <a class="{{ request()->routeIs('contracts.*') ? 'active' : '' }}" href="{{ route('contracts.index') }}">Hợp đồng</a>
+                                <a class="{{ request()->routeIs('attendance.*') ? 'active' : '' }}" href="{{ route('attendance.index') }}">Chấm công</a>
+                                <a class="{{ request()->routeIs('evaluations.*') ? 'active' : '' }}" href="{{ route('evaluations.index') }}">Đánh giá</a>
+                                <a class="{{ request()->routeIs('leave_requests.*') ? 'active' : '' }}" href="{{ route('leave_requests.index') }}">Nghỉ phép</a>
+                                <a class="{{ request()->routeIs('overtime_requests.*') ? 'active' : '' }}" href="{{ route('overtime_requests.index') }}">Tăng ca</a>
+                                <a class="{{ request()->routeIs('support_requests.*') ? 'active' : '' }}" href="{{ route('support_requests.index') }}">Yêu cầu hỗ trợ</a>
+                                <a class="{{ request()->routeIs('deletion_requests.*') ? 'active' : '' }}" href="{{ route('deletion_requests.index') }}">Xóa / điều chuyển</a>
+                                <a class="{{ request()->routeIs('payroll.*') ? 'active' : '' }}" href="{{ route('payroll.index') }}">Bảng lương</a>
+                                <a class="{{ request()->routeIs('accountant.*') ? 'active' : '' }}" href="{{ route('accountant.dashboard') }}">Nghiệp vụ kế toán</a>
+                                <a class="{{ request()->routeIs('salary_histories.*') ? 'active' : '' }}" href="{{ route('salary_histories.index') }}">Lịch sử lương</a>
+                                <a class="{{ request()->routeIs('salary_payments.*') ? 'active' : '' }}" href="{{ route('salary_payments.index') }}">Thanh toán</a>
+                                <a class="{{ request()->routeIs('statistics.*') ? 'active' : '' }}" href="{{ route('statistics.index') }}">Thống kê</a>
+                                <a class="{{ request()->routeIs('hr-dashboard.*') ? 'active' : '' }}" href="{{ route('hr-dashboard.index') }}">Báo cáo HR</a>
+                                <a class="{{ request()->routeIs('benefits.*') ? 'active' : '' }}" href="{{ route('benefits.index') }}">Phúc lợi</a>
+                                <a class="{{ request()->routeIs('notifications.*') ? 'active' : '' }}" href="{{ route('notifications.index') }}">Thông báo</a>
+                            </details>
+                        @endif
                     @elseif ($user->is_hr)
                         <a class="{{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}"><i class="bi bi-house"></i>Dashboard</a>
                         <a class="{{ request()->routeIs('employees.*') ? 'active' : '' }}" href="{{ route('employees.index') }}"><i class="bi bi-people"></i>Nhân viên</a>

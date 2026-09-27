@@ -3,6 +3,46 @@
 @section('title', 'Chức vụ')
 
 @section('content')
+    <style>
+        .position-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        .position-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 18px;
+            background: #fff;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, .05);
+        }
+        .position-card-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+        .position-card-index {
+            display: inline-grid;
+            place-items: center;
+            width: 30px;
+            height: 30px;
+            border-radius: 9px;
+            background: #eff6ff;
+            color: #2563eb;
+            font-weight: 800;
+            flex: 0 0 auto;
+        }
+        .position-card-title { margin: 0; font-size: 17px; }
+        .position-card-level { margin: 4px 0 0; color: #64748b; font-size: 13px; }
+        .position-card-field { margin-top: 12px; }
+        .position-card-label { display: block; color: #64748b; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+        .position-card-value { margin-top: 3px; line-height: 1.5; }
+        @media (max-width: 640px) {
+            .position-cards { grid-template-columns: 1fr; }
+        }
+    </style>
     <div class="page-head">
         <div>
             <h1>Chức vụ</h1>
@@ -29,32 +69,31 @@
                 'deptLink' => route('departments.show', $selected),
             ])
         @else
-            <div class="table-responsive">
-                <table class="table" style="width: 100%; border-collapse: collapse;">
-                    <thead>
-                        <tr>
-                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">STT</th>
-                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Tên chức vụ</th>
-                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Phòng ban</th>
-                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb;">Mô tả</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach ($positions as $index => $position)
-                            <tr>
-                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $index + 1 }}</td>
-                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
-                                    <strong>{{ $position->name }}</strong>
+            <div class="position-cards">
+                @foreach ($positions as $index => $position)
+                    <article class="position-card">
+                        <div class="position-card-head">
+                            <div style="display:flex;gap:10px;align-items:flex-start;">
+                                <span class="position-card-index">{{ $index + 1 }}</span>
+                                <div>
+                                    <h2 class="position-card-title">{{ $position->name }}</h2>
                                     @if ($position->level)
-                                        <br><span class="muted" style="font-size:12px;">Cấp bậc: {{ $position->level }}</span>
+                                        <p class="position-card-level">Cấp bậc: {{ $position->level }}</p>
                                     @endif
-                                </td>
-                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ optional($position->department)->name ?? '—' }}</td>
-                                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{{ $position->description ?: '-' }}</td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
+                                </div>
+                            </div>
+                            <i class="bi bi-briefcase" style="color:#2563eb;font-size:20px;"></i>
+                        </div>
+                        <div class="position-card-field">
+                            <span class="position-card-label">Phòng ban</span>
+                            <div class="position-card-value">{{ optional($position->department)->name ?? '—' }}</div>
+                        </div>
+                        <div class="position-card-field">
+                            <span class="position-card-label">Mô tả</span>
+                            <div class="position-card-value">{{ $position->description ?: '-' }}</div>
+                        </div>
+                    </article>
+                @endforeach
             </div>
         @endif
     </div>

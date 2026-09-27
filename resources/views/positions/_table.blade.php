@@ -9,36 +9,35 @@
     </div>
 @endisset
 
-<div class="table-responsive">
-    <table class="table" style="width:100%; border-collapse:collapse;">
-        <thead>
-            <tr>
-                <th style="padding:10px 12px; text-align:left; border-bottom:1px solid #e5e7eb;">STT</th>
-                <th style="padding:10px 12px; text-align:left; border-bottom:1px solid #e5e7eb;">Tên chức vụ</th>
-                <th style="padding:10px 12px; text-align:left; border-bottom:1px solid #e5e7eb;">Cấp bậc</th>
-                <th style="padding:10px 12px; text-align:left; border-bottom:1px solid #e5e7eb;">Lương cơ bản</th>
-                <th style="padding:10px 12px; text-align:left; border-bottom:1px solid #e5e7eb;">Khoảng lương</th>
-                <th style="padding:10px 12px; text-align:left; border-bottom:1px solid #e5e7eb;">Nhân viên</th>
-                <th style="padding:10px 12px; text-align:left; border-bottom:1px solid #e5e7eb;">Mô tả</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach ($positions as $p)
-                <tr>
-                    <td style="padding:10px 12px; border-bottom:1px solid #e5e7eb;">{{ $loop->iteration }}</td>
-                    <td style="padding:10px 12px; border-bottom:1px solid #e5e7eb;">
-                        <strong>{{ $p->name }}</strong>
-                        @if ($p->department && ! isset($title))
-                            <br><span class="muted" style="font-size:12px;">{{ $p->department->name }}</span>
-                        @endif
-                    </td>
-                    <td style="padding:10px 12px; border-bottom:1px solid #e5e7eb;"><span class="badge bg-secondary">{{ $p->level }}</span></td>
-                    <td style="padding:10px 12px; border-bottom:1px solid #e5e7eb;">{{ number_format($p->base_salary, 0, ',', '.') }} đ</td>
-                    <td style="padding:10px 12px; border-bottom:1px solid #e5e7eb;">{{ number_format($p->salary_range_min, 0, ',', '.') }} – {{ number_format($p->salary_range_max, 0, ',', '.') }} đ</td>
-                    <td style="padding:10px 12px; border-bottom:1px solid #e5e7eb;">{{ $p->employees->count() }}</td>
-                    <td style="padding:10px 12px; border-bottom:1px solid #e5e7eb;">{{ $p->description ?: '-' }}</td>
-                </tr>
-            @endforeach
-        </tbody>
-    </table>
+<div class="position-cards">
+    @foreach ($positions as $p)
+        <article class="position-card">
+            <div class="position-card-head">
+                <div style="display:flex;gap:10px;align-items:flex-start;">
+                    <span class="position-card-index">{{ $loop->iteration }}</span>
+                    <div>
+                        <h2 class="position-card-title">{{ $p->name }}</h2>
+                        <p class="position-card-level">Cấp bậc: {{ $p->level ?: '—' }}</p>
+                    </div>
+                </div>
+                <i class="bi bi-briefcase" style="color:#2563eb;font-size:20px;"></i>
+            </div>
+            <div class="position-card-field">
+                <span class="position-card-label">Lương cơ bản</span>
+                <div class="position-card-value">{{ number_format($p->base_salary, 0, ',', '.') }} đ</div>
+            </div>
+            <div class="position-card-field">
+                <span class="position-card-label">Khoảng lương</span>
+                <div class="position-card-value">{{ number_format($p->salary_range_min, 0, ',', '.') }} – {{ number_format($p->salary_range_max, 0, ',', '.') }} đ</div>
+            </div>
+            <div class="position-card-field">
+                <span class="position-card-label">Nhân viên</span>
+                <div class="position-card-value">{{ $p->employees->count() }}</div>
+            </div>
+            <div class="position-card-field">
+                <span class="position-card-label">Mô tả</span>
+                <div class="position-card-value">{{ $p->description ?: '-' }}</div>
+            </div>
+        </article>
+    @endforeach
 </div>

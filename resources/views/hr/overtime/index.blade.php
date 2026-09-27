@@ -23,7 +23,7 @@
 
 @php $currentUser = auth()->user(); @endphp
 
-@if($currentUser?->is_hr)
+@if($currentUser?->canManageHr())
 <div class="ot-card">
     <h2>Chỉ định tăng ca</h2>
     <form method="POST" action="{{ route('overtime_requests.assign') }}">

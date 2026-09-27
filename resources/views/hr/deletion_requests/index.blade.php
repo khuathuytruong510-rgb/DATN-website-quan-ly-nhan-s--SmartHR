@@ -5,8 +5,8 @@
 @section('content')
 @php
     $user = auth()->user();
-    $isManager = $user && ($user->is_hr || $user->is_admin);
-    $isDirector = $user && $user->is_director;
+    $isManager = $user && ($user->canManageHr() || $user->is_admin);
+    $isDirector = $user && $user->canActAsDirector();
     $badgeMap = [
         'pending' => 'background:#fef3c7;color:#92400e;',
         'approved' => 'background:#dbeafe;color:#1e40af;',
@@ -17,8 +17,13 @@
 @endphp
 <style>
     .deletion-requests-page { max-width: 100%; }
-    .deletion-requests-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .deletion-requests-table { min-width: 1040px; table-layout: fixed; }
+    .deletion-requests-table-wrap {
+        flex: 0 0 auto;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+    .deletion-requests-table { width: 100%; min-width: 1200px; table-layout: fixed; }
     .deletion-requests-table th,
     .deletion-requests-table td { overflow-wrap: normal; }
     .deletion-requests-table code { display: inline-block; white-space: nowrap; }
@@ -29,14 +34,36 @@
         line-height: 1.35;
         overflow: hidden;
         text-overflow: ellipsis;
-        white-space: nowrap;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
     }
     .deletion-requests-table .request-reason {
         overflow: hidden;
         text-overflow: ellipsis;
-        white-space: nowrap;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        line-height: 1.4;
     }
-    .deletion-requests-table .actions { flex-wrap: nowrap; }
+    .deletion-requests-table .actions { flex-wrap: wrap; gap: 6px; }
+    .deletion-requests-table th,
+    .deletion-requests-table td { padding: 12px 10px; }
+    .deletion-requests-table col:nth-child(1) { width: 13% !important; }
+    .deletion-requests-table col:nth-child(2) { width: 16% !important; }
+    .deletion-requests-table col:nth-child(3) { width: 20% !important; }
+    .deletion-requests-table col:nth-child(4) { width: 11% !important; }
+    .deletion-requests-table col:nth-child(5) { width: 14% !important; }
+    .deletion-requests-table col:nth-child(6) { width: 14% !important; }
+    .deletion-requests-table col:nth-child(7) { width: 12% !important; }
+    @media (max-width: 1100px) {
+        .deletion-requests-table { min-width: 1200px; }
+    }
+    @media (max-width: 720px) {
+        .deletion-requests-table { min-width: 1200px; }
+        .deletion-requests-table th,
+        .deletion-requests-table td { padding: 10px 8px; }
+    }
 </style>
 <div class="content deletion-requests-page">
     <div class="page-head">
@@ -80,13 +107,13 @@
     <div class="card deletion-requests-table-wrap" style="padding:0;">
         <table class="deletion-requests-table">
             <colgroup>
-                <col style="width:145px;">
-                <col style="width:220px;">
-                <col style="width:320px;">
-                <col style="width:120px;">
-                <col style="width:145px;">
-                <col style="width:210px;">
-                <col style="width:130px;">
+                <col>
+                <col>
+                <col>
+                <col>
+                <col>
+                <col>
+                <col>
             </colgroup>
             <thead>
                 <tr>

@@ -9,7 +9,7 @@ class AutoMarkPayrollReadyCommand extends Command
 {
     protected $signature = 'payroll:auto-ready';
 
-    protected $description = 'Tự động chuyển bảng lương chờ xác nhận sang đủ điều kiện thanh toán sau hạn 3 ngày';
+    protected $description = 'Tự xác nhận phiếu lương chưa phản hồi vào 23:59 ngày chốt lương';
 
     public function handle(PayrollPaymentWorkflowService $workflow): int
     {

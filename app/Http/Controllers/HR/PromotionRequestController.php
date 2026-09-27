@@ -23,14 +23,14 @@ class PromotionRequestController extends Controller
     {
         $user = request()->user();
 
-        return $user !== null && ($user->is_hr || $user->is_admin);
+        return $user !== null && ($user->canManageHr() || $user->is_admin);
     }
 
     protected function actorDirectorOK(): bool
     {
         $user = request()->user();
 
-        return $user !== null && $user->is_director;
+        return $user !== null && $user->canActAsDirector();
     }
 
     protected function assertManage(): void

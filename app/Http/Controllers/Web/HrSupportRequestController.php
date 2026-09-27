@@ -113,7 +113,7 @@ class HrSupportRequestController extends Controller
     private function assertCanView(): void
     {
         $user = request()->user();
-        if (! $user || (! $user->canManageHr() && ! $user->is_director)) {
+        if (! $user || (! $user->canManageHr() && ! $user->canActAsDirector())) {
             abort(403);
         }
     }

@@ -8,7 +8,7 @@ class StoreContractRenewalRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return (bool) $this->user()?->is_hr;
+        return (bool) $this->user()?->canManageHr();
     }
 
     public function rules(): array

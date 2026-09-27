@@ -126,14 +126,14 @@
                         <p class="text-muted small">Tài liệu đã khóa. Không sửa nội dung bản này. Nếu cần thay đổi, tạo hợp đồng/gia hạn mới rồi ký lại.</p>
                     @endif
 
-                    @if(auth()->user()?->is_hr && $contract->isAwaitingHrSend())
+                    @if(auth()->user()?->canManageHr() && $contract->isAwaitingHrSend())
                     <form action="{{ route('contracts.send_for_signature', $contract) }}" method="POST" class="mb-2">
                         @csrf
                         <button class="btn btn-warning w-100" type="submit">Gửi ký (Giám đốc → nhân viên)</button>
                     </form>
                     @endif
 
-                    @if(auth()->user()?->is_director && $contract->isPendingDirectorEsign())
+                    @if(auth()->user()?->canActAsDirector() && $contract->isPendingDirectorEsign())
                     <form action="{{ route('contracts.sign', $contract) }}" method="POST" class="mb-2"
                             data-confirm="Xác nhận ký hợp đồng {{ $contract->contract_code }} phía doanh nghiệp? Hash: {{ $contract->document_hash ?: '(sẽ khóa khi ký)' }}. Đây là mô phỏng, chưa phải chứng thư số pháp lý. Sau khi ký, nhân viên mới được ký.">
                         @csrf

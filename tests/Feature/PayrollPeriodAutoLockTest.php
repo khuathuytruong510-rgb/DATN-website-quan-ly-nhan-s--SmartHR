@@ -44,6 +44,22 @@ class PayrollPeriodAutoLockTest extends TestCase
         $this->assertFalse(app(PayrollPeriodLockService::class)->isLocked(9, 2026));
     }
 
+    public function test_system_auto_verification_skips_period_waiting_for_unlock_approval(): void
+    {
+        $hr = User::factory()->create(['is_hr' => true]);
+        $service = app(PayrollPeriodLockService::class);
+        $service->lockBySystem(8, 2026);
+        $service->lockBySystem(9, 2026);
+
+        $this->assertTrue($service->autoVerify(8, 2026));
+        $service->requestUnlock(9, 2026, $hr, 'Bổ sung dữ liệu chấm công');
+
+        $this->assertFalse($service->autoVerify(9, 2026));
+        $this->assertTrue($service->isHrVerified(8, 2026));
+        $this->assertFalse($service->isHrVerified(9, 2026));
+        $this->assertDatabaseHas('activity_logs', ['action' => 'payroll_period_auto_hr_verified']);
+    }
+
     public function test_hr_payroll_index_shows_verify_when_locked(): void
     {
         $hr = User::factory()->create(['is_hr' => true, 'is_admin' => false, 'is_accountant' => false, 'is_director' => false]);

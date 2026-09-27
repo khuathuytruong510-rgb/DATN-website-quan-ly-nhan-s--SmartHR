@@ -3,8 +3,8 @@
 @section('title', 'Chi tiết yêu cầu xóa')
 @php
     $user = auth()->user();
-    $isManager = $user && ($user->is_hr || $user->is_admin);
-    $isDirector = $user && $user->is_director;
+    $isManager = $user && ($user->canManageHr() || $user->is_admin);
+    $isDirector = $user && $user->canActAsDirector();
     $badge = match ($request->status) {
         'pending' => 'background:#fef3c7;color:#92400e;',
         'approved' => 'background:#dbeafe;color:#1e40af;',

@@ -3,6 +3,7 @@
 return [
     'types' => [
         'maternity' => ['label' => 'Nghỉ thai sản', 'paid' => true],
+        'spouse_birth' => ['label' => 'Nghỉ thai sản (vợ sinh con)', 'paid' => true],
         'annual' => ['label' => 'Nghỉ phép năm', 'paid' => true],
         'sick' => ['label' => 'Nghỉ ốm', 'paid' => true],
         'personal' => ['label' => 'Nghỉ việc riêng', 'paid' => false],

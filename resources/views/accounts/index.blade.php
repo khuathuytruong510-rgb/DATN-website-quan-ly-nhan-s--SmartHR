@@ -11,7 +11,7 @@
         <div class="page-actions">
             <a class="btn" href="{{ route('admin.notifications.index') }}">Thông báo</a>
             <a class="btn primary" href="{{ route('accounts.create') }}">Tạo tài khoản</a>
-            @if (auth()->user()->is_admin)
+            @if (auth()->user()->is_admin || auth()->user()->is_super_admin)
                 <a class="btn" href="{{ route('permissions.index') }}">Quản lý phân quyền</a>
             @endif
         </div>
@@ -20,7 +20,7 @@
     @php $filters = $filters ?? []; @endphp
     <form method="GET" action="{{ route('accounts.index') }}" class="card p-3 mb-3">
         <div class="row g-2 align-items-end">
-            <div class="col-12 col-md-6">
+            <div class="col-12 col-md-4">
                 <label class="form-label" for="account-search">Tìm tài khoản</label>
                 <input id="account-search" class="form-control" type="search" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Họ tên hoặc email...">
             </div>
@@ -32,7 +32,17 @@
                     <option value="locked" @selected(($filters['status'] ?? '') === 'locked')>Đã khóa</option>
                 </select>
             </div>
-            <div class="col-12 col-md-3 d-flex gap-2">
+            <div class="col-12 col-md-3">
+                <label class="form-label" for="account-department">Phòng ban</label>
+                <select id="account-department" class="form-select" name="department_id">
+                    <option value="" @selected(($filters['department_id'] ?? '') === '')>Tất cả phòng ban</option>
+                    @foreach($departments as $department)
+                        <option value="{{ $department->id }}" @selected((string) ($filters['department_id'] ?? '') === (string) $department->id)>{{ $department->name }}</option>
+                    @endforeach
+                    <option value="none" @selected(($filters['department_id'] ?? '') === 'none')>Chưa gắn phòng ban</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-2 d-flex gap-2">
                 <button type="submit" class="btn btn-primary">Tìm kiếm</button>
                 <a href="{{ route('accounts.index') }}" class="btn btn-outline-secondary">Xóa lọc</a>
             </div>
@@ -66,7 +76,9 @@
                             </td>
                             <td>{{ $user->email }}</td>
                             <td>
-                                @if ($user->is_admin)
+                                @if ($user->is_super_admin)
+                                    <span class="badge" style="background:#ede9fe;color:#5b21b6;">Siêu Admin</span>
+                                @elseif ($user->is_admin)
                                     <span class="badge">Admin (hệ thống)</span>
                                 @endif
                                 @if ($user->is_director)
@@ -91,17 +103,20 @@
                             </td>
                             <td>{{ $user->created_at?->format('d/m/Y') ?? '-' }}</td>
                             <td>
-                                <a class="btn" href="{{ route('accounts.edit', $user) }}">Sửa</a>
-                                
-                                <form action="{{ route('accounts.destroy', $user) }}" method="POST" style="display:inline">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button class="btn" type="submit" data-confirm="Bạn có chắc muốn xoá tài khoản này?">Xoá</button>
-                                </form>
-                                <form action="{{ route('accounts.toggle_lock', $user) }}" method="POST" style="display:inline">
-                                    @csrf
-                                    <button class="btn" type="submit">{{ $user->is_locked ? 'Mở khoá' : 'Khoá' }}</button>
-                                </form>
+                                @if((!$user->is_admin && !$user->is_super_admin) || auth()->user()?->is_super_admin)
+                                    <a class="btn" href="{{ route('accounts.edit', $user) }}">Sửa</a>
+                                    <form action="{{ route('accounts.destroy', $user) }}" method="POST" style="display:inline">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button class="btn" type="submit" data-confirm="Bạn có chắc muốn xoá tài khoản này?">Xoá</button>
+                                    </form>
+                                    <form action="{{ route('accounts.toggle_lock', $user) }}" method="POST" style="display:inline">
+                                        @csrf
+                                        <button class="btn" type="submit">{{ $user->is_locked ? 'Mở khoá' : 'Khoá' }}</button>
+                                    </form>
+                                @else
+                                    <span class="muted">Chỉ Siêu Admin quản lý</span>
+                                @endif
                             </td>
                         </tr>
                     @endforeach

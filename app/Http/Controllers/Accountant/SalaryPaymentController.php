@@ -45,7 +45,7 @@ class SalaryPaymentController extends Controller
      */
     public function create(Payroll $payroll)
     {
-        if (! request()->user()?->is_accountant) {
+        if (! request()->user()?->canPayPayroll()) {
             abort(403, 'Chỉ Kế toán được tạo thanh toán.');
         }
 
@@ -73,7 +73,7 @@ class SalaryPaymentController extends Controller
      */
     public function edit(SalaryPayment $salaryPayment)
     {
-        if (! request()->user()?->is_accountant) {
+        if (! request()->user()?->canPayPayroll()) {
             abort(403, 'Chỉ Kế toán được sửa phiếu thanh toán.');
         }
 
@@ -97,7 +97,7 @@ class SalaryPaymentController extends Controller
      */
     public function update(Request $request, SalaryPayment $salaryPayment)
     {
-        if (! $request->user()?->is_accountant) {
+        if (! $request->user()?->canPayPayroll()) {
             abort(403, 'Chỉ Kế toán được sửa phiếu thanh toán.');
         }
 
@@ -126,7 +126,7 @@ class SalaryPaymentController extends Controller
      */
     public function pay(Request $request, SalaryPayment $salaryPayment)
     {
-        if (! $request->user()?->is_accountant) {
+        if (! $request->user()?->canPayPayroll()) {
             abort(403, 'Chỉ Kế toán được thanh toán lương.');
         }
 
@@ -249,7 +249,7 @@ class SalaryPaymentController extends Controller
      */
     public function destroy(SalaryPayment $salaryPayment)
     {
-        if (! request()->user()?->is_accountant) {
+        if (! request()->user()?->canPayPayroll()) {
             abort(403, 'Chỉ Kế toán được xóa phiếu thanh toán chưa chi.');
         }
 

@@ -185,7 +185,7 @@ class PayrollPeriodLockService
     /** HR xác nhận đã kiểm tra nguồn → Kế toán được tính. */
     public function markHrVerified(int $month, int $year, User $actor): PayrollPeriodLock
     {
-        if (! $actor->is_hr) {
+        if (! $actor->canManageHr()) {
             throw new RuntimeException('Chỉ HR được xác nhận đã kiểm tra nguồn kỳ lương.');
         }
 
@@ -217,10 +217,31 @@ class PayrollPeriodLockService
         });
     }
 
+    /** Automatically verify a locked period when HR has not done so by the payroll date. */
+    public function autoVerify(int $month, int $year): bool
+    {
+        return DB::transaction(function () use ($month, $year): bool {
+            $period = $this->lockedRow($month, $year);
+
+            if (! $period->exists || ! $period->is_locked || $period->hr_verified_at || $period->unlock_request_status === 'pending') {
+                return false;
+            }
+
+            $period->update([
+                'hr_verified_at' => now(),
+                'hr_verified_by' => null,
+            ]);
+
+            $this->logSystem($month, $year, 'payroll_period_auto_hr_verified');
+
+            return true;
+        });
+    }
+
     /** HR gửi yêu cầu mở khóa → Giám đốc duyệt. */
     public function requestUnlock(int $month, int $year, User $actor, string $reason): PayrollPeriodLock
     {
-        if (! $actor->is_hr) {
+        if (! $actor->canManageHr()) {
             throw new RuntimeException('Chỉ HR được gửi yêu cầu mở khóa kỳ lương.');
         }
 
@@ -292,7 +313,7 @@ class PayrollPeriodLockService
 
     public function approveUnlock(int $month, int $year, User $director): PayrollPeriodLock
     {
-        if (! $director->is_director) {
+        if (! $director->canActAsDirector()) {
             throw new RuntimeException('Chỉ Giám đốc được duyệt mở khóa kỳ lương.');
         }
 
@@ -353,7 +374,7 @@ class PayrollPeriodLockService
 
     public function rejectUnlock(int $month, int $year, User $director, ?string $note = null): PayrollPeriodLock
     {
-        if (! $director->is_director) {
+        if (! $director->canActAsDirector()) {
             throw new RuntimeException('Chỉ Giám đốc được từ chối mở khóa kỳ lương.');
         }
 
@@ -406,7 +427,7 @@ class PayrollPeriodLockService
      */
     public function relockAfterEdit(int $month, int $year, User $actor): PayrollPeriodLock
     {
-        if (! $actor->is_hr) {
+        if (! $actor->canManageHr()) {
             throw new RuntimeException('Chỉ HR được khóa lại kỳ sau khi chỉnh sửa.');
         }
 

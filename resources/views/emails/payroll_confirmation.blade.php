@@ -63,7 +63,7 @@
                     </tr>
                 </table>
 
-                <p style="margin-top: 24px;">Nếu thông tin chính xác, vui lòng bấm nút bên dưới để xác nhận (hoặc xác nhận trên trang Lương của bạn). Nếu không phản hồi sau 3 ngày, hệ thống sẽ tự động chuyển sang bước thanh toán.</p>
+                <p style="margin-top: 24px;">Nếu thông tin chính xác, vui lòng bấm nút bên dưới để xác nhận (hoặc xác nhận trên trang Lương của bạn) trước {{ $payroll->confirmation_deadline?->format('d/m/Y H:i') ?? '23:59 ngày chốt lương' }}. Sau thời hạn này, hệ thống tự xác nhận phiếu; Kế toán vẫn thực hiện thanh toán theo quy trình.</p>
 
                 @if(!empty($confirmUrl))
                     <p style="text-align:center; margin: 28px 0;">

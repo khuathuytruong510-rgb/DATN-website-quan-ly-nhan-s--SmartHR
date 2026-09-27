@@ -87,7 +87,7 @@ class PayrollCalculationService
     /**
      * Tính cả kỳ cho nhân viên đang làm. Bỏ qua phiếu không được tính lại.
      */
-    public function calculatePeriod(int $month, int $year, ?User $actor = null): array
+    public function calculatePeriod(int $month, int $year, ?User $actor = null, bool $skipPayrollIssues = false): array
     {
         app(PayrollPeriodLockService::class)->assertUnlockedForCalculation($month, $year);
 
@@ -96,6 +96,17 @@ class PayrollCalculationService
 
         $employees = Employee::query()->where('status', 'active')->orderBy('id')->get();
         foreach ($employees as $employee) {
+            if ($skipPayrollIssues && Payroll::query()
+                ->where('employee_id', $employee->id)
+                ->where('month', $month)
+                ->where('year', $year)
+                ->where('status', PayrollPaymentWorkflowService::PAYROLL_ISSUE)
+                ->exists()) {
+                $skipped++;
+
+                continue;
+            }
+
             try {
                 $this->calculate($employee, $month, $year);
                 $calculated++;

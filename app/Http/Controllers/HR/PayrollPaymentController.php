@@ -20,7 +20,7 @@ class PayrollPaymentController extends Controller
     protected function assertCanPay(): void
     {
         $user = request()->user();
-        if (! $user || ! $user->is_accountant) {
+        if (! $user?->canPayPayroll()) {
             abort(403, 'Chỉ Kế toán được thanh toán lương.');
         }
     }

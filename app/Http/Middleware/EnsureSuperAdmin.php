@@ -5,15 +5,11 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 
-class EnsureAccountant
+class EnsureSuperAdmin
 {
     public function handle(Request $request, Closure $next)
     {
-        $user = auth()->user();
-
-        if (! $user || (! $user->is_accountant && ! $user->is_super_admin)) {
-            abort(403);
-        }
+        abort_unless($request->user()?->is_super_admin, 403, 'Chỉ Siêu Admin được thực hiện thao tác này.');
 
         return $next($request);
     }

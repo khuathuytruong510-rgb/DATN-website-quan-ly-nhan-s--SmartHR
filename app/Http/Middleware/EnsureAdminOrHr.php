@@ -79,6 +79,10 @@ class EnsureAdminOrHr
     {
         $user = auth()->user();
 
+        if ($user?->is_super_admin) {
+            return $next($request);
+        }
+
         if (! $user || (! $user->is_hr && ! $user->is_accountant && ! $user->is_director)) {
             abort(403);
         }

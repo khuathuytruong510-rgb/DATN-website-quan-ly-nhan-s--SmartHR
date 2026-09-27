@@ -24,11 +24,11 @@
                 </form>
             @endif
 
-            @if(auth()->user()->is_hr && $workflow->canRemediateIssue($payroll))
+            @if(auth()->user()->canManageHr() && $workflow->canRemediateIssue($payroll))
                 <a href="{{ route('payroll.issues.fix_form', $payroll) }}" class="btn primary">Khắc phục</a>
             @endif
 
-            @if($user->is_accountant && $workflow->canPay($payroll))
+            @if($user->canPayPayroll() && $workflow->canPay($payroll))
                 <a href="{{ route('payroll.payment.show', $payroll) }}" class="btn" style="background:#bbf7d0;color:#166534;border:1px solid #86efac;">Thanh toán</a>
             @endif
         </div>

@@ -8,7 +8,7 @@ class StoreAssignedOvertimeRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return (bool) auth()->user()?->is_hr;
+        return (bool) auth()->user()?->canManageHr();
     }
 
     public function rules(): array

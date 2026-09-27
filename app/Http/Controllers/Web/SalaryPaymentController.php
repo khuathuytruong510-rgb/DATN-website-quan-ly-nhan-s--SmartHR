@@ -42,7 +42,7 @@ class SalaryPaymentController extends Controller
 
     public function pay(ProcessSalaryPaymentRequest $request, SalaryPayment $salaryPayment)
     {
-        if (! $request->user()?->is_accountant) {
+        if (! $request->user()?->canPayPayroll()) {
             abort(403, 'Chỉ Kế toán được thanh toán lương.');
         }
 

@@ -113,7 +113,7 @@ class ContractExpiryAlertService
      */
     public function recordDecision(User $actor, Contract $contract, string $decision, ?string $reason = null): ContractExpiryAction
     {
-        if (! $actor->is_hr) {
+        if (! $actor->canManageHr()) {
             throw new \RuntimeException('Chỉ HR được ghi nhận xử lý hợp đồng sắp hết hạn.');
         }
 

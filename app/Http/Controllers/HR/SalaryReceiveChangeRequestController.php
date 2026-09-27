@@ -18,7 +18,7 @@ class SalaryReceiveChangeRequestController extends Controller
     protected function assertHr(): void
     {
         $user = request()->user();
-        if (! $user || (! $user->is_hr && ! $user->is_director)) {
+        if (! $user || (! $user->canManageHr() && ! $user->canActAsDirector())) {
             abort(403);
         }
     }

@@ -76,8 +76,9 @@
                 @php
                     $isEdit = isset($user) && $user->id;
                     $currentRole = old('role', $isEdit
-                        ? ($user->is_admin ? 'admin' : ($user->is_director ? 'director' : ($user->is_hr ? 'hr' : ($user->is_accountant ? 'accountant' : 'employee'))))
+                        ? ($user->is_super_admin ? 'super_admin' : ($user->is_admin ? 'admin' : ($user->is_director ? 'director' : ($user->is_hr ? 'hr' : ($user->is_accountant ? 'accountant' : 'employee')))))
                         : 'employee');
+                    $canManageSuperAdmins = $canManageSuperAdmins ?? (bool) auth()->user()?->is_super_admin;
                     $lockDirectorRole = $isEdit && $user->is_director;
                     $blockNewDirector = ! empty($directorExists) && $currentRole !== 'director';
                 @endphp
@@ -98,11 +99,21 @@
                         <option value="hr" {{ $currentRole === 'hr' ? 'selected' : '' }}>HR</option>
                         <option value="accountant" {{ $currentRole === 'accountant' ? 'selected' : '' }}>Kế toán</option>
                         <option value="director" {{ $currentRole === 'director' ? 'selected' : '' }} {{ $blockNewDirector ? 'disabled' : '' }}>Giám đốc</option>
-                        <option value="admin" {{ $currentRole === 'admin' ? 'selected' : '' }}>Admin (quản trị hệ thống)</option>
+                        @if($canManageSuperAdmins)
+                            <option value="admin" {{ $currentRole === 'admin' ? 'selected' : '' }}>Admin thường</option>
+                            <option value="super_admin" {{ $currentRole === 'super_admin' ? 'selected' : '' }}>Siêu Admin</option>
+                        @endif
                     </select>
                 @endif
                 @error('role')<span class="error">{{ $message }}</span>@enderror
             </div>
+
+            @if($canManageSuperAdmins && empty($contract))
+                <div class="callout info" id="super-admin-capabilities" style="display:{{ $currentRole === 'super_admin' ? 'block' : 'none' }};margin-bottom:16px;">
+                    <p class="callout-title">Quyền Siêu Admin</p>
+                    <p>Quản lý tài khoản Admin thường; tạo, khóa/mở khóa và đặt lại tài khoản; phân quyền; quản lý phòng ban, chức vụ, nhân viên; xem dữ liệu, nhật ký và thông báo toàn hệ thống; cấu hình hệ thống; xóa dữ liệu quan trọng với xác nhận.</p>
+                </div>
+            @endif
 
             <div class="field">
                 <label class="form-label" for="department_id">Phòng ban</label>
@@ -122,3 +133,16 @@
         </form>
     </div>
 @endsection
+
+@push('scripts')
+<script>
+    (function () {
+        const roleSelect = document.getElementById('role');
+        const summary = document.getElementById('super-admin-capabilities');
+        if (!roleSelect || !summary) return;
+        roleSelect.addEventListener('change', function () {
+            summary.style.display = this.value === 'super_admin' ? 'block' : 'none';
+        });
+    })();
+</script>
+@endpush

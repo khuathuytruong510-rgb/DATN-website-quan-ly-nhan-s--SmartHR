@@ -20,13 +20,13 @@ class NotificationController extends Controller
             ->where(function ($query) use ($user) {
                 $query->where('target', 'all');
 
-                if ($user->is_director && ! $user->is_hr) {
+                if ($user->canActAsDirector() && ! $user->canManageHr()) {
                     $query->orWhere('target', 'director');
                 }
-                if ($user->is_hr) {
+                if ($user->canManageHr()) {
                     $query->orWhere('target', 'hr');
                 }
-                if ($user->is_admin) {
+                if ($user->is_admin || $user->isSuperAdmin()) {
                     $query->orWhere('target', 'admin');
                 }
             })
@@ -45,7 +45,7 @@ class NotificationController extends Controller
 
     public function adminIndex(): View
     {
-        abort_unless(Auth::user()?->is_admin, 403);
+        abort_unless(Auth::user()?->is_admin || Auth::user()?->isSuperAdmin(), 403);
 
         $user = Auth::user();
         $notifications = Notification::with('sender')
@@ -75,7 +75,7 @@ class NotificationController extends Controller
             'target' => ['required', 'in:employee,hr,all'],
         ]);
 
-        if ($user->is_hr && $data['target'] !== 'employee') {
+        if ($user->is_hr && ! $user->isSuperAdmin() && $data['target'] !== 'employee') {
             abort(403, 'HR chỉ có thể gửi thông báo đến nhân viên.');
         }
 

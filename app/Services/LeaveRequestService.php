@@ -11,6 +11,7 @@ use App\Support\HrApprovalNotifier;
 use App\Support\LeaveTypes;
 use App\Support\RequestApprover;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 
 class LeaveRequestService
@@ -23,45 +24,77 @@ class LeaveRequestService
 
     public function submit(Employee $employee, User $actor, array $data): LeaveRequest
     {
-        $halfDay = (bool) ($data['half_day'] ?? false);
+        $isSpouseBirth = ($data['type'] ?? null) === LeaveTypes::SPOUSE_BIRTH;
+        $childrenCount = $isSpouseBirth ? (int) ($data['children_count'] ?? 0) : null;
+        $birthComplication = $isSpouseBirth && (bool) ($data['birth_complication'] ?? false);
+        $halfDay = ! $isSpouseBirth && (bool) ($data['half_day'] ?? false);
+
+        if ($isSpouseBirth) {
+            $schedule = $this->eligibility->spouseBirthSchedule(
+                $data['start_date'],
+                $childrenCount,
+                $birthComplication
+            );
+            $data['end_date'] = $schedule['end_date'];
+            $data['half_day'] = false;
+            $data['reason'] = 'Vợ sinh con';
+        }
+
         $check = $this->eligibility->assertEligible(
             $employee,
             $data['type'],
             $data['start_date'],
             $data['end_date'],
-            $halfDay
+            $halfDay,
+            null,
+            $childrenCount,
+            $birthComplication
         );
 
         $this->periodLock->assertWritableRange($data['start_date'], $data['end_date'], 'đơn nghỉ phép');
+        $document = $data['document'] ?? null;
+        $documentPath = $document?->store('leave-evidence', 'local');
 
-        return DB::transaction(function () use ($employee, $actor, $data, $check) {
-            $leave = LeaveRequest::create([
-                'employee_id' => $employee->id,
-                'start_date' => $data['start_date'],
-                'end_date' => $data['end_date'],
-                'half_day' => (bool) ($data['half_day'] ?? false),
-                'type' => $data['type'],
-                'reason' => $data['reason'] ?? null,
-                'is_urgent' => (bool) ($data['is_urgent'] ?? false),
-                'urgent_reason' => $data['urgent_reason'] ?? null,
-                'days' => $check['days'],
-                'status' => 'pending',
-                'approved_by' => null,
-                'approved_at' => null,
-                'cancelled_by' => null,
-                'cancelled_at' => null,
-            ]);
+        try {
+            return DB::transaction(function () use ($employee, $actor, $data, $check, $isSpouseBirth, $childrenCount, $birthComplication, $document, $documentPath) {
+                $leave = LeaveRequest::create([
+                    'employee_id' => $employee->id,
+                    'start_date' => $data['start_date'],
+                    'end_date' => $data['end_date'],
+                    'half_day' => (bool) ($data['half_day'] ?? false),
+                    'type' => $data['type'],
+                    'children_count' => $isSpouseBirth ? $childrenCount : null,
+                    'birth_complication' => $isSpouseBirth ? $birthComplication : null,
+                    'document_path' => $documentPath,
+                    'document_name' => $document?->getClientOriginalName(),
+                    'reason' => $data['reason'] ?? null,
+                    'is_urgent' => (bool) ($data['is_urgent'] ?? false),
+                    'urgent_reason' => $data['urgent_reason'] ?? null,
+                    'days' => $check['days'],
+                    'status' => 'pending',
+                    'approved_by' => null,
+                    'approved_at' => null,
+                    'cancelled_by' => null,
+                    'cancelled_at' => null,
+                ]);
 
-            ActivityLog::create([
-                'user_id' => $actor->id,
-                'action' => 'leave_submitted',
-                'meta' => sprintf('%s → %s', $data['start_date'], $data['end_date']),
-            ]);
+                ActivityLog::create([
+                    'user_id' => $actor->id,
+                    'action' => 'leave_submitted',
+                    'meta' => sprintf('%s → %s', $data['start_date'], $data['end_date']),
+                ]);
 
-            $this->notifyApprovers($leave, $actor, $employee);
+                $this->notifyApprovers($leave, $actor, $employee);
 
-            return $leave;
-        });
+                return $leave;
+            });
+        } catch (\Throwable $e) {
+            if ($documentPath) {
+                Storage::disk('local')->delete($documentPath);
+            }
+
+            throw $e;
+        }
     }
 
     public function approve(LeaveRequest $leave, User $hr): LeaveRequest
@@ -150,7 +183,9 @@ class LeaveRequestService
         $end = Carbon::parse($leave->end_date)->startOfDay();
 
         while ($cursor->lte($end)) {
-            if (! $cursor->isSunday()) {
+            $isSpouseBirthOffDay = $leave->type === LeaveTypes::SPOUSE_BIRTH
+                && ! $this->eligibility->isSpouseBirthWorkingDay($cursor);
+            if (! $isSpouseBirthOffDay && ($leave->type === LeaveTypes::SPOUSE_BIRTH || ! $cursor->isSunday())) {
                 Attendance::updateOrCreate(
                     [
                         'employee_id' => $leave->employee_id,

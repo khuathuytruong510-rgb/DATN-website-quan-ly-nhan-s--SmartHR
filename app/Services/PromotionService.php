@@ -376,12 +376,12 @@ class PromotionService
 
     public static function actorCanApprove(?User $user): bool
     {
-        return $user !== null && $user->is_director;
+        return $user !== null && $user->canActAsDirector();
     }
 
     public static function actorCanManage(?User $user): bool
     {
-        return $user !== null && ($user->is_hr || $user->is_admin);
+        return $user !== null && ($user->canManageHr() || $user->is_admin);
     }
 
     public static function syncDepartmentCount(?int $departmentId): void

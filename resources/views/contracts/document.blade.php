@@ -145,7 +145,7 @@
 <body>
     <p class="no-print">
         <button type="button" onclick="window.print()">In / Lưu PDF</button>
-        @if(auth()->user()?->is_hr)
+        @if(auth()->user()?->canManageHr())
             <a href="{{ route('contracts.show', $contract) }}" style="margin-left:10px;">← Quay lại chi tiết (Gửi ký)</a>
         @endif
     </p>

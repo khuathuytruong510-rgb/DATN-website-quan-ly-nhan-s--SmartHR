@@ -15,6 +15,10 @@ class LeaveRequest extends Model
         'days',
         'half_day',
         'type',
+        'children_count',
+        'birth_complication',
+        'document_path',
+        'document_name',
         'reason',
         'is_urgent',
         'urgent_reason',
@@ -36,6 +40,8 @@ class LeaveRequest extends Model
             'cancelled_at' => 'datetime',
             'days' => 'float',
             'half_day' => 'boolean',
+            'children_count' => 'integer',
+            'birth_complication' => 'boolean',
             'is_urgent' => 'boolean',
         ];
     }

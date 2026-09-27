@@ -11,7 +11,7 @@ class EnsureAdmin
     {
         $user = auth()->user();
 
-        if (! $user || ! $user->is_admin) {
+        if (! $user || (! $user->is_admin && ! $user->is_super_admin)) {
             abort(403);
         }
 

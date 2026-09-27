@@ -14,6 +14,7 @@ use App\Models\SalaryReceiveChangeRequest;
 use App\Models\User;
 use App\Support\HrApprovalNotifier;
 use App\Support\RequestApprover;
+use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -92,6 +93,20 @@ class PayrollPaymentWorkflowService
     {
     }
 
+    public static function confirmationDeadlineFor(Payroll $payroll): Carbon
+    {
+        $rawMonth = (string) $payroll->getRawOriginal('month');
+        if (preg_match('/^(\d{4})-(\d{2})$/', $rawMonth, $matches)) {
+            $period = Carbon::create((int) $matches[1], (int) $matches[2], 1);
+        } else {
+            $period = Carbon::create((int) $payroll->year, (int) $rawMonth, 1);
+        }
+
+        $deadline = $period->addMonthNoOverflow()->day(15)->setTime(23, 59);
+
+        return $deadline->lessThanOrEqualTo(now()) ? $deadline->addMonthNoOverflow() : $deadline;
+    }
+
     public function statusLabel(?string $status): string
     {
         return match ($status) {
@@ -139,12 +154,12 @@ class PayrollPaymentWorkflowService
 
     public function actorCanReview(?User $user, Payroll $payroll): bool
     {
-        return $user && $user->is_hr && $this->canReviewByHr($payroll);
+        return $user && $user->canManageHr() && $this->canReviewByHr($payroll);
     }
 
     public function actorCanFinalApprove(?User $user, Payroll $payroll): bool
     {
-        return $user && $user->is_director && $this->canFinalApprove($payroll);
+        return $user && $user->canFinalApprovePayroll() && $this->canFinalApprove($payroll);
     }
 
     public function canApprove(Payroll $payroll): bool
@@ -191,12 +206,12 @@ class PayrollPaymentWorkflowService
     public function assertTransition(Payroll $payroll, string $to, ?User $actor = null): void
     {
         $allowed = match ($to) {
-            self::HR_CHECKED => $this->canReviewByHr($payroll) && $actor?->is_hr,
-            self::DIRECTOR_APPROVED => $this->canFinalApprove($payroll) && $actor?->is_director,
+            self::HR_CHECKED => $this->canReviewByHr($payroll) && $actor?->canManageHr(),
+            self::DIRECTOR_APPROVED => $this->canFinalApprove($payroll) && $actor?->canFinalApprovePayroll(),
             self::EMPLOYEE_CONFIRMED => $this->canConfirm($payroll),
             self::PAYROLL_ISSUE => $this->canReportIssue($payroll),
             self::CALCULATED => $this->canRemediateIssue($payroll),
-            self::PAID => $this->canPay($payroll) && $actor?->is_accountant,
+            self::PAID => $this->canPay($payroll) && $actor?->canPayPayroll(),
             default => false,
         };
 
@@ -379,7 +394,7 @@ class PayrollPaymentWorkflowService
             $payroll->update([
                 'status' => self::WAITING_CONFIRMATION,
                 'confirmation_status' => 'pending',
-                'confirmation_deadline' => now()->addDays(3),
+                'confirmation_deadline' => self::confirmationDeadlineFor($payroll),
                 'confirmation_token' => $token,
                 'sent_at' => now(),
                 'sent_by' => $actor->id,
@@ -407,7 +422,7 @@ class PayrollPaymentWorkflowService
                 $payroll,
                 $actor,
                 'Bảng lương cần xác nhận',
-                'Bảng lương tháng '.$payroll->display_month.' đã được Giám đốc phê duyệt. Vui lòng xác nhận trong 3 ngày.'
+                'Bảng lương tháng '.$payroll->display_month.' đã được Giám đốc phê duyệt. Vui lòng xác nhận trước '.$payroll->confirmation_deadline->format('d/m/Y H:i').'.'
             );
         } catch (\Throwable) {
         }
@@ -415,6 +430,121 @@ class PayrollPaymentWorkflowService
         $this->sendConfirmationEmail($payroll->fresh(['employee']));
 
         return $payroll->fresh(['employee']);
+    }
+
+    /** Automatically complete outstanding HR and director steps for one payroll period. */
+    public function autoFinalizePeriod(int $month, int $year): array
+    {
+        $reviewed = 0;
+        $approved = 0;
+        $statuses = array_merge(self::calculatedStatuses(), self::hrCheckedStatuses());
+        $payrolls = Payroll::query()
+            ->where('month', $month)
+            ->where('year', $year)
+            ->whereIn('status', $statuses)
+            ->orderBy('id')
+            ->get();
+
+        foreach ($payrolls as $payroll) {
+            if ($this->isCalculated($payroll->status)) {
+                [$payroll, $wasReviewed] = $this->autoReviewBySystem($payroll);
+                if (! $payroll) {
+                    continue;
+                }
+                $reviewed += $wasReviewed ? 1 : 0;
+            }
+
+            if ($this->isHrChecked($payroll->status) && $this->autoApproveBySystem($payroll)) {
+                $approved++;
+            }
+        }
+
+        return compact('reviewed', 'approved');
+    }
+
+    /** @return array{0: ?Payroll, 1: bool} */
+    protected function autoReviewBySystem(Payroll $payroll): array
+    {
+        return DB::transaction(function () use ($payroll): array {
+            $payroll = $this->lockPayroll($payroll);
+
+            if ($this->isHrChecked($payroll->status)) {
+                return [$payroll->fresh(['employee']), false];
+            }
+            if (! $this->isCalculated($payroll->status)) {
+                return [null, false];
+            }
+
+            $payroll->update(['status' => self::HR_CHECKED]);
+            $payroll = $payroll->fresh(['employee']);
+            $this->snapshotPayoutAccount($payroll);
+            $this->logSystemPayrollAction('payroll_auto_hr_checked', $payroll);
+
+            return [$payroll->fresh(['employee']), true];
+        });
+    }
+
+    protected function autoApproveBySystem(Payroll $payroll): bool
+    {
+        $payroll = DB::transaction(function () use ($payroll): ?Payroll {
+            $payroll = $this->lockPayroll($payroll);
+            if (! $this->isHrChecked($payroll->status)) {
+                return null;
+            }
+
+            $payroll->update([
+                'status' => self::DIRECTOR_APPROVED,
+                'confirmation_status' => 'pending',
+                'confirmation_deadline' => self::confirmationDeadlineFor($payroll),
+                'confirmation_token' => Str::random(48),
+                'sent_at' => now(),
+                'sent_by' => null,
+                'director_approved_by' => null,
+                'director_approved_name' => 'Hệ thống (tự động)',
+                'director_approved_at' => now(),
+                'email_status' => 'pending',
+            ]);
+
+            $payroll = $payroll->fresh(['employee']);
+            $this->snapshotPayoutAccount($payroll);
+            $this->logSystemPayrollAction('payroll_auto_final_approved', $payroll);
+
+            return $payroll->fresh(['employee']);
+        });
+
+        if (! $payroll) {
+            return false;
+        }
+
+        try {
+            $this->notifyEmployee(
+                $payroll,
+                null,
+                'Bảng lương cần xác nhận',
+                'Bảng lương tháng '.$payroll->display_month.' đã được hệ thống tự động phê duyệt. Vui lòng xác nhận trước '.$payroll->confirmation_deadline->format('d/m/Y H:i').'.'
+            );
+        } catch (\Throwable) {
+        }
+
+        $this->sendConfirmationEmail($payroll->fresh(['employee']));
+
+        return true;
+    }
+
+    protected function logSystemPayrollAction(string $action, Payroll $payroll): void
+    {
+        $userId = User::query()
+            ->where(fn ($query) => $query->where('is_hr', true)->orWhere('is_admin', true))
+            ->orderBy('id')
+            ->value('id');
+
+        if ($userId) {
+            ActivityLog::create([
+                'user_id' => $userId,
+                'action' => $action,
+                'meta' => sprintf('payroll:%d;period:%02d/%d;by:system', $payroll->id, $payroll->month, $payroll->year),
+            ]);
+        }
     }
 
     /**
@@ -446,19 +576,23 @@ class PayrollPaymentWorkflowService
                 'confirmation_token' => null,
             ]);
 
-            ActivityLog::create([
-                'user_id' => $actor?->id ?? Auth::id(),
-                'action' => $auto ? 'payroll_auto_ready' : 'payroll_confirmed',
-                'meta' => 'payroll:'.$payroll->id,
-            ]);
+            $logUserId = $auto
+                ? (User::query()->where('is_hr', true)->orderBy('id')->value('id')
+                    ?? User::query()->where('is_admin', true)->orderBy('id')->value('id'))
+                : ($actor?->id ?? Auth::id());
+            if ($logUserId) {
+                ActivityLog::create([
+                    'user_id' => $logUserId,
+                    'action' => $auto ? 'payroll_auto_ready' : 'payroll_confirmed',
+                    'meta' => $auto ? 'payroll:'.$payroll->id.';by:system' : 'payroll:'.$payroll->id,
+                ]);
+            }
 
             return $payroll->fresh(['employee']);
         });
     }
 
-    /**
-     * Tự động chuyển sau 3 ngày không phản hồi
-     */
+    /** Automatically confirm unreplied payslips when their payroll period closes. */
     public function autoMarkReady(): int
     {
         $count = 0;
@@ -468,19 +602,15 @@ class PayrollPaymentWorkflowService
                 $q->whereNull('confirmation_status')
                     ->orWhere('confirmation_status', '!=', 'issue_reported');
             })
-            ->where(function ($q) {
-                $q->where(function ($q2) {
-                    $q2->whereNotNull('confirmation_deadline')
-                        ->where('confirmation_deadline', '<=', now());
-                })->orWhere(function ($q2) {
-                    $q2->whereNull('confirmation_deadline')
-                        ->whereNotNull('sent_at')
-                        ->where('sent_at', '<=', now()->subDays(3));
-                });
-            })
             ->get();
 
         foreach ($items as $payroll) {
+            $deadline = $payroll->confirmation_deadline
+                ?? $payroll->sent_at?->copy()->setTime(23, 59);
+            if (! $deadline || $deadline->isFuture()) {
+                continue;
+            }
+
             try {
                 $this->confirm($payroll, null, true);
                 $count++;

@@ -5,8 +5,8 @@
 @section('content')
 @php
     $user = auth()->user();
-    $isManager = $user && ($user->is_hr || $user->is_admin);
-    $isDirector = $user && $user->is_director;
+    $isManager = $user && ($user->canManageHr() || $user->is_admin);
+    $isDirector = $user && $user->canActAsDirector();
 @endphp
 <div class="content" style="max-width:1100px;">
     <div class="page-head">

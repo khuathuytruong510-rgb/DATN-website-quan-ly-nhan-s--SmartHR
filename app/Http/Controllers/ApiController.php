@@ -11,7 +11,7 @@ class ApiController extends BaseController
     protected function requireHr(Request $request): User
     {
         $user = $this->currentUser($request);
-        if (! $user->is_hr) {
+        if (! $user->canManageHr()) {
             abort(403, 'Chỉ HR được ghi dữ liệu nhân sự qua API.');
         }
 

@@ -175,7 +175,7 @@
             <td style="padding:12px 14px;">
                 <div style="display:flex;gap:5px;flex-wrap:wrap;">
                     <a href="{{ route('evaluations.show', $ev) }}" class="btn" style="padding:5px 10px;font-size:12px;">Chi tiết</a>
-                    @if(auth()->user()?->is_admin || auth()->user()?->is_hr)
+                    @if(auth()->user()?->is_admin || auth()->user()?->canManageHr())
                     <a href="{{ route('evaluations.edit', $ev) }}" class="btn" style="padding:5px 10px;font-size:12px;">Sửa</a>
                     @if($ev->status === 'pending')
                     <form method="POST" action="{{ route('evaluations.approve', $ev) }}" style="display:inline;">

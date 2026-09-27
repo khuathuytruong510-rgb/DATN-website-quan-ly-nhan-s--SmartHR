@@ -43,7 +43,7 @@ class ContractEsignController extends Controller
 
     public function sendForSignature(Request $request, Contract $contract, ContractService $service): RedirectResponse
     {
-        if (! $request->user()?->is_hr) {
+        if (! $request->user()?->canManageHr()) {
             abort(403, 'Chỉ HR được gửi hợp đồng cho Giám đốc ký số.');
         }
 
@@ -60,7 +60,7 @@ class ContractEsignController extends Controller
 
     public function reject(Request $request, Contract $contract, ContractService $service): RedirectResponse
     {
-        if (! $request->user()?->is_director) {
+        if (! $request->user()?->canActAsDirector()) {
             abort(403, 'Chỉ Giám đốc được từ chối ký số.');
         }
 
@@ -85,7 +85,7 @@ class ContractEsignController extends Controller
         if (! $user) {
             abort(403);
         }
-        if ($user->is_hr || $user->is_director || $user->is_admin || $user->is_accountant) {
+        if ($user->isSuperAdmin() || $user->is_hr || $user->is_director || $user->is_admin || $user->is_accountant) {
             return;
         }
         $employee = $user->linkedEmployee();

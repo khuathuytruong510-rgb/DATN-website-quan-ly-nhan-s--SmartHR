@@ -37,13 +37,15 @@
         </div>
     @endif
 
-    <form method="POST" action="{{ route('me.leave_requests.store') }}" data-confirm="Xác nhận gửi đơn? Hệ thống sẽ kiểm tra điều kiện nghỉ phép trên hợp đồng và luật lao động. Nếu đủ điều kiện, đơn được gửi {{ $approver }} duyệt.">
+    <form method="POST" action="{{ route('me.leave_requests.store') }}" enctype="multipart/form-data" data-confirm="Xác nhận gửi đơn? Hệ thống sẽ kiểm tra điều kiện nghỉ phép trên hợp đồng và luật lao động. Nếu đủ điều kiện, đơn được gửi {{ $approver }} duyệt.">
         @csrf
 
         <div class="field">
             <label class="form-label" for="leave-type">Loại nghỉ phép</label>
             @include('components.leave_type_select', ['leaveTypes' => $leaveTypes ?? null, 'selected' => $defaultType ?? null])
         </div>
+
+        @include('components.spouse_birth_leave_fields')
 
         @include('components.leave_quota_card', [
             'guides' => $leaveLimit['types'] ?? [],
@@ -65,7 +67,7 @@
             </div>
         </div>
 
-        <div class="field">
+        <div class="field" id="half-day-field">
             <label class="check-row">
                 <input type="checkbox" name="half_day" value="1" {{ old('half_day') ? 'checked' : '' }} id="half_day" />
                 Nghỉ 1/2 ngày
@@ -74,7 +76,7 @@
 
         <div class="field">
             <label class="form-label">Lý do</label>
-            <textarea class="form-control" name="reason">{{ old('reason') }}</textarea>
+            <textarea class="form-control" id="leave-reason" name="reason">{{ old('reason', old('type') === \App\Support\LeaveTypes::SPOUSE_BIRTH ? 'Vợ sinh con' : '') }}</textarea>
         </div>
 
         <div class="callout warn">

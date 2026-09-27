@@ -162,10 +162,10 @@ class ContractService
                 }
                 $this->applyPartyEsign($actor, $contract, ContractSignature::ROLE_EMPLOYEE);
             } elseif ($party === 'director') {
-                if (! $actor->is_director) {
+                if (! $actor->canActAsDirector()) {
                     throw new \RuntimeException('Chỉ Giám đốc được ký hợp đồng phía doanh nghiệp.');
                 }
-                if ($actor->is_admin && ! $actor->is_director) {
+                if ($actor->is_admin && ! $actor->canActAsDirector()) {
                     throw new \RuntimeException('Admin không được ký thay Giám đốc.');
                 }
                 if ($contract->director_signed_at) {
@@ -223,7 +223,7 @@ class ContractService
 
     public function sendForDirectorSignature(User $actor, Contract $contract): Contract
     {
-        if (! $actor->is_hr) {
+        if (! $actor->canManageHr()) {
             throw new \RuntimeException('Chỉ HR được gửi hợp đồng cho Giám đốc ký số.');
         }
 
@@ -256,7 +256,7 @@ class ContractService
 
     public function rejectDirectorSignature(User $actor, Contract $contract, string $reason): Contract
     {
-        if (! $actor->is_director) {
+        if (! $actor->canActAsDirector()) {
             throw new \RuntimeException('Chỉ Giám đốc được từ chối yêu cầu ký số.');
         }
 

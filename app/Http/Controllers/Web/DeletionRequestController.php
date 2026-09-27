@@ -196,7 +196,7 @@ class DeletionRequestController extends Controller
 
     public function approve(Request $request, DeletionRequest $deletionRequest): RedirectResponse
     {
-        abort_unless($request->user()?->is_director, 403, 'Chỉ Giám đốc được duyệt yêu cầu này.');
+        abort_unless($request->user()?->canActAsDirector(), 403, 'Chỉ Giám đốc được duyệt yêu cầu này.');
 
         try {
             $this->service->approve($deletionRequest, $request->user());
@@ -218,7 +218,7 @@ class DeletionRequestController extends Controller
 
     public function reject(Request $request, DeletionRequest $deletionRequest): RedirectResponse
     {
-        abort_unless($request->user()?->is_director, 403, 'Chỉ Giám đốc được từ chối yêu cầu này.');
+        abort_unless($request->user()?->canActAsDirector(), 403, 'Chỉ Giám đốc được từ chối yêu cầu này.');
 
         $data = $request->validate([
             'rejection_reason' => ['required', 'string', 'max:500'],
@@ -260,11 +260,12 @@ class DeletionRequestController extends Controller
     public function document(DeletionRequest $deletionRequest): StreamedResponse
     {
         $this->assertCanView();
-        abort_unless($deletionRequest->document_path && Storage::disk('public')->exists($deletionRequest->document_path), 404);
+        $documentPath = data_get($deletionRequest->payload, 'document_path');
+        abort_unless($documentPath && Storage::disk('public')->exists($documentPath), 404);
 
         return Storage::disk('public')->download(
-            $deletionRequest->document_path,
-            $deletionRequest->document_name ?: basename($deletionRequest->document_path)
+            $documentPath,
+            data_get($deletionRequest->payload, 'document_name') ?: basename($documentPath)
         );
     }
 
@@ -398,6 +399,6 @@ class DeletionRequestController extends Controller
     private function assertCanView(): void
     {
         $user = request()->user();
-        abort_unless($user && ($user->is_hr || $user->is_director || $user->is_admin), 403);
+        abort_unless($user && ($user->canManageHr() || $user->canActAsDirector() || $user->is_admin), 403);
     }
 }

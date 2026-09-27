@@ -33,11 +33,11 @@
 
                 @php
                     $user = auth()->user();
-                    $canGenerate = $user->is_accountant && empty($paymentFocus);
+                    $canGenerate = $user->canPayPayroll() && empty($paymentFocus);
                     $pendingHrCount = $payrolls->whereIn('status', \App\Services\PayrollPaymentWorkflowService::calculatedStatuses())->count();
                     $pendingDirectorCount = $payrolls->whereIn('status', \App\Services\PayrollPaymentWorkflowService::hrCheckedStatuses())->count();
-                    $canBulkHrReview = $user->is_hr;
-                    $canBulkFinalApprove = $user->is_director;
+                    $canBulkHrReview = $user->canManageHr();
+                    $canBulkFinalApprove = $user->canFinalApprovePayroll();
                     $periodLocked = (bool) optional($periodLock ?? null)->is_locked;
                     $periodMeta = $periodMeta ?? app(\App\Services\PayrollCalculationService::class)->periodMeta((int) $month, (int) $year);
                     $hrWorkOnly = !empty($hrWorkOnly);
@@ -116,7 +116,7 @@
                         {{ $periodMeta['formula_label'] }}.
                     </p>
 
-                    @if($user->is_hr)
+                    @if($user->canManageHr())
                         @if($periodLocked)
                             <form method="POST" action="{{ route('payroll.period.unlock') }}"
                                   data-confirm="Hủy chốt lương kỳ {{ sprintf('%02d/%d', $month, $year) }}? Sau đó có thể sửa chấm công/nghỉ phép. Phải chốt lại trước khi Kế toán tính.">
@@ -460,7 +460,7 @@
                                         $user = auth()->user();
                                         $canHrReview = $workflow->actorCanReview($user, $payroll);
                                         $canFinalApprove = $workflow->actorCanFinalApprove($user, $payroll);
-                                        $canPay = $user->is_accountant && $workflow->canPay($payroll);
+                                        $canPay = $user->canPayPayroll() && $workflow->canPay($payroll);
                                     @endphp
 
                                     @if($canHrReview)
@@ -483,7 +483,7 @@
                                         <span class="badge text-bg-info text-wrap" style="max-width:160px;">Chờ phê duyệt cuối</span>
                                     @elseif($payroll->status === 'payroll_issue' || $payroll->confirmation_status === 'issue_reported')
                                         <span class="badge text-bg-danger text-wrap" style="max-width:160px;" title="{{ $payroll->issue_report }}">Sự cố lương</span>
-                                        @if(auth()->user()->is_hr)
+                                        @if(auth()->user()->canManageHr())
                                             <a href="{{ route('payroll.issues.fix_form', $payroll) }}" class="btn btn-sm btn-danger">Khắc phục</a>
                                         @endif
                                     @elseif($workflow->isDirectorApproved($payroll->status))
@@ -508,7 +508,7 @@
                             <td colspan="20" class="text-center py-5 text-muted">
                                 @if(!empty($paymentFocus))
                                     Không có phiếu nhân viên đã xác nhận chờ thanh toán trong kỳ này.
-                                @elseif(auth()->user()?->is_hr)
+                                @elseif(auth()->user()?->canManageHr())
                                     Không có nhân viên đang làm để kiểm tra số liệu kỳ này.
                                 @else
                                     Chưa có dữ liệu bảng lương.

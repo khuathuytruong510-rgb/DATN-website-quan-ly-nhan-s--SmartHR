@@ -41,7 +41,7 @@
                         </td>
                         <td>
                             <div class="actions" style="justify-content:flex-end;">
-                                @if(auth()->user()?->is_hr)
+                                @if(auth()->user()?->canManageHr())
                                 <a href="{{ route('payroll.issues.fix_form', $payroll) }}" class="btn primary">Khắc phục</a>
                                 @endif
                                 <a href="{{ route('payroll.show', $payroll) }}" class="btn">Xem phiếu</a>

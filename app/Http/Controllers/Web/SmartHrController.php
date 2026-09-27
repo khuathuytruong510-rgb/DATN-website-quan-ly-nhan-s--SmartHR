@@ -29,6 +29,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Carbon\Carbon;
@@ -528,10 +529,31 @@ class SmartHrController extends Controller
             $query->where('is_locked', false);
         }
 
+        $departmentId = (string) $request->query('department_id', '');
+        if ($departmentId === 'none') {
+            $usersWithDepartmentEmail = Employee::query()
+                ->whereNotNull('department_id')
+                ->whereNotNull('email')
+                ->select('email');
+            $query->whereDoesntHave('employee', fn ($builder) => $builder->whereNotNull('department_id'))
+                ->whereNotIn('email', $usersWithDepartmentEmail);
+        } elseif ($departmentId !== '' && ctype_digit($departmentId) && Department::whereKey($departmentId)->exists()) {
+            $query->where(function ($builder) use ($departmentId): void {
+                $builder->whereHas('employee', fn ($employeeQuery) => $employeeQuery->where('department_id', $departmentId))
+                    ->orWhere(function ($unlinked) use ($departmentId): void {
+                        $unlinked->whereDoesntHave('employee')
+                            ->whereIn('email', Employee::query()->where('department_id', $departmentId)->select('email'));
+                    });
+            });
+        } else {
+            $departmentId = '';
+        }
+
         return view('accounts.index', [
             'users' => $query->latest()->paginate(10)->withQueryString(),
             'pendingAccountIds' => $pendingAccountIds,
-            'filters' => $request->only(['search', 'status']),
+            'filters' => array_merge($request->only(['search', 'status']), ['department_id' => $departmentId]),
+            'departments' => Department::query()->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -553,14 +575,21 @@ class SmartHrController extends Controller
             'departments' => Department::orderBy('name')->get(),
             'directorExists' => User::query()->where('is_director', true)->exists(),
             'linkEmployee' => $linkEmployee,
+            'canManageSuperAdmins' => $this->canCreateSuperAdmin($request->user()),
         ]);
     }
 
     public function storeAccount(Request $request): RedirectResponse
     {
-        $linkEmployee = $this->resolveEmployeeToLink($request);
+        $actor = $request->user();
+        $role = (string) $request->input('role');
+        if (in_array($role, ['admin', 'super_admin'], true) && ! $this->canCreateSuperAdmin($actor)) {
+            abort(403, 'Chỉ Siêu Admin được tạo tài khoản Admin.');
+        }
+
+        $linkEmployee = in_array($role, ['admin', 'super_admin'], true) ? null : $this->resolveEmployeeToLink($request);
         $emailRules = ['required', 'email', 'max:255', 'unique:users,email'];
-        if ($request->input('role') !== 'admin' && ! $linkEmployee) {
+        if (! in_array($role, ['admin', 'super_admin'], true) && ! $linkEmployee) {
             $emailRules[] = 'unique:employees,email';
         }
 
@@ -568,7 +597,7 @@ class SmartHrController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => $emailRules,
             'password' => ['required', 'string', 'min:6', 'confirmed'],
-            'role' => ['required', 'in:employee,hr,admin,accountant,director'],
+            'role' => ['required', 'in:employee,hr,admin,super_admin,accountant,director'],
             'department_id' => [
                 Rule::requiredIf(! $linkEmployee && in_array($request->input('role'), ['employee', 'hr', 'accountant', 'director'], true)),
                 'nullable',
@@ -595,7 +624,7 @@ class SmartHrController extends Controller
             'password' => Hash::make($data['password']),
         ], $this->roleFlags($data['role'])));
 
-        if ($data['role'] !== 'admin') {
+        if (! in_array($data['role'], ['admin', 'super_admin'], true)) {
             if ($linkEmployee) {
                 $linkEmployee->update(['user_id' => $user->id]);
             } else {
@@ -627,24 +656,32 @@ class SmartHrController extends Controller
 
     public function editAccount(User $user): View
     {
+        abort_unless(! ($user->is_admin || $user->is_super_admin) || Auth::user()?->is_super_admin, 403,
+            'Chỉ Siêu Admin được sửa tài khoản Admin.');
+
         return view('accounts.form', [
             'user' => $user,
             'departments' => Department::orderBy('name')->get(),
             'directorExists' => User::query()->where('is_director', true)->where('id', '!=', $user->id)->exists(),
+            'canManageSuperAdmins' => (bool) Auth::user()?->is_super_admin,
         ]);
     }
 
     public function updateAccount(Request $request, User $user): RedirectResponse
     {
-        if (! Auth::user()->is_admin && $user->is_admin) {
-            abort(403, 'Chỉ Admin quản trị mới được chỉnh sửa tài khoản Admin.');
+        $actor = $request->user();
+        if (($user->is_admin || $user->is_super_admin) && ! $actor?->is_super_admin) {
+            abort(403, 'Chỉ Siêu Admin được chỉnh sửa tài khoản Admin.');
+        }
+        if (in_array($request->input('role'), ['admin', 'super_admin'], true) && ! $actor?->is_super_admin) {
+            abort(403, 'Chỉ Siêu Admin được cấp quyền Admin.');
         }
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
             'password' => ['nullable', 'string', 'min:6', 'confirmed'],
-            'role' => ['required', 'in:employee,hr,admin,accountant,director'],
+            'role' => ['required', 'in:employee,hr,admin,super_admin,accountant,director'],
             'department_id' => ['required_if:role,employee,hr,accountant,director', 'nullable', 'exists:departments,id'],
         ]);
 
@@ -654,6 +691,11 @@ class SmartHrController extends Controller
             return redirect()
                 ->route('director_succession.index')
                 ->with('error', 'Không cấp hoặc thu hồi role Giám đốc bằng cách sửa tài khoản. Hãy cập nhật người giữ chức để giữ lịch sử nhiệm kỳ và phê duyệt.');
+        }
+
+        if ($user->is_super_admin && $data['role'] !== 'super_admin'
+            && User::query()->where('is_super_admin', true)->count() <= 1) {
+            return back()->withInput()->with('error', 'Phải duy trì ít nhất một tài khoản Siêu Admin.');
         }
 
         $update = array_merge([
@@ -667,7 +709,7 @@ class SmartHrController extends Controller
 
         $user->update($update);
 
-        if ($data['role'] === 'admin') {
+        if (in_array($data['role'], ['admin', 'super_admin'], true)) {
             $user->employee()->delete();
         } else {
             $user->employee()->updateOrCreate(
@@ -688,8 +730,15 @@ class SmartHrController extends Controller
     public function destroyAccount(User $user): RedirectResponse
     {
         $auth = Auth::user();
+        if (($user->is_admin || $user->is_super_admin) && ! $auth?->is_super_admin) {
+            abort(403, 'Chỉ Siêu Admin được xóa tài khoản Admin.');
+        }
         if ($auth->id === $user->id) {
             return redirect()->route('accounts.index')->with('error', 'Bạn không thể xoá chính mình.');
+        }
+
+        if ($user->is_super_admin && User::query()->where('is_super_admin', true)->count() <= 1) {
+            return back()->with('error', 'Không thể xóa Siêu Admin cuối cùng.');
         }
 
         try {
@@ -707,8 +756,16 @@ class SmartHrController extends Controller
     public function toggleLockAccount(User $user): RedirectResponse
     {
         $auth = Auth::user();
+        if (($user->is_admin || $user->is_super_admin) && ! $auth?->is_super_admin) {
+            abort(403, 'Chỉ Siêu Admin được khóa tài khoản Admin.');
+        }
         if ($auth->id === $user->id) {
             return redirect()->route('accounts.index')->with('error', 'Bạn không thể khoá/mở khoá chính mình.');
+        }
+
+        if ($user->is_super_admin && ! $user->is_locked
+            && User::query()->where('is_super_admin', true)->where('is_locked', false)->count() <= 1) {
+            return back()->with('error', 'Không thể khóa Siêu Admin đang hoạt động cuối cùng.');
         }
 
         $user->is_locked = ! $user->is_locked;
@@ -722,7 +779,7 @@ class SmartHrController extends Controller
     public function impersonate(User $user): RedirectResponse
     {
         $admin = Auth::user();
-        if (! $admin || ! $admin->is_admin) {
+        if (! $admin || ! $admin->is_super_admin) {
             abort(403);
         }
 
@@ -757,15 +814,85 @@ class SmartHrController extends Controller
         return redirect()->route('accounts.index')->with('success', 'Đã quay lại tài khoản quản trị.');
     }
 
-    public function permissions(): View
+    public function permissions(Request $request): View
     {
+        $query = User::query();
+        $search = trim((string) $request->query('search', ''));
+        $role = (string) $request->query('role', '');
+        $departmentId = (string) $request->query('department_id', '');
+
+        if ($search !== '') {
+            $query->where(function ($builder) use ($search): void {
+                $builder->where('name', 'like', '%'.$search.'%')
+                    ->orWhere('email', 'like', '%'.$search.'%');
+            });
+        }
+
+        $roleColumns = [
+            'director' => 'is_director',
+            'hr' => 'is_hr',
+            'accountant' => 'is_accountant',
+        ];
+        if ($role === 'none') {
+            $query->where('is_admin', false)
+                ->where('is_super_admin', false)
+                ->where('is_director', false)
+                ->where('is_hr', false)
+                ->where('is_accountant', false);
+        } elseif ($role === 'admin') {
+            $query->where('is_admin', true)->where('is_super_admin', false);
+        } elseif ($role === 'super_admin') {
+            $query->where('is_super_admin', true);
+        } elseif (isset($roleColumns[$role])) {
+            $query->where($roleColumns[$role], true);
+        } else {
+            $role = '';
+        }
+
+        if ($departmentId === 'none') {
+            $usersWithDepartmentEmail = Employee::query()
+                ->whereNotNull('department_id')
+                ->whereNotNull('email')
+                ->select('email');
+
+            $query->whereDoesntHave('employee', fn ($builder) => $builder->whereNotNull('department_id'))
+                ->whereNotIn('email', $usersWithDepartmentEmail);
+        } elseif ($departmentId !== '' && ctype_digit($departmentId) && Department::whereKey($departmentId)->exists()) {
+            $query->where(function ($builder) use ($departmentId): void {
+                $builder->whereHas('employee', fn ($employeeQuery) => $employeeQuery->where('department_id', $departmentId))
+                    ->orWhere(function ($unlinked) use ($departmentId): void {
+                        $unlinked->whereDoesntHave('employee')
+                            ->whereIn('email', Employee::query()->where('department_id', $departmentId)->select('email'));
+                    });
+            });
+        } else {
+            $departmentId = '';
+        }
+
         return view('permissions.index', [
-            'users' => User::latest()->paginate(10),
+            'users' => $query->latest()->paginate(10)->withQueryString(),
+            'filters' => [
+                'search' => $search,
+                'role' => $role,
+                'department_id' => $departmentId,
+            ],
+            'departments' => Department::query()->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
     public function updatePermissions(Request $request, User $user): RedirectResponse
     {
+        $actor = $request->user();
+        $wantsSuperAdmin = $request->boolean('is_super_admin');
+        if (! $actor?->is_super_admin && (
+            $user->is_admin
+            || $user->is_super_admin
+            || $request->boolean('is_admin')
+            || $wantsSuperAdmin
+        )) {
+            abort(403, 'Chỉ Siêu Admin được thay đổi quyền Admin hoặc Siêu Admin.');
+        }
+
         $wantsDirector = $request->boolean('is_director');
         if ($wantsDirector !== (bool) $user->is_director) {
             return redirect()
@@ -773,14 +900,23 @@ class SmartHrController extends Controller
                 ->with('error', 'Role Giám đốc phải đi theo người đang giữ chức. Dùng trang Cập nhật người giữ chức Giám đốc, không tick phân quyền trực tiếp.');
         }
 
+        if ($user->is_super_admin && ! $wantsSuperAdmin
+            && User::query()->where('is_super_admin', true)->count() <= 1) {
+            return back()->withInput()->with('error', 'Phải duy trì ít nhất một tài khoản Siêu Admin.');
+        }
+
         $user->update([
-            'is_admin' => $request->boolean('is_admin'),
+            'is_admin' => $wantsSuperAdmin || $request->boolean('is_admin'),
+            'is_super_admin' => $wantsSuperAdmin,
             'is_director' => $user->is_director,
             'is_hr' => $request->boolean('is_hr'),
             'is_accountant' => $request->boolean('is_accountant'),
         ]);
 
-        return redirect()->route('permissions.index')->with('success', 'Cập nhật phân quyền người dùng thành công.');
+        return redirect()->route('permissions.index', array_filter(
+            $request->only(['search', 'role', 'department_id']),
+            fn ($value) => $value !== null && $value !== ''
+        ))->with('success', 'Cập nhật phân quyền người dùng thành công.');
     }
 
     public function systemLogs(): View
@@ -1052,7 +1188,7 @@ class SmartHrController extends Controller
             $query->whereHas('employee', fn ($query) => $query->where('department_id', $departmentId));
         }
 
-        if ($user && ! $user->is_hr && ! $user->is_director) {
+        if ($user && ! $user->canManageHr() && ! $user->canActAsDirector()) {
             $employee = Employee::where('email', $user->email)->first();
             if ($employee) {
                 $query->where('employee_id', $employee->id);
@@ -1275,16 +1411,33 @@ class SmartHrController extends Controller
         return back()->with('success', 'Đã từ chối đăng ký khuôn mặt.');
     }
 
-    public function createAttendance(): View
+    public function createAttendance(Request $request): View
     {
+        $departmentId = $request->input('department_id');
+        $employeeCode = trim((string) $request->input('employee_code', ''));
+
+        $employeeQuery = Employee::query()
+            ->whereDoesntHave('user', fn ($query) => $query->where('is_director', true));
+
+        if ($departmentId !== null && $departmentId !== '') {
+            $employeeQuery->where('department_id', $departmentId);
+        }
+
+        if ($employeeCode !== '') {
+            $employeeQuery->where('employee_code', 'like', '%' . $employeeCode . '%');
+        }
+
         return view('hr.attendance.form', [
             'attendance' => new Attendance([
                 'status' => 'present',
                 'date' => now()->toDateString(),
             ]),
-            'employees' => Employee::whereDoesntHave('user', fn ($query) => $query->where('is_director', true))
-                ->orderBy('name')
-                ->get(),
+            'employees' => $employeeQuery->with('department')->orderBy('name')->get(),
+            'departments' => Department::orderBy('name')->get(),
+            'employeeFilters' => [
+                'department_id' => $departmentId,
+                'employee_code' => $employeeCode,
+            ],
         ]);
     }
 
@@ -1816,7 +1969,7 @@ class SmartHrController extends Controller
             'sent_at' => now(),
             'sent_by' => Auth::id(),
             'email_status' => 'sent',
-            'confirmation_deadline' => now()->addDays(7),
+            'confirmation_deadline' => PayrollPaymentWorkflowService::confirmationDeadlineFor($payroll),
         ];
 
         if ($payroll->confirmation_status !== 'confirmed') {
@@ -1896,6 +2049,22 @@ class SmartHrController extends Controller
         ]);
     }
 
+    public function leaveDocument(Request $request, LeaveRequest $leaveRequest): StreamedResponse
+    {
+        $actor = $request->user();
+        $isApprover = $actor && ($actor->is_hr || $actor->is_admin || $actor->is_director);
+        $employeeId = $actor?->linkedEmployee()?->id;
+        abort_unless($isApprover || (int) $employeeId === (int) $leaveRequest->employee_id, 403);
+
+        $path = $leaveRequest->document_path;
+        abort_unless($path && Storage::disk('local')->exists($path), 404);
+
+        return Storage::disk('local')->download(
+            $path,
+            $leaveRequest->document_name ?: basename($path)
+        );
+    }
+
     public function overtimeRequests(): View
     {
         $actor = Auth::user();
@@ -1954,7 +2123,7 @@ class SmartHrController extends Controller
             'leaveTypes' => LeaveTypes::all(),
             'defaultType' => LeaveTypes::default(),
             'employeeGuides' => $employeeGuides,
-        ]);
+        ] + $eligibility->spouseBirthCalendarOptions(now()->year - 1, now()->year + 2));
     }
 
     public function storeLeaveRequest(Request $request): RedirectResponse
@@ -1962,10 +2131,13 @@ class SmartHrController extends Controller
         $data = $request->validate([
             'employee_id' => ['required', 'exists:employees,id'],
             'start_date' => ['required', 'date'],
-            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'end_date' => ['required_unless:type,'.LeaveTypes::SPOUSE_BIRTH, 'nullable', 'date', 'after_or_equal:start_date'],
             'half_day' => ['nullable', 'boolean'],
             'type' => ['required', 'string'],
             'reason' => ['nullable', 'string'],
+            'children_count' => ['required_if:type,'.LeaveTypes::SPOUSE_BIRTH, 'nullable', 'integer', 'min:1', 'max:255'],
+            'birth_complication' => ['nullable', 'boolean'],
+            'document' => ['nullable', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png'],
             'is_urgent' => ['nullable', 'boolean'],
             'urgent_reason' => ['required_if:is_urgent,1', 'nullable', 'string', 'max:500'],
         ]);
@@ -2469,7 +2641,7 @@ class SmartHrController extends Controller
         $user = Auth::user();
         $employee = $user?->linkedEmployee();
 
-        if (! $user?->is_director) {
+        if (! $user?->canActAsDirector()) {
             abort(403, 'Chỉ Giám đốc ký hợp đồng phía công ty. Nhân viên ký trên cổng của mình.');
         }
 
@@ -2777,11 +2949,18 @@ class SmartHrController extends Controller
     private function roleFlags(string $role): array
     {
         return [
-            'is_admin' => $role === 'admin',
+            'is_admin' => in_array($role, ['admin', 'super_admin'], true),
+            'is_super_admin' => $role === 'super_admin',
             'is_director' => $role === 'director',
             'is_hr' => $role === 'hr',
             'is_accountant' => $role === 'accountant',
         ];
+    }
+
+    private function canCreateSuperAdmin(?User $actor): bool
+    {
+        return (bool) ($actor?->is_super_admin
+            || ($actor?->is_admin && ! User::query()->where('is_super_admin', true)->exists()));
     }
 
     private function positionForRole(string $role): string
@@ -2796,7 +2975,7 @@ class SmartHrController extends Controller
 
     private function canManageContracts(): bool
     {
-        return (bool) Auth::user()?->is_hr;
+        return (bool) Auth::user()?->canManageHr();
     }
 
     private function canSignContract(?User $user, ?Employee $employee, Contract $contract): bool
@@ -2805,7 +2984,7 @@ class SmartHrController extends Controller
             return false;
         }
 
-        if ($user->is_director) {
+        if ($user->canActAsDirector()) {
             return $contract->isPendingDirectorEsign();
         }
 
@@ -2884,7 +3063,7 @@ class SmartHrController extends Controller
 
     public function getNextEmployeeCode(Request $request)
     {
-        if (! Auth::user()?->is_hr) {
+        if (! Auth::user()?->canManageHr()) {
             abort(403, 'Chỉ HR được tạo mã nhân viên.');
         }
 
@@ -2925,16 +3104,16 @@ class SmartHrController extends Controller
      */
     private function isAdmin(): bool
     {
-        return Auth::user()?->is_admin === true;
+        return (bool) (Auth::user()?->is_admin || Auth::user()?->isSuperAdmin());
     }
 
     private function isHr(): bool
     {
-        return Auth::user()?->is_hr === true;
+        return (bool) Auth::user()?->canManageHr();
     }
 
     private function isHROrAdmin(): bool
     {
-        return $this->isHr();
+        return $this->isHr() || $this->isAdmin();
     }
 }

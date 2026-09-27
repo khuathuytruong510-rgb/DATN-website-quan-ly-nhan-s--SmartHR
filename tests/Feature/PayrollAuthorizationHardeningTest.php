@@ -108,6 +108,37 @@ class PayrollAuthorizationHardeningTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_super_admin_can_review_and_finally_approve_payroll_without_role_flags(): void
+    {
+        ['alicePayroll' => $payroll] = $this->seedPeople();
+        $payroll->update(['status' => PayrollPaymentWorkflowService::CALCULATED]);
+        $superAdmin = User::factory()->create([
+            'is_admin' => false,
+            'is_super_admin' => true,
+            'is_hr' => false,
+            'is_accountant' => false,
+            'is_director' => false,
+        ]);
+
+        $this->actingAs($superAdmin)
+            ->post(route('payroll.review', $payroll))
+            ->assertRedirect();
+        $this->assertSame(PayrollPaymentWorkflowService::HR_CHECKED, $payroll->fresh()->status);
+
+        $this->actingAs($superAdmin)
+            ->post(route('payroll.approve', $payroll->fresh()))
+            ->assertRedirect();
+        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $payroll->fresh()->status);
+
+        $payroll->update(['status' => PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED]);
+        $paid = app(PayrollPaymentWorkflowService::class)->markPaid(
+            $payroll->fresh(),
+            ['payment_method' => 'cash'],
+            $superAdmin
+        );
+        $this->assertSame(PayrollPaymentWorkflowService::PAID, $paid->status);
+    }
+
     public function test_employee_cannot_confirm_or_report_another_persons_payroll(): void
     {
         ['aliceUser' => $aliceUser, 'bobPayroll' => $bobPayroll, 'alicePayroll' => $alicePayroll] = $this->seedPeople();
