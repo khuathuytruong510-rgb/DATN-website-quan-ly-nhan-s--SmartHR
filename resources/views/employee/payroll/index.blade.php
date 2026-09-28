@@ -133,49 +133,20 @@
                             <div class="w-full rounded-xl bg-slate-50 text-slate-700 px-4 py-3 text-sm border border-slate-200">
                                 {{ $workflow->statusLabel($p->status) }}. Bạn chỉ xem phiếu ở bước này.
                             </div>
-                        @elseif($workflow->isDirectorApproved($p->status) && $p->confirmation_status !== 'confirmed')
-                            <div class="w-full rounded-xl bg-blue-50 text-blue-800 px-4 py-3 text-sm border border-blue-100 mb-1">
-                                Phiếu lương cần bạn xác nhận{{ $p->sent_at ? ' (đã cập nhật '.optional($p->sent_at)->format('d/m/Y H:i').')' : '' }}.
+                        @elseif($workflow->isDirectorApproved($p->status))
+                            <div class="w-full rounded-xl bg-green-50 text-green-800 px-4 py-3 text-sm border border-green-100">
+                                Giám đốc đã duyệt bảng lương{{ $p->sent_at ? ' (cập nhật '.optional($p->sent_at)->format('d/m/Y H:i').')' : '' }}.
+                                Bạn chỉ xem chi tiết phiếu đã được phê duyệt.
                             </div>
-                            <form method="POST" action="{{ route('me.payroll.confirm', $p) }}">
-                                @csrf
-                                <button class="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700" type="submit">
-                                    Xác nhận bảng lương
-                                </button>
-                            </form>
-                        @elseif($workflow->canPay($p))
-                            <div class="w-full rounded-xl bg-blue-50 text-blue-800 px-4 py-3 text-sm border border-blue-100">
-                                Bạn đã xác nhận. Phiếu đang chờ kế toán thanh toán.
-                            </div>
-                        @elseif($p->status === 'paid')
-                            <div class="w-full rounded-xl bg-green-50 text-green-700 px-4 py-3 text-sm">
-                                Đã thanh toán{{ $p->paid_at ? ' lúc '.$p->paid_at->format('d/m/Y H:i') : '' }}
-                                @if($p->payment_method) · {{ $p->payment_method }} @endif
+                        @elseif(in_array($p->status, ['employee_confirmed', 'ready_for_payment', 'paid'], true))
+                            <div class="w-full rounded-xl bg-slate-50 text-slate-700 px-4 py-3 text-sm border border-slate-200">
+                                {{ $workflow->statusLabel($p->status) }}. Bạn chỉ xem phiếu.
                             </div>
                         @endif
                     </div>
                 </article>
             @endforeach
         </div>
-
-        {{-- Lịch sử thanh toán --}}
-        @php $paidList = $payrolls->where('status', 'paid'); @endphp
-        @if($paidList->isNotEmpty())
-            <div class="mt-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                <h2 class="text-lg font-bold mb-4">Lịch sử thanh toán</h2>
-                <div class="space-y-3">
-                    @foreach($paidList as $paid)
-                        <div class="flex justify-between gap-3 border-b border-gray-100 pb-3 text-sm">
-                            <div>
-                                <strong>Tháng {{ $paid->display_month }}</strong>
-                                <div class="text-gray-500">{{ optional($paid->paid_at)->format('d/m/Y H:i') ?? '—' }} · {{ $paid->payment_method ?? '—' }}</div>
-                            </div>
-                            <div class="font-bold text-blue-600">{{ number_format($paid->total_salary ?? 0, 0, '.', ',') }} ₫</div>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-        @endif
     @endif
 </div>
 @endsection

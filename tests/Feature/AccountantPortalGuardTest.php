@@ -14,10 +14,12 @@ use App\Services\PayrollPaymentWorkflowService;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
+use Tests\Concerns\AssertsRemovedPayrollPaymentFeatures;
 use Tests\TestCase;
 
 class AccountantPortalGuardTest extends TestCase
 {
+    use AssertsRemovedPayrollPaymentFeatures;
     use RefreshDatabase;
 
     private function seedPeople(): array
@@ -227,55 +229,35 @@ class AccountantPortalGuardTest extends TestCase
         $this->assertEquals(54321, (float) $approved->fresh()->total_salary);
     }
 
-    public function test_pay_only_when_employee_confirmed_and_ignores_mass_assignment(): void
+    public function test_accountant_cannot_pay_after_director_approval(): void
     {
-        ['accountant' => $kt, 'alice' => $alice, 'bob' => $bob] = $this->seedPeople();
+        ['accountant' => $kt, 'alice' => $alice] = $this->seedPeople();
+        $workflow = app(PayrollPaymentWorkflowService::class);
 
-        $tooEarly = $this->payroll($alice, PayrollPaymentWorkflowService::DIRECTOR_APPROVED);
-        $this->actingAs($kt)->post(route('payroll.payment.confirm', $tooEarly), [
-            'payment_method' => 'cash',
-            'status' => PayrollPaymentWorkflowService::PAID,
-            'total_salary' => 999999999,
-        ])->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $tooEarly->fresh()->status);
-        $this->assertNull($tooEarly->fresh()->paid_at);
-
-        $payable = Payroll::create([
+        $approved = $this->payroll($alice, PayrollPaymentWorkflowService::DIRECTOR_APPROVED);
+        $legacyConfirmed = Payroll::create([
             'employee_id' => $alice->id,
             'month' => 7,
             'year' => 2026,
             'base_salary' => 10000000,
             'total_salary' => 8800000,
             'status' => PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED,
-            'payout_bank_name' => 'MB Bank',
-            'payout_account_number' => '111122223333',
-            'payout_account_holder' => 'NGUYEN VAN A',
         ]);
 
-        $this->actingAs($kt)->post(route('payroll.payment.confirm', $payable), [
+        $this->assertNamedRouteRemoved('payroll.payment.confirm', $approved);
+        $this->actingAs($kt)->postPayrollPaymentConfirm($approved, [
             'payment_method' => 'cash',
             'status' => PayrollPaymentWorkflowService::PAID,
             'total_salary' => 999999999,
-            'employee_id' => $bob->id,
-            'transaction_code' => 'HACKEDREF999',
-        ])->assertRedirect(route('payroll.show', $payable));
+        ])->assertNotFound();
+        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $approved->fresh()->status);
+        $this->assertNull($approved->fresh()->paid_at);
 
-        $fresh = $payable->fresh('salaryPayment');
-        $this->assertSame(PayrollPaymentWorkflowService::PAID, $fresh->status);
-        $this->assertEquals(8800000, (float) $fresh->total_salary);
-        $this->assertSame($alice->id, (int) $fresh->employee_id);
-        $this->assertSame($kt->id, (int) $fresh->paid_by);
-        $this->assertNotNull($fresh->paid_at);
-        $this->assertNotNull($fresh->salaryPayment);
-        $this->assertSame($kt->id, (int) $fresh->salaryPayment->paid_by);
-        $this->assertNotNull($fresh->salaryPayment->paid_at);
-        $this->assertNull($fresh->salaryPayment->transaction_code);
+        $this->actingAs($kt)->postPayrollPaymentConfirm($legacyConfirmed, ['payment_method' => 'cash'])->assertNotFound();
+        $this->assertSame(PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, $legacyConfirmed->fresh()->status);
 
-        $this->actingAs($kt)->post(route('payroll.payment.confirm', $fresh), [
-            'payment_method' => 'cash',
-        ])->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::PAID, $fresh->fresh()->status);
-        $this->assertSame(1, SalaryPayment::where('payroll_id', $payable->id)->count());
+        $this->expectException(\RuntimeException::class);
+        $workflow->markPaid($approved->fresh(), ['payment_method' => 'cash'], $kt);
     }
 
     public function test_duplicate_salary_payment_is_rejected_by_unique_payroll_id(): void
@@ -337,30 +319,26 @@ class AccountantPortalGuardTest extends TestCase
             'base_salary' => 1,
             'working_salary' => 1,
         ])->assertNotFound();
-        $this->actingAs($kt)->post(route('payroll.payment.bank', $payable), [
+        $this->assertNamedRouteRemoved('payroll.payment.bank', $payable);
+        $this->actingAs($kt)->post('/payroll/'.$payable->id.'/payment/bank', [
             'bank_name' => 'Hack Bank',
             'account_number' => '000000000001',
             'account_holder' => 'HACKER',
-        ])->assertForbidden();
+        ])->assertNotFound();
 
         $this->assertSame('MB Bank', $alice->fresh()->bank_name);
     }
 
-    public function test_payment_screen_lists_only_employee_confirmed(): void
+    public function test_payroll_payment_screen_route_is_removed(): void
     {
-        ['accountant' => $kt, 'alice' => $alice, 'bob' => $bob] = $this->seedPeople();
-        $this->payroll($alice, PayrollPaymentWorkflowService::CALCULATED);
-        $this->payroll($bob, PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED);
+        ['accountant' => $kt, 'alice' => $alice] = $this->seedPeople();
+        $confirmed = $this->payroll($alice, PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED);
 
-        $this->actingAs($kt)
-            ->get(route('payroll.index', ['month' => 8, 'year' => 2026]))
-            ->assertOk()
-            ->assertSee('Thanh toán lương')
-            ->assertSee('Bob KT')
-            ->assertDontSee('Alice KT');
+        $this->assertNamedRouteRemoved('payroll.payment.show', $confirmed);
+        $this->actingAs($kt)->getPayrollPaymentScreen($confirmed)->assertNotFound();
     }
 
-    public function test_accountant_bulk_submit_and_pay_all_for_period(): void
+    public function test_accountant_bulk_submit_period_ends_at_director_approval(): void
     {
         Mail::fake();
         ['hr' => $hr, 'director' => $director, 'accountant' => $kt, 'alice' => $alice, 'bob' => $bob, 'aliceUser' => $aliceUser, 'bobUser' => $bobUser] = $this->seedPeople();
@@ -393,22 +371,24 @@ class AccountantPortalGuardTest extends TestCase
 
         $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $aliceSlip->fresh()->status);
         $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $bobSlip->fresh()->status);
+        $this->assertSame('notified', $aliceSlip->fresh()->confirmation_status);
+        $this->assertSame('notified', $bobSlip->fresh()->confirmation_status);
 
-        $this->actingAs($aliceUser)->post(route('me.payroll.confirm', $aliceSlip->fresh()))->assertRedirect();
-        $this->actingAs($bobUser)->post(route('me.payroll.confirm', $bobSlip->fresh()))->assertRedirect();
+        $this->assertNamedRouteRemoved('me.payroll.confirm', $aliceSlip);
+        $this->actingAs($aliceUser)->postEmployeePayrollConfirm($aliceSlip->fresh())->assertNotFound();
+        $this->actingAs($bobUser)->postEmployeePayrollConfirm($bobSlip->fresh())->assertNotFound();
+        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $aliceSlip->fresh()->status);
 
-        $this->actingAs($kt)
-            ->get(route('accountant.payroll.index', ['month' => 8, 'year' => 2026]))
-            ->assertOk()
-            ->assertSee('Thanh toán tất cả');
-
-        $this->actingAs($kt)->post(route('accountant.payroll.pay_all'), [
+        $this->assertNamedRouteRemoved('accountant.payroll.pay_all');
+        $payAllResponse = $this->actingAs($kt)->post('/accountant/payroll/pay-all', [
             'month' => 8,
             'year' => 2026,
             'payment_method' => 'cash',
-        ])->assertRedirect();
+        ]);
+        $this->assertTrue(in_array($payAllResponse->status(), [404, 405], true));
 
-        $this->assertSame(PayrollPaymentWorkflowService::PAID, $aliceSlip->fresh()->status);
-        $this->assertSame(PayrollPaymentWorkflowService::PAID, $bobSlip->fresh()->status);
+        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $aliceSlip->fresh()->status);
+        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $bobSlip->fresh()->status);
+        $this->assertFalse(app(PayrollPaymentWorkflowService::class)->canPay($aliceSlip->fresh()));
     }
 }

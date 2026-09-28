@@ -120,11 +120,11 @@ class HrPortalGuardTest extends TestCase
 
         $this->actingAs($hr)->post(route('payroll.generate'), ['month' => 8, 'year' => 2026])->assertForbidden();
         $this->actingAs($hr)->post(route('payroll.approve', $calculated))->assertForbidden();
-        $this->actingAs($hr)->post(route('payroll.payment.confirm', $payable), [
+        $this->actingAs($hr)->post('/payroll/'.$payable->id.'/payment/confirm', [
             'payment_method' => 'cash',
             'status' => PayrollPaymentWorkflowService::PAID,
-        ])->assertForbidden();
-        $this->actingAs($hr)->get(route('payroll.payment.show', $payable))->assertForbidden();
+        ])->assertNotFound();
+        $this->actingAs($hr)->get('/payroll/'.$payable->id.'/payment')->assertNotFound();
 
         $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $calculated->fresh()->status);
         $this->assertSame(PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, $payable->fresh()->status);
@@ -192,11 +192,11 @@ class HrPortalGuardTest extends TestCase
         ]);
 
         $this->actingAs($hr)->post(route('contracts.sign', $contract))->assertForbidden();
-        $this->actingAs($hr)->put(route('salary_payments.update', $payment), [
+        $this->actingAs($hr)->put('/salary-payments/'.$payment->id, [
             'payment_method' => 'cash',
             'status' => 'paid',
-        ])->assertForbidden();
-        $this->actingAs($hr)->post(route('salary_payments.action', $payment))->assertForbidden();
+        ])->assertNotFound();
+        $this->actingAs($hr)->post('/salary-payments/'.$payment->id.'/action')->assertNotFound();
 
         $this->assertSame(Contract::STATUS_WAITING_DIRECTOR_SIGNATURE, $contract->fresh()->status);
         $this->assertSame('pending', $payment->fresh()->status);

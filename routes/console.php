@@ -14,6 +14,5 @@ $payrollFinalizeAt = Carbon\Carbon::createFromFormat('H:i', config('overtime.shi
 
 Schedule::command('payroll:auto-calculate-monthly')->monthlyOn(15, '00:15')->withoutOverlapping();
 Schedule::command('payroll:auto-finalize-monthly')->monthlyOn(15, $payrollFinalizeAt)->withoutOverlapping();
-Schedule::command('payroll:auto-ready')->monthlyOn(15, '23:59')->withoutOverlapping();
 Schedule::command('payroll:auto-lock-period')->dailyAt('00:05');
 Schedule::command('contracts:send-expiry-alerts')->dailyAt('08:00');

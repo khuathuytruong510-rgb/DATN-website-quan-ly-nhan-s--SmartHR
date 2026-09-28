@@ -23,18 +23,13 @@ class PayrollController extends Controller
         $month = (int) ($request->input('month') ?: now()->month);
         $year = (int) ($request->input('year') ?: now()->year);
         $user = $request->user();
-        $paymentFocus = $user && $user->is_accountant && ! $user->is_hr && ! $user->is_director;
 
         $query = Payroll::with('employee')
             ->where('month', $month)
             ->where('year', $year);
 
-        if ($paymentFocus) {
-            $query->whereIn('status', PayrollPaymentWorkflowService::payableStatuses());
-        }
-
         $payrolls = $query->orderByDesc('id')->get();
-        $tableRows = ($user?->is_hr && ! $paymentFocus)
+        $tableRows = ($user?->is_hr && ! $user?->is_director)
             ? $this->calculator->previewPeriod($month, $year)
             : $payrolls;
 
@@ -46,8 +41,8 @@ class PayrollController extends Controller
             'periodMeta' => $this->calculator->periodMeta($month, $year),
             'workflow' => $this->workflow,
             'periodLock' => $this->periodLock->find((int) $month, (int) $year),
-            'paymentFocus' => $paymentFocus,
-            'hrWorkOnly' => (bool) ($user?->is_hr && ! $user->is_director && ! $paymentFocus),
+            'paymentFocus' => false,
+            'hrWorkOnly' => (bool) ($user?->is_hr && ! $user->is_director),
         ]);
     }
 
@@ -148,12 +143,12 @@ class PayrollController extends Controller
 
         $payroll->refresh();
         $mailNote = match ($payroll->email_status) {
-            'sent' => ' Đã gửi email xác nhận đến nhân viên.',
+            'sent' => ' Đã gửi email thông báo bảng lương đến nhân viên.',
             'failed' => ' (Email gửi thất bại — kiểm tra cấu hình Gmail SMTP.)',
-            default => '',
+            default => ' Đã tạo thông báo trên hệ thống cho nhân viên.',
         };
 
-        return back()->with('success', 'Đã phê duyệt cuối. Đang chờ nhân viên xác nhận.'.$mailNote);
+        return back()->with('success', 'Đã phê duyệt cuối và thông báo bảng lương đến nhân viên.'.$mailNote);
     }
 
     /**
@@ -193,7 +188,7 @@ class PayrollController extends Controller
             }
         }
 
-        $msg = "Đã phê duyệt cuối {$ok} bảng lương. Đang chờ nhân viên xác nhận.";
+        $msg = "Đã phê duyệt cuối {$ok} bảng lương và thông báo đến nhân viên.";
         if ($failed > 0) {
             $msg .= " {$failed} phiếu lỗi/bỏ qua.";
         }
@@ -240,14 +235,6 @@ class PayrollController extends Controller
         ]);
     }
 
-    /**
-     * Giữ route cũ — chuyển sang approve chuẩn
-     */
-    public function approveWithPayment(Payroll $payroll)
-    {
-        return $this->approve($payroll);
-    }
-
     public function destroy(Payroll $payroll)
     {
         if (! request()->user()?->canManageHr()) {
@@ -255,7 +242,7 @@ class PayrollController extends Controller
         }
 
         if (! in_array($payroll->status, PayrollPaymentWorkflowService::recalculableStatuses(), true)) {
-            return back()->with('error', 'Không xóa phiếu đã được HR kiểm tra, Giám đốc duyệt, NV xác nhận hoặc đã thanh toán.');
+            return back()->with('error', 'Không xóa phiếu đã được Kế toán gửi duyệt hoặc Giám đốc đã duyệt.');
         }
 
         $payroll->delete();

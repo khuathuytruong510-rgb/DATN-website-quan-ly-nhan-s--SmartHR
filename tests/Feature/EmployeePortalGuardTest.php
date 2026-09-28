@@ -20,10 +20,12 @@ use App\Models\SupportRequest;
 use App\Models\User;
 use App\Services\PayrollPaymentWorkflowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\AssertsRemovedPayrollPaymentFeatures;
 use Tests\TestCase;
 
 class EmployeePortalGuardTest extends TestCase
 {
+    use AssertsRemovedPayrollPaymentFeatures;
     use RefreshDatabase;
 
     private function seedPeople(): array
@@ -180,39 +182,33 @@ class EmployeePortalGuardTest extends TestCase
         $this->assertSame('08:32:00', $row->fresh()->getRawOriginal('check_in'));
     }
 
-    public function test_payroll_confirm_state_matrix_and_status_tamper(): void
+    public function test_payroll_confirm_endpoint_removed_for_all_statuses(): void
     {
         ['aliceUser' => $alice, 'alice' => $emp, 'accountant' => $accountant] = $this->seedPeople();
         $workflow = app(PayrollPaymentWorkflowService::class);
 
-        $calculated = $this->payroll($emp, PayrollPaymentWorkflowService::CALCULATED, ['month' => 1]);
-        $this->actingAs($alice)->post(route('me.payroll.confirm', $calculated), ['status' => 'paid'])->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::CALCULATED, $calculated->fresh()->status);
+        foreach ([
+            1 => PayrollPaymentWorkflowService::CALCULATED,
+            2 => PayrollPaymentWorkflowService::HR_CHECKED,
+            3 => PayrollPaymentWorkflowService::DIRECTOR_APPROVED,
+            4 => PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED,
+            5 => PayrollPaymentWorkflowService::PAID,
+        ] as $month => $status) {
+            $slip = $this->payroll($emp, $status, ['month' => $month]);
+            $this->actingAs($alice)->postEmployeePayrollConfirm($slip)->assertNotFound();
+            $this->assertSame($status, $slip->fresh()->status);
+        }
 
-        $checked = $this->payroll($emp, PayrollPaymentWorkflowService::HR_CHECKED, ['month' => 2]);
-        $this->actingAs($alice)->post(route('me.payroll.confirm', $checked), ['status' => 'paid'])->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::HR_CHECKED, $checked->fresh()->status);
+        $approved = Payroll::query()->where('employee_id', $emp->id)->where('month', 3)->firstOrFail();
+        try {
+            $workflow->markPaid($approved, ['payment_method' => 'cash'], $accountant);
+            $this->fail('markPaid() must be removed.');
+        } catch (\RuntimeException) {
+        }
 
-        $approved = $this->payroll($emp, PayrollPaymentWorkflowService::DIRECTOR_APPROVED, ['month' => 3]);
-        $this->actingAs($alice)->post(route('me.payroll.confirm', $approved), [
-            'status' => 'paid',
-            'employee_id' => 999,
-            'total_salary' => 1,
-            'paid_by' => $alice->id,
-        ])->assertRedirect();
-        $fresh = $approved->fresh();
-        $this->assertSame(PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, $fresh->status);
-        $this->assertSame($emp->id, (int) $fresh->employee_id);
-        $this->assertEquals(10000000, (float) $fresh->total_salary);
-        $this->assertNull($fresh->paid_at);
-
-        $workflow->markPaid($fresh, ['payment_method' => 'cash'], $accountant);
-        $this->actingAs($alice)->post(route('me.payroll.confirm', $fresh))->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::PAID, $fresh->fresh()->status);
-
-        $this->actingAs($alice)->put('/me/payroll/'.$fresh->id, ['status' => 'paid'])->assertForbidden();
-        $this->actingAs($alice)->patch('/me/payroll/'.$fresh->id, ['status' => 'paid'])->assertForbidden();
-        $this->actingAs($alice)->delete('/me/payroll/'.$fresh->id)->assertForbidden();
+        $this->actingAs($alice)->put('/me/payroll/'.$approved->id, ['status' => 'paid'])->assertForbidden();
+        $this->actingAs($alice)->patch('/me/payroll/'.$approved->id, ['status' => 'paid'])->assertForbidden();
+        $this->actingAs($alice)->delete('/me/payroll/'.$approved->id)->assertForbidden();
     }
 
     public function test_employee_cannot_report_payroll_issue_anymore(): void
@@ -258,11 +254,9 @@ class EmployeePortalGuardTest extends TestCase
         $this->assertSame('111122223333', $payroll->fresh()->payout_account_number);
 
         $workflow->approve($payroll->fresh(), $director);
-        $workflow->confirm($payroll->fresh(), $alice);
-        $paid = $workflow->markPaid($payroll->fresh(), ['payment_method' => 'bank_transfer'], $accountant);
-        $payment = SalaryPayment::where('payroll_id', $paid->id)->first();
-        $this->assertNotNull($payment);
-        $this->assertSame('111122223333', $payment->account_number);
+        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $payroll->fresh()->status);
+        $this->assertSame('111122223333', $payroll->fresh()->payout_account_number);
+        $this->assertSame(0, SalaryPayment::where('payroll_id', $payroll->id)->count());
     }
 
     public function test_leave_cancel_pending_and_approved_before_date_not_delete(): void
@@ -591,23 +585,23 @@ class EmployeePortalGuardTest extends TestCase
         $this->assertSame(SupportRequest::PENDING, $ticket->status);
     }
 
-    public function test_confirm_is_idempotent_and_does_not_create_salary_history_before_paid(): void
+    public function test_director_approved_payroll_stays_read_only_without_confirm_or_payment(): void
     {
         ['aliceUser' => $alice, 'alice' => $emp, 'accountant' => $accountant] = $this->seedPeople();
         $workflow = app(PayrollPaymentWorkflowService::class);
         $payroll = $this->payroll($emp, PayrollPaymentWorkflowService::DIRECTOR_APPROVED);
 
-        $this->actingAs($alice)->post(route('me.payroll.confirm', $payroll))->assertRedirect();
-        $this->actingAs($alice)->post(route('me.payroll.confirm', $payroll))->assertRedirect();
-
-        $this->assertSame(PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, $payroll->fresh()->status);
-        $this->assertSame(1, Payroll::where('employee_id', $emp->id)->count());
+        $this->actingAs($alice)->postEmployeePayrollConfirm($payroll)->assertNotFound();
+        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $payroll->fresh()->status);
         $this->assertSame(0, SalaryHistory::where('payroll_id', $payroll->id)->count());
 
-        $workflow->markPaid($payroll->fresh(), ['payment_method' => 'cash'], $accountant);
-        $this->assertSame(PayrollPaymentWorkflowService::PAID, $payroll->fresh()->status);
-        $this->assertSame(1, SalaryHistory::where('payroll_id', $payroll->id)->count());
-        $this->assertSame(1, SalaryPayment::where('payroll_id', $payroll->id)->count());
+        try {
+            $workflow->markPaid($payroll->fresh(), ['payment_method' => 'cash'], $accountant);
+            $this->fail('markPaid() must be removed.');
+        } catch (\RuntimeException) {
+        }
+        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $payroll->fresh()->status);
+        $this->assertSame(0, SalaryPayment::where('payroll_id', $payroll->id)->count());
     }
 
     public function test_paid_cancelled_and_confirmed_cannot_revert(): void
@@ -615,11 +609,9 @@ class EmployeePortalGuardTest extends TestCase
         ['aliceUser' => $alice, 'alice' => $emp, 'hr' => $hr, 'accountant' => $accountant] = $this->seedPeople();
         $workflow = app(PayrollPaymentWorkflowService::class);
 
-        $paid = $this->payroll($emp, PayrollPaymentWorkflowService::DIRECTOR_APPROVED, ['month' => 4]);
-        $workflow->confirm($paid->fresh(), $alice);
-        $workflow->markPaid($paid->fresh(), ['payment_method' => 'cash'], $accountant);
+        $paid = $this->payroll($emp, PayrollPaymentWorkflowService::PAID, ['month' => 4, 'paid_at' => now()]);
 
-        $this->actingAs($alice)->post(route('me.payroll.confirm', $paid->fresh()))->assertRedirect();
+        $this->actingAs($alice)->postEmployeePayrollConfirm($paid->fresh())->assertNotFound();
         $this->assertSame(PayrollPaymentWorkflowService::PAID, $paid->fresh()->status);
 
         try {
@@ -630,7 +622,7 @@ class EmployeePortalGuardTest extends TestCase
         $this->assertSame(PayrollPaymentWorkflowService::PAID, $paid->fresh()->status);
 
         $confirmed = $this->payroll($emp, PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, ['month' => 5]);
-        $this->actingAs($alice)->post(route('me.payroll.confirm', $confirmed), ['status' => PayrollPaymentWorkflowService::DIRECTOR_APPROVED])->assertRedirect();
+        $this->actingAs($alice)->postEmployeePayrollConfirm($confirmed)->assertNotFound();
         $this->assertSame(PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, $confirmed->fresh()->status);
 
         $cancelled = LeaveRequest::create([
@@ -651,20 +643,15 @@ class EmployeePortalGuardTest extends TestCase
         $workflow = app(PayrollPaymentWorkflowService::class);
 
         $waiting = $this->payroll($emp, 'waiting_confirmation', ['month' => 6]);
-        $this->actingAs($alice)->get(route('me.payrolls'))
-            ->assertOk()
-            ->assertSee('Xác nhận bảng lương');
-        $this->actingAs($alice)->post(route('me.payroll.confirm', $waiting))->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, $waiting->fresh()->status);
+        $this->actingAs($alice)->postEmployeePayrollConfirm($waiting)->assertNotFound();
+        $this->assertSame('waiting_confirmation', $waiting->fresh()->status);
 
         $oldCalculated = $this->payroll($emp, 'pending', ['month' => 7]);
-        $page = $this->actingAs($alice)->get(route('me.payrolls'));
-        $page->assertOk()->assertSee('chỉ xem');
-        $this->actingAs($alice)->post(route('me.payroll.confirm', $oldCalculated))->assertRedirect();
+        $this->actingAs($alice)->postEmployeePayrollConfirm($oldCalculated)->assertNotFound();
         $this->assertSame('pending', $oldCalculated->fresh()->status);
 
         $oldHr = $this->payroll($emp, 'hr_approved', ['month' => 8]);
-        $this->actingAs($alice)->post(route('me.payroll.confirm', $oldHr))->assertRedirect();
+        $this->actingAs($alice)->postEmployeePayrollConfirm($oldHr)->assertNotFound();
         $this->assertSame('hr_approved', $oldHr->fresh()->status);
         $this->assertTrue($workflow->isHrChecked($oldHr->fresh()->status));
 
@@ -700,20 +687,20 @@ class EmployeePortalGuardTest extends TestCase
             ->assertSee('chỉ xem')
             ->assertDontSee('Xác nhận bảng lương');
 
-        $approved = $this->payroll($emp, PayrollPaymentWorkflowService::DIRECTOR_APPROVED, ['month' => 3]);
-        $this->actingAs($alice)->get(route('me.payroll.show', $approved))
-            ->assertOk()
-            ->assertSee('Xác nhận bảng lương');
+        $approved = $this->payroll($emp, PayrollPaymentWorkflowService::DIRECTOR_APPROVED, ['month' => 3, 'confirmation_status' => 'notified']);
+        $this->actingAs($alice)->postEmployeePayrollConfirm($approved)->assertNotFound();
+        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $approved->fresh()->status);
 
-        $confirmed = $this->payroll($emp, PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, ['month' => 4]);
-        $this->actingAs($alice)->get(route('me.payroll.show', $confirmed))
+        $legacyConfirmed = $this->payroll($emp, PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, ['month' => 4]);
+        $this->actingAs($alice)->get(route('me.payroll.show', $legacyConfirmed))
             ->assertOk()
-            ->assertSee('đang chờ kế toán thanh toán')
-            ->assertDontSee('Xác nhận bảng lương');
+            ->assertDontSee('Xác nhận bảng lương')
+            ->assertDontSee('đang chờ kế toán thanh toán');
 
         $paid = $this->payroll($emp, PayrollPaymentWorkflowService::PAID, ['month' => 5, 'paid_at' => now()]);
         $this->actingAs($alice)->get(route('me.payroll.show', $paid))
             ->assertOk()
-            ->assertSee('Đã thanh toán');
+            ->assertSee('đã bỏ thanh toán')
+            ->assertDontSee('Xác nhận bảng lương');
     }
 }

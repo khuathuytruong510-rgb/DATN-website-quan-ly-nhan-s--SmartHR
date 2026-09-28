@@ -11,7 +11,7 @@
 <div class="page-head">
     <div>
         <h1>Bảng lương</h1>
-        <p class="muted" style="margin:4px 0 0;">Hệ thống tự tính sau khi HR xác nhận nguồn → Kế toán kiểm tra gửi Giám đốc → GĐ duyệt → NV xác nhận → Thanh toán.</p>
+        <p class="muted" style="margin:4px 0 0;">Hệ thống tự tính sau khi HR xác nhận nguồn → Kế toán kiểm tra gửi Giám đốc → GĐ duyệt và thông báo nhân viên.</p>
     </div>
     <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;">
         <a class="btn" href="{{ route('accountant.payroll.generate') }}">Xem / tính lại kỳ</a>
@@ -22,16 +22,6 @@
             <input type="hidden" name="month" value="{{ $filterMonth }}">
             <input type="hidden" name="year" value="{{ $filterYear }}">
             <button class="btn primary" type="submit">Gửi duyệt tất cả ({{ $pendingSubmitCount }})</button>
-        </form>
-        @endif
-        @if(($pendingPayCount ?? 0) > 0)
-        <form method="POST" action="{{ route('accountant.payroll.pay_all') }}"
-              data-confirm="Thanh toán tất cả {{ $pendingPayCount }} phiếu đã xác nhận tháng {{ sprintf('%02d/%d', $filterMonth, $filterYear) }} (mặc định tiền mặt)?">
-            @csrf
-            <input type="hidden" name="month" value="{{ $filterMonth }}">
-            <input type="hidden" name="year" value="{{ $filterYear }}">
-            <input type="hidden" name="payment_method" value="cash">
-            <button class="btn primary" type="submit" style="background:#166534;">Thanh toán tất cả ({{ $pendingPayCount }})</button>
         </form>
         @endif
     </div>
@@ -56,9 +46,7 @@
             <option value="">Tất cả trạng thái</option>
             <option value="calculated" {{ request('status')=='calculated' ? 'selected' : '' }}>Đã tính — chờ gửi duyệt</option>
             <option value="hr_checked" {{ request('status')=='hr_checked' ? 'selected' : '' }}>Đã gửi duyệt — chờ Giám đốc</option>
-            <option value="director_approved" {{ request('status')=='director_approved' ? 'selected' : '' }}>Giám đốc đã duyệt — chờ NV</option>
-            <option value="employee_confirmed" {{ request('status')=='employee_confirmed' ? 'selected' : '' }}>NV đã xác nhận — chờ TT</option>
-            <option value="paid" {{ request('status')=='paid' ? 'selected' : '' }}>Đã trả</option>
+            <option value="director_approved" {{ request('status')=='director_approved' ? 'selected' : '' }}>Giám đốc đã duyệt</option>
         </select>
         <button class="btn" type="submit">Tìm</button>
         <a class="btn" href="{{ route('accountant.payroll.index') }}">Xóa lọc</a>
@@ -99,8 +87,6 @@
                                 @csrf
                                 <button class="btn" type="submit">Tính lại</button>
                             </form>
-                            @elseif($workflow->canPay($p))
-                            <a class="btn primary" href="{{ route('payroll.payment.show', $p) }}">Thanh toán</a>
                             @endif
                         </td>
                     </tr>

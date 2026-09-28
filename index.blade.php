@@ -265,8 +265,9 @@
 
                                     @php
                                         $user = auth()->user();
-                                        $canApprove = ($user->is_admin || $user->is_hr) && $payroll->status === 'pending';
-                                        $canPay = ($user->is_admin || $user->is_accountant) && $payroll->status === 'ready_for_payment';
+                                        $canApprove = $user && method_exists($user, 'canFinalApprovePayroll')
+                                            ? $user->canFinalApprovePayroll() && in_array($payroll->status, ['hr_checked', 'hr_approved', 'hr_reviewed'], true)
+                                            : false;
                                     @endphp
 
                                     @if($canApprove)
@@ -276,12 +277,8 @@
                                                 Duyệt
                                             </button>
                                         </form>
-                                    @elseif(in_array($payroll->status, ['waiting_confirmation', 'approved'], true))
-                                        <span class="badge text-bg-warning text-wrap" style="max-width:160px;">Chờ xác nhận của nhân viên</span>
-                                    @elseif($canPay)
-                                        <a href="{{ route('payroll.payment.show', $payroll) }}" class="btn btn-sm btn-pay-soft">Thanh toán</a>
-                                    @elseif($payroll->status === 'paid')
-                                        <span class="badge text-bg-success">Đã thanh toán</span>
+                                    @elseif(in_array($payroll->status, ['director_approved', 'waiting_confirmation', 'approved', 'employee_confirmed', 'ready_for_payment', 'paid'], true))
+                                        <span class="badge text-bg-success text-wrap" style="max-width:160px;">Đã duyệt — đã thông báo NV</span>
                                     @endif
                                 </div>
                             </td>

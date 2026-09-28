@@ -7,19 +7,13 @@ use Illuminate\Http\Request;
 
 class EnsureAdminOrHr
 {
-    /** Kế toán chỉ được GHI các thao tác tính/gửi duyệt/chi lương, không ghi dữ liệu nhân sự. */
+    /** Kế toán chỉ được GHI các thao tác tính/gửi duyệt lương, không ghi dữ liệu nhân sự. */
     private const ACCOUNTANT_WRITE_ROUTES = [
         'payroll.generate',
         'payroll.review',
         'payroll.review_all',
         'payroll.email.send_all',
         'payroll.email.send',
-        'payroll.payment.confirm',
-        'salary_payments.create',
-        'salary_payments.update',
-        'salary_payments.send_email',
-        'salary_payments.pay',
-        'salary_payments.action',
     ];
 
     /** Màn hình thuộc HR/GĐ — kế toán xem payroll/kỳ lương, không vào form sửa nguồn. */
@@ -54,7 +48,7 @@ class EnsureAdminOrHr
         'support_requests.resolve',
     ];
 
-    /** Form ghi dữ liệu HR/KT — Giám đốc xem, không mở màn hình sửa nguồn hay thanh toán. */
+    /** Form ghi dữ liệu HR/KT — Giám đốc xem, không mở màn hình sửa nguồn. */
     private const DIRECTOR_DENIED_GET_ROUTES = [
         'employees.create',
         'employees.edit',
@@ -68,7 +62,6 @@ class EnsureAdminOrHr
         'leave_requests.create',
         'evaluations.create',
         'evaluations.edit',
-        'payroll.payment.show',
         'payroll.email.index',
         'deletion_requests.create_employee',
         'deletion_requests.create_department',
@@ -132,7 +125,7 @@ class EnsureAdminOrHr
 
         if ($user->is_accountant && ! $request->isMethodSafe()) {
             if (! in_array($request->route()?->getName(), self::ACCOUNTANT_WRITE_ROUTES, true)) {
-                abort(403, 'Kế toán chỉ được tính lương và thanh toán. Không được ghi dữ liệu nhân sự, hợp đồng, chấm công hay nghỉ phép.');
+                abort(403, 'Kế toán chỉ được tính lương và gửi duyệt. Không được ghi dữ liệu nhân sự, hợp đồng, chấm công hay nghỉ phép.');
             }
         }
 

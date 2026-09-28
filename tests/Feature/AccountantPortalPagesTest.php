@@ -36,7 +36,8 @@ class AccountantPortalPagesTest extends TestCase
         $this->actingAs($user)->get(route('accountant.dashboard'))
             ->assertOk()
             ->assertSee('Dashboard Kế toán')
-            ->assertSee('Chờ thanh toán')
+            ->assertSee('Đã duyệt')
+            ->assertSee('Chờ HR / Giám đốc')
             ->assertDontSee('Quản lý phụ cấp');
     }
 

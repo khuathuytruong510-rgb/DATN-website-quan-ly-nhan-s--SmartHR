@@ -28,10 +28,9 @@ class AccountantController extends Controller
             PayrollPaymentWorkflowService::calculatedStatuses(),
             PayrollPaymentWorkflowService::hrCheckedStatuses()
         ))->count();
-        $waitingPay = Payroll::whereIn('status', PayrollPaymentWorkflowService::payableStatuses())->count();
-        $paid = Payroll::where('status', PayrollPaymentWorkflowService::PAID)->count();
+        $approved = Payroll::whereIn('status', PayrollPaymentWorkflowService::completedStatuses())->count();
 
-        return view('accountant.dashboard', compact('total', 'waitingReview', 'waitingPay', 'paid'));
+        return view('accountant.dashboard', compact('total', 'waitingReview', 'approved'));
     }
 
     public function payrollIndex(Request $request): View
@@ -64,9 +63,7 @@ class AccountantController extends Controller
                 'calculated' => PayrollPaymentWorkflowService::calculatedStatuses(),
                 'hr_checked' => PayrollPaymentWorkflowService::hrCheckedStatuses(),
                 'hr_approved' => PayrollPaymentWorkflowService::hrCheckedStatuses(),
-                'director_approved' => PayrollPaymentWorkflowService::directorApprovedStatuses(),
-                'employee_confirmed' => PayrollPaymentWorkflowService::payableStatuses(),
-                'ready_for_payment' => PayrollPaymentWorkflowService::payableStatuses(),
+                'director_approved' => PayrollPaymentWorkflowService::completedStatuses(),
             ];
             if (isset($statusGroups[$status])) {
                 $query->whereIn('status', $statusGroups[$status]);
@@ -89,11 +86,6 @@ class AccountantController extends Controller
                 ->where('month', $filterMonth)
                 ->where('year', $filterYear)
                 ->whereIn('status', PayrollPaymentWorkflowService::calculatedStatuses())
-                ->count(),
-            'pendingPayCount' => Payroll::query()
-                ->where('month', $filterMonth)
-                ->where('year', $filterYear)
-                ->whereIn('status', PayrollPaymentWorkflowService::payableStatuses())
                 ->count(),
             'payrollYears' => Payroll::query()
                 ->select('year')
@@ -123,9 +115,10 @@ class AccountantController extends Controller
         }
 
         $workflow = app(PayrollPaymentWorkflowService::class);
-        if (! $workflow->isDirectorApproved($payroll->status) && ! $workflow->canPay($payroll)) {
+        if (! $workflow->isDirectorApproved($payroll->status)
+            && ! in_array($payroll->status, PayrollPaymentWorkflowService::completedStatuses(), true)) {
             return redirect()->route('accountant.payroll.show', $payroll)
-                ->with('error', 'Chỉ gửi email khi phiếu đã được Giám đốc phê duyệt (hoặc NV đã xác nhận, chờ thanh toán).');
+                ->with('error', 'Chỉ gửi email thông báo khi phiếu đã được Giám đốc phê duyệt.');
         }
 
         try {
@@ -215,18 +208,14 @@ class AccountantController extends Controller
             $employee = $p->employee;
             if (! $employee || ! filter_var($employee->email, FILTER_VALIDATE_EMAIL)) { $failed++; continue; }
 
-            $updateData = [
+            $p->update([
                 'sent_at' => now(),
                 'sent_by' => Auth::id(),
                 'email_status' => 'sent',
-                'confirmation_deadline' => PayrollPaymentWorkflowService::confirmationDeadlineFor($p),
-            ];
-
-            if ($p->confirmation_status !== 'confirmed') {
-                $updateData['confirmation_status'] = 'pending';
-            }
-
-            $p->update($updateData);
+                'confirmation_status' => 'notified',
+                'confirmation_deadline' => null,
+                'confirmation_token' => null,
+            ]);
 
             try {
                 Mail::to($employee->email)->send(new PayrollConfirmationMail($p->fresh()));
@@ -271,42 +260,6 @@ class AccountantController extends Controller
             ->with('success', $msg);
     }
 
-    /** Kế toán thanh toán tất cả phiếu NV đã xác nhận. */
-    public function payAll(Request $request): RedirectResponse
-    {
-        $user = $request->user();
-        if (! $user?->canPayPayroll()) {
-            abort(403, 'Chỉ kế toán được thanh toán bảng lương.');
-        }
-
-        $data = $request->validate([
-            'month' => ['required', 'integer', 'min:1', 'max:12'],
-            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
-            'payment_method' => ['nullable', 'in:cash,bank_transfer'],
-        ]);
-
-        $workflow = app(PayrollPaymentWorkflowService::class);
-        $result = $workflow->payAll(
-            (int) $data['month'],
-            (int) $data['year'],
-            $user,
-            ['payment_method' => $data['payment_method'] ?? 'cash']
-        );
-
-        if ($result['ok'] === 0 && $result['failed'] === 0) {
-            return back()->with('error', 'Không có phiếu nào đủ điều kiện thanh toán trong kỳ này.');
-        }
-
-        $msg = "Đã thanh toán {$result['ok']} phiếu.";
-        if ($result['failed'] > 0) {
-            $msg .= " {$result['failed']} phiếu lỗi/bỏ qua (thiếu STK hoặc không hợp lệ).";
-        }
-
-        return redirect()
-            ->route('accountant.payroll.index', ['month' => $data['month'], 'year' => $data['year']])
-            ->with('success', $msg);
-    }
-
     public function payrollGenerate(
         Request $request,
         PayrollPeriodLockService $periodLock,
@@ -338,7 +291,7 @@ class AccountantController extends Controller
                     && $lockRow?->unlock_request_status !== 'pending',
                 'total' => $statusCounts->sum(),
                 'calculated' => (int) $statusCounts->only(PayrollPaymentWorkflowService::calculatedStatuses())->sum(),
-                'issue' => (int) ($statusCounts[PayrollPaymentWorkflowService::PAYROLL_ISSUE] ?? 0),
+                'approved' => (int) $statusCounts->only(PayrollPaymentWorkflowService::completedStatuses())->sum(),
             ]);
             $cursor = $cursor->copy()->subMonth();
         }

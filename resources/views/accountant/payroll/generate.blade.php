@@ -20,7 +20,7 @@
         <h1>Tính lương</h1>
         <p class="muted">
             Chọn kỳ → đối chiếu bảng số liệu (chấm công, nghỉ phép, tăng ca, phụ cấp, BH, thuế) → mới bấm Tính lương.
-            Chỉ tính phiếu nháp / đã tính. Không tính lại phiếu đã gửi duyệt, Giám đốc đã duyệt, NV đã xác nhận hoặc đã thanh toán.
+            Chỉ tính phiếu nháp / đã tính. Không tính lại phiếu đã gửi duyệt hoặc Giám đốc đã duyệt.
         </p>
     </div>
     <div class="actions">
@@ -64,7 +64,7 @@
                     <th>Kỳ</th>
                     <th>HR chốt</th>
                     <th>Phiếu</th>
-                    <th>Đã tính</th>
+                    <th>Đã tính / Đã duyệt</th>
                     <th></th>
                 </tr>
             </thead>
@@ -80,7 +80,7 @@
                             @endif
                         </td>
                         <td>{{ $period['total'] }}</td>
-                        <td>{{ $period['calculated'] }} / {{ $period['issue'] }}</td>
+                        <td>{{ $period['calculated'] }} / {{ $period['approved'] ?? 0 }}</td>
                         <td style="text-align:right;">
                             <a class="btn {{ ($period['month'] === $month && $period['year'] === $year) ? 'primary' : '' }}"
                                href="{{ route('accountant.payroll.generate', ['month' => $period['month'], 'year' => $period['year']]) }}">

@@ -109,9 +109,7 @@
                 <select id="status" name="status">
                     <option value="calculated" {{ old('status', $payroll->status ?? 'calculated') == 'calculated' ? 'selected' : '' }}>Đã tính — chờ gửi duyệt</option>
                     <option value="hr_checked" {{ old('status', $payroll->status) == 'hr_checked' ? 'selected' : '' }}>Đã gửi duyệt — chờ Giám đốc</option>
-                    <option value="director_approved" {{ old('status', $payroll->status) == 'director_approved' ? 'selected' : '' }}>Giám đốc đã duyệt</option>
-                    <option value="employee_confirmed" {{ old('status', $payroll->status) == 'employee_confirmed' ? 'selected' : '' }}>NV đã xác nhận</option>
-                    <option value="paid" {{ old('status', $payroll->status) == 'paid' ? 'selected' : '' }}>Đã thanh toán</option>
+                    <option value="director_approved" {{ old('status', $payroll->status) == 'director_approved' ? 'selected' : '' }}>Giám đốc đã duyệt — đã thông báo NV</option>
                 </select>
                 @error('status')
                     <span class="error">{{ $message }}</span>

@@ -24,9 +24,6 @@
                 </form>
             @endif
 
-            @if($user->canPayPayroll() && $workflow->canPay($payroll))
-                <a href="{{ route('payroll.payment.show', $payroll) }}" class="btn" style="background:#bbf7d0;color:#166534;border:1px solid #86efac;">Thanh toán</a>
-            @endif
         </div>
     </div>
 
@@ -53,35 +50,15 @@
                 <p style="margin:4px 0 0;font-weight:600;">{{ $payroll->directorApproverLabel() }}</p>
             </div>
             @endif
+            @if($payroll->sent_at)
             <div style="margin-bottom:14px;">
-                <span style="color:#64748b;font-size:13px;">Xác nhận NV</span>
-                <p style="margin:4px 0 0;">
-                    @if($payroll->confirmation_status === 'confirmed')
-                        <span class="badge" style="background:#dcfce7;color:#166534;">Đã xác nhận</span>
-                    @else
-                        <span class="badge" style="background:#e2e8f0;color:#475569;">Chưa xác nhận</span>
+                <span style="color:#64748b;font-size:13px;">Thông báo NV</span>
+                <p style="margin:4px 0 0;font-weight:600;">{{ $payroll->sent_at->format('d/m/Y H:i') }}
+                    @if($payroll->email_status)
+                        · email: {{ $payroll->email_status }}
                     @endif
                 </p>
             </div>
-            @if($payroll->confirmation_deadline)
-                <div style="margin-bottom:14px;">
-                    <span style="color:#64748b;font-size:13px;">Hạn xác nhận</span>
-                    <p style="margin:4px 0 0;font-weight:600;">{{ $payroll->confirmation_deadline->format('d/m/Y H:i') }}</p>
-                </div>
-            @endif
-            @if($payroll->paid_at)
-                <div style="margin-bottom:14px;">
-                    <span style="color:#64748b;font-size:13px;">Thanh toán lúc</span>
-                    <p style="margin:4px 0 0;font-weight:600;">{{ $payroll->paid_at->format('d/m/Y H:i') }}</p>
-                </div>
-                <div style="margin-bottom:14px;">
-                    <span style="color:#64748b;font-size:13px;">Người thanh toán</span>
-                    <p style="margin:4px 0 0;font-weight:600;">{{ optional($payroll->paidByUser)->name ?? '—' }}</p>
-                </div>
-                <div>
-                    <span style="color:#64748b;font-size:13px;">Phương thức</span>
-                    <p style="margin:4px 0 0;font-weight:600;">{{ $payroll->payment_method ?? '—' }}</p>
-                </div>
             @endif
         </div>
 

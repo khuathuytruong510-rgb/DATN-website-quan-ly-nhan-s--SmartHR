@@ -203,29 +203,13 @@
                 <div class="emp-kpi-value">{{ $payroll['approved'] }}</div>
                 <p class="emp-kpi-sub">Giám đốc đã duyệt</p>
             </article>
-            <article class="emp-kpi is-warn">
-                <div class="emp-kpi-head">
-                    <h3 class="emp-kpi-label">Chờ NV xác nhận</h3>
-                    <span class="emp-kpi-ico ico-warn"><i class="bi bi-person-check"></i></span>
-                </div>
-                <div class="emp-kpi-value">{{ $payroll['awaitingEmployee'] }}</div>
-                <p class="emp-kpi-sub">Phiếu đã gửi nhân viên</p>
-            </article>
-            <article class="emp-kpi is-violet">
-                <div class="emp-kpi-head">
-                    <h3 class="emp-kpi-label">Chờ thanh toán</h3>
-                    <span class="emp-kpi-ico ico-violet"><i class="bi bi-wallet2"></i></span>
-                </div>
-                <div class="emp-kpi-value">{{ $payroll['awaitingPayment'] }}</div>
-                <p class="emp-kpi-sub">NV đã xác nhận</p>
-            </article>
             <article class="emp-kpi is-ok">
                 <div class="emp-kpi-head">
-                    <h3 class="emp-kpi-label">Đã thanh toán</h3>
+                    <h3 class="emp-kpi-label">Dữ liệu cũ đã chi</h3>
                     <span class="emp-kpi-ico ico-ok"><i class="bi bi-check2-circle"></i></span>
                 </div>
                 <div class="emp-kpi-value">{{ $payroll['paid'] }}</div>
-                <p class="emp-kpi-sub">Kế toán đã chi</p>
+                <p class="emp-kpi-sub">Phiếu trạng thái paid (lịch sử)</p>
             </article>
         </div>
     </section>

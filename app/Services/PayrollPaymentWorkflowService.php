@@ -3,13 +3,10 @@
 namespace App\Services;
 
 use App\Mail\PayrollConfirmationMail;
-use App\Mail\SalaryPaidMail;
 use App\Models\ActivityLog;
 use App\Models\Employee;
 use App\Models\Notification;
 use App\Models\Payroll;
-use App\Models\SalaryHistory;
-use App\Models\SalaryPayment;
 use App\Models\SalaryReceiveChangeRequest;
 use App\Models\User;
 use App\Support\HrApprovalNotifier;
@@ -20,7 +17,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use RuntimeException;
 
 class PayrollPaymentWorkflowService
@@ -37,18 +33,19 @@ class PayrollPaymentWorkflowService
     /** @deprecated Dùng HR_CHECKED. */
     public const HR_APPROVED = self::HR_CHECKED;
 
-    /** Giám đốc đã phê duyệt, chờ nhân viên xác nhận. */
+    /** Giám đốc đã phê duyệt — bước cuối; hệ thống thông báo bảng lương đến NV. */
     public const DIRECTOR_APPROVED = 'director_approved';
 
     /** @deprecated Đã bỏ tính năng sự cố lương — giữ hằng số để đọc dữ liệu cũ. */
     public const PAYROLL_ISSUE = 'payroll_issue';
 
-    /** Nhân viên đã xác nhận phiếu lương. */
+    /** @deprecated Đã bỏ bước NV xác nhận / thanh toán — giữ để đọc dữ liệu cũ. */
     public const EMPLOYEE_CONFIRMED = 'employee_confirmed';
 
-    /** Đủ điều kiện thanh toán (sau khi NV xác nhận). */
+    /** @deprecated Đã bỏ thanh toán lương — giữ để đọc dữ liệu cũ. */
     public const READY_FOR_PAYMENT = 'ready_for_payment';
 
+    /** @deprecated Đã bỏ thanh toán lương — giữ để đọc dữ liệu cũ. */
     public const PAID = 'paid';
 
     /** Alias tương thích dữ liệu cũ. */
@@ -84,15 +81,27 @@ class PayrollPaymentWorkflowService
         return [self::DIRECTOR_APPROVED, 'waiting_confirmation', 'approved'];
     }
 
+    /** @deprecated Đã bỏ thanh toán lương. */
     public static function payableStatuses(): array
     {
         return [self::EMPLOYEE_CONFIRMED, self::READY_FOR_PAYMENT];
+    }
+
+    /** Trạng thái kết thúc quy trình (GĐ đã duyệt + đã/đang thông báo NV). */
+    public static function completedStatuses(): array
+    {
+        return array_values(array_unique(array_merge(
+            self::directorApprovedStatuses(),
+            self::payableStatuses(),
+            [self::PAID]
+        )));
     }
 
     public function __construct(protected SalaryService $salaryService)
     {
     }
 
+    /** @deprecated Không còn hạn xác nhận NV. */
     public static function confirmationDeadlineFor(Payroll $payroll): Carbon
     {
         $rawMonth = (string) $payroll->getRawOriginal('month');
@@ -113,11 +122,10 @@ class PayrollPaymentWorkflowService
             self::DRAFT => 'Nháp — đang chuẩn bị',
             self::CALCULATED, 'pending' => 'Hệ thống đã tính — chờ Kế toán gửi duyệt',
             self::HR_CHECKED, 'hr_approved', 'hr_reviewed' => 'Kế toán đã gửi duyệt — chờ Giám đốc',
-            self::DIRECTOR_APPROVED, 'waiting_confirmation', 'approved' => 'Giám đốc đã duyệt — chờ NV xác nhận',
+            self::DIRECTOR_APPROVED, 'waiting_confirmation', 'approved' => 'Giám đốc đã duyệt — đã thông báo NV',
             self::PAYROLL_ISSUE => 'Trạng thái cũ (đã bỏ sự cố lương)',
-            self::EMPLOYEE_CONFIRMED => 'NV đã xác nhận — đủ điều kiện thanh toán',
-            self::READY_FOR_PAYMENT => 'NV đã xác nhận — đủ điều kiện thanh toán',
-            self::PAID => 'Đã thanh toán',
+            self::EMPLOYEE_CONFIRMED, self::READY_FOR_PAYMENT => 'Trạng thái cũ (đã bỏ xác nhận / thanh toán)',
+            self::PAID => 'Trạng thái cũ (đã bỏ thanh toán)',
             default => $status ?? '—',
         };
     }
@@ -180,14 +188,16 @@ class PayrollPaymentWorkflowService
         return $this->canFinalApprove($payroll);
     }
 
+    /** @deprecated Đã bỏ bước NV xác nhận. */
     public function canConfirm(Payroll $payroll): bool
     {
-        return $this->isDirectorApproved($payroll->status);
+        return false;
     }
 
+    /** @deprecated Đã bỏ thanh toán lương. */
     public function canPay(Payroll $payroll): bool
     {
-        return in_array($payroll->status, self::payableStatuses(), true);
+        return false;
     }
 
     protected function lockPayroll(Payroll $payroll): Payroll
@@ -196,31 +206,14 @@ class PayrollPaymentWorkflowService
     }
 
     /**
-     * NV xác nhận: phiếu phải thuộc hồ sơ gắn user đăng nhập.
-     * Không đọc employee_id từ request. actor = null chỉ dùng cho link email / job tự động.
-     */
-    protected function assertActorOwnsPayroll(Payroll $payroll, ?User $actor): void
-    {
-        if (! $actor) {
-            return;
-        }
-
-        $employeeId = $actor->linkedEmployee()?->id;
-        if (! $employeeId || (int) $payroll->employee_id !== (int) $employeeId) {
-            throw new RuntimeException('Bạn chỉ được thao tác phiếu lương của chính mình.');
-        }
-    }
-
-    /**
      * Một cửa kiểm tra transition. Controller không được tự gán status từ request.
+     * Quy trình: nháp/đã tính → KT gửi duyệt → GĐ duyệt (kết thúc).
      */
     public function assertTransition(Payroll $payroll, string $to, ?User $actor = null): void
     {
         $allowed = match ($to) {
             self::HR_CHECKED => $this->canSubmitToDirector($payroll) && $actor?->canPayPayroll(),
             self::DIRECTOR_APPROVED => $this->canFinalApprove($payroll) && $actor?->canFinalApprovePayroll(),
-            self::EMPLOYEE_CONFIRMED => $this->canConfirm($payroll),
-            self::PAID => $this->canPay($payroll) && $actor?->canPayPayroll(),
             default => false,
         };
 
@@ -296,46 +289,17 @@ class PayrollPaymentWorkflowService
     }
 
     /**
-     * Kế toán thanh toán tất cả phiếu NV đã xác nhận trong kỳ.
+     * @deprecated Đã bỏ thanh toán lương.
      *
      * @return array{ok: int, failed: int}
      */
     public function payAll(int $month, int $year, User $actor, array $data = []): array
     {
-        if (! $actor->canPayPayroll()) {
-            throw new RuntimeException('Chỉ kế toán được thanh toán bảng lương.');
-        }
-
-        $pending = Payroll::query()
-            ->with('employee')
-            ->where('month', $month)
-            ->where('year', $year)
-            ->whereIn('status', self::payableStatuses())
-            ->orderBy('id')
-            ->get();
-
-        $method = $data['payment_method'] ?? 'cash';
-        $ok = 0;
-        $failed = 0;
-        foreach ($pending as $payroll) {
-            try {
-                $payload = ['payment_method' => $method];
-                if ($method === 'bank_transfer') {
-                    $payload['transaction_code'] = $data['transaction_code']
-                        ?? ('BULK-'.$payroll->id.'-'.now()->format('YmdHis'));
-                }
-                $this->markPaid($payroll, $payload, $actor);
-                $ok++;
-            } catch (\Throwable) {
-                $failed++;
-            }
-        }
-
-        return compact('ok', 'failed');
+        throw new RuntimeException('Đã bỏ chức năng thanh toán lương. Quy trình dừng ở Giám đốc duyệt và thông báo bảng lương.');
     }
 
     /**
-     * Giám đốc phê duyệt cuối → phát hành phiếu, chờ NV xác nhận + gửi thông báo/email.
+     * Giám đốc phê duyệt cuối → thông báo bảng lương đến nhân viên (bước kết thúc).
      */
     public function approve(Payroll $payroll, ?User $actor = null): Payroll
     {
@@ -345,13 +309,11 @@ class PayrollPaymentWorkflowService
             $payroll = $this->lockPayroll($payroll);
             $this->assertTransition($payroll, self::DIRECTOR_APPROVED, $actor);
 
-            $token = Str::random(48);
-
             $payroll->update([
-                'status' => self::WAITING_CONFIRMATION,
-                'confirmation_status' => 'pending',
-                'confirmation_deadline' => self::confirmationDeadlineFor($payroll),
-                'confirmation_token' => $token,
+                'status' => self::DIRECTOR_APPROVED,
+                'confirmation_status' => 'notified',
+                'confirmation_deadline' => null,
+                'confirmation_token' => null,
                 'sent_at' => now(),
                 'sent_by' => $actor->id,
                 'director_approved_by' => $actor->id,
@@ -377,13 +339,13 @@ class PayrollPaymentWorkflowService
             $this->notifyEmployee(
                 $payroll,
                 $actor,
-                'Bảng lương cần xác nhận',
-                'Bảng lương tháng '.$payroll->display_month.' đã được Giám đốc phê duyệt. Vui lòng xác nhận trước '.$payroll->confirmation_deadline->format('d/m/Y H:i').'.'
+                'Bảng lương đã được phê duyệt',
+                'Bảng lương tháng '.$payroll->display_month.' đã được Giám đốc phê duyệt. Bạn có thể xem chi tiết trên trang Lương.'
             );
         } catch (\Throwable) {
         }
 
-        $this->sendConfirmationEmail($payroll->fresh(['employee']));
+        $this->sendPayrollNotifyEmail($payroll->fresh(['employee']));
 
         return $payroll->fresh(['employee']);
     }
@@ -430,9 +392,9 @@ class PayrollPaymentWorkflowService
 
             $payroll->update([
                 'status' => self::DIRECTOR_APPROVED,
-                'confirmation_status' => 'pending',
-                'confirmation_deadline' => self::confirmationDeadlineFor($payroll),
-                'confirmation_token' => Str::random(48),
+                'confirmation_status' => 'notified',
+                'confirmation_deadline' => null,
+                'confirmation_token' => null,
                 'sent_at' => now(),
                 'sent_by' => null,
                 'director_approved_by' => null,
@@ -456,13 +418,13 @@ class PayrollPaymentWorkflowService
             $this->notifyEmployee(
                 $payroll,
                 null,
-                'Bảng lương cần xác nhận',
-                'Bảng lương tháng '.$payroll->display_month.' đã được hệ thống tự động phê duyệt. Vui lòng xác nhận trước '.$payroll->confirmation_deadline->format('d/m/Y H:i').'.'
+                'Bảng lương đã được phê duyệt',
+                'Bảng lương tháng '.$payroll->display_month.' đã được phê duyệt. Bạn có thể xem chi tiết trên trang Lương.'
             );
         } catch (\Throwable) {
         }
 
-        $this->sendConfirmationEmail($payroll->fresh(['employee']));
+        $this->sendPayrollNotifyEmail($payroll->fresh(['employee']));
 
         return true;
     }
@@ -483,176 +445,22 @@ class PayrollPaymentWorkflowService
         }
     }
 
-    /**
-     * NV xác nhận (web hoặc email) → đủ điều kiện thanh toán
-     */
+    /** @deprecated Đã bỏ bước NV xác nhận. */
     public function confirm(Payroll $payroll, ?User $actor = null, bool $auto = false): Payroll
     {
-        return DB::transaction(function () use ($payroll, $actor, $auto) {
-            $payroll = $this->lockPayroll($payroll);
-
-            if ($payroll->status === self::PAID) {
-                throw new RuntimeException('Phiếu đã thanh toán. Không thể xác nhận lại.');
-            }
-
-            if (in_array($payroll->status, self::payableStatuses(), true)) {
-                return $payroll;
-            }
-
-            if (! $auto) {
-                $this->assertActorOwnsPayroll($payroll, $actor);
-            }
-
-            $this->assertTransition($payroll, self::EMPLOYEE_CONFIRMED, $actor);
-
-            $payroll->update([
-                'status' => self::EMPLOYEE_CONFIRMED,
-                'confirmation_status' => 'confirmed',
-                'confirmed_at' => now(),
-                'confirmation_token' => null,
-            ]);
-
-            $logUserId = $auto
-                ? (User::query()->where('is_hr', true)->orderBy('id')->value('id')
-                    ?? User::query()->where('is_admin', true)->orderBy('id')->value('id'))
-                : ($actor?->id ?? Auth::id());
-            if ($logUserId) {
-                ActivityLog::create([
-                    'user_id' => $logUserId,
-                    'action' => $auto ? 'payroll_auto_ready' : 'payroll_confirmed',
-                    'meta' => $auto ? 'payroll:'.$payroll->id.';by:system' : 'payroll:'.$payroll->id,
-                ]);
-            }
-
-            return $payroll->fresh(['employee']);
-        });
+        throw new RuntimeException('Đã bỏ bước nhân viên xác nhận bảng lương. Quy trình dừng ở Giám đốc duyệt và thông báo.');
     }
 
-    /** Automatically confirm unreplied payslips when their payroll period closes. */
+    /** @deprecated Đã bỏ bước tự xác nhận / thanh toán. */
     public function autoMarkReady(): int
     {
-        $count = 0;
-        $items = Payroll::query()
-            ->whereIn('status', self::directorApprovedStatuses())
-            ->get();
-
-        foreach ($items as $payroll) {
-            $deadline = $payroll->confirmation_deadline
-                ?? $payroll->sent_at?->copy()->setTime(23, 59);
-            if (! $deadline || $deadline->isFuture()) {
-                continue;
-            }
-
-            try {
-                $this->confirm($payroll, null, true);
-                $count++;
-            } catch (RuntimeException) {
-                // Phiếu đang sự cố hoặc không hợp lệ — bỏ qua, không làm fail cả batch.
-            }
-        }
-
-        return $count;
+        return 0;
     }
 
-    /**
-     * Kế toán xác nhận thanh toán
-     */
+    /** @deprecated Đã bỏ thanh toán lương. */
     public function markPaid(Payroll $payroll, array $data, ?User $actor = null): Payroll
     {
-        $actor ??= Auth::user();
-
-        $payroll = DB::transaction(function () use ($payroll, $data, $actor) {
-            $payroll = Payroll::query()->whereKey($payroll->id)->lockForUpdate()->firstOrFail();
-
-            if ($payroll->status === self::PAID) {
-                throw new RuntimeException('Phiếu đã thanh toán. Không thể thanh toán lần hai.');
-            }
-
-            $this->assertTransition($payroll, self::PAID, $actor);
-
-            $method = $data['payment_method'] ?? 'bank_transfer';
-            $employee = $payroll->employee;
-            if (! $employee) {
-                throw new RuntimeException('Thiếu thông tin nhân viên.');
-            }
-
-            $this->snapshotPayoutAccount($payroll->fresh(['employee']));
-            $payroll = $payroll->fresh(['employee']);
-            $employee = $payroll->employee;
-
-            $payment = $payroll->salaryPayment;
-            if (! $payment) {
-                try {
-                    $payment = SalaryPayment::create([
-                        'employee_id' => $payroll->employee_id,
-                        'payroll_id' => $payroll->id,
-                        'code' => 'PAY-'.now()->format('YmdHis').'-'.$payroll->id,
-                        'month' => $payroll->month,
-                        'year' => $payroll->year,
-                        'total' => $payroll->total_salary,
-                        'deductions' => (float) ($payroll->insurance ?? 0) + (float) ($payroll->tax ?? 0),
-                        'net' => $payroll->total_salary,
-                        'status' => 'pending',
-                    ]);
-                } catch (QueryException) {
-                    throw new RuntimeException('Phiếu đã có thanh toán. Không thể thanh toán lần hai.');
-                }
-            }
-
-            $reference = $data['transaction_code'] ?? $data['payment_reference'] ?? null;
-
-            $payment = $this->salaryService->processPayment($payment, [
-                'payment_method' => $method,
-                'bank' => $payroll->payout_bank_name ?: $employee->bank_name,
-                'account_number' => $payroll->payout_account_number ?: $employee->account_number,
-                'account_holder' => $payroll->payout_account_holder ?: $employee->account_holder,
-                'transaction_code' => $reference,
-                'notes' => $data['notes'] ?? 'Thanh toán lương',
-            ]);
-
-            $payroll->update([
-                'status' => self::PAID,
-                'paid_at' => now(),
-                'paid_by' => $actor?->id,
-                'payment_method' => $method,
-            ]);
-
-            SalaryHistory::recordFromPaidPayroll($payroll->fresh(['employee', 'salaryPayment']), $actor);
-
-            ActivityLog::create([
-                'user_id' => $actor?->id,
-                'action' => 'payroll_paid',
-                'meta' => sprintf(
-                    'payroll:%d;method:%s;by:%s;ref:%s',
-                    $payroll->id,
-                    $method,
-                    $actor?->id ?? 'system',
-                    $reference ?: 'cash'
-                ),
-            ]);
-
-            return $payroll->fresh(['employee', 'salaryPayment']);
-        });
-
-        try {
-            $this->notifyEmployee(
-                $payroll->fresh(['employee']),
-                $actor,
-                'Đã thanh toán lương',
-                'Lương tháng '.$payroll->display_month.' đã được thanh toán.'
-            );
-        } catch (\Throwable) {
-        }
-
-        $payment = $payroll->salaryPayment;
-        if ($payment && $payroll->employee && filter_var($payroll->employee->email, FILTER_VALIDATE_EMAIL)) {
-            try {
-                Mail::to($payroll->employee->email)->send(new SalaryPaidMail($payment));
-            } catch (\Throwable) {
-            }
-        }
-
-        return $payroll->fresh(['employee', 'salaryPayment']);
+        throw new RuntimeException('Đã bỏ chức năng thanh toán lương. Quy trình dừng ở Giám đốc duyệt và thông báo bảng lương.');
     }
 
     public function updateEmployeeBank(Employee $employee, array $data, $qrFile = null): Employee
@@ -807,7 +615,8 @@ class PayrollPaymentWorkflowService
         ])->save();
     }
 
-    protected function sendConfirmationEmail(Payroll $payroll, bool $isRevision = false): void
+    /** Gửi email thông báo bảng lương (không còn nút xác nhận). */
+    protected function sendPayrollNotifyEmail(Payroll $payroll, bool $isRevision = false): void
     {
         $employee = $payroll->employee;
         if (! $employee || ! filter_var($employee->email, FILTER_VALIDATE_EMAIL)) {
@@ -822,6 +631,12 @@ class PayrollPaymentWorkflowService
         } catch (\Throwable) {
             $payroll->update(['email_status' => 'failed']);
         }
+    }
+
+    /** @deprecated Dùng sendPayrollNotifyEmail(). */
+    protected function sendConfirmationEmail(Payroll $payroll, bool $isRevision = false): void
+    {
+        $this->sendPayrollNotifyEmail($payroll, $isRevision);
     }
 
     protected function notifyEmployee(Payroll $payroll, ?User $actor, string $title, string $message): void

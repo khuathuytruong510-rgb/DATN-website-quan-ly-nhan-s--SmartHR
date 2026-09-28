@@ -11,10 +11,12 @@ use App\Models\SalaryHistory;
 use App\Models\User;
 use App\Services\PayrollPaymentWorkflowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\AssertsRemovedPayrollPaymentFeatures;
 use Tests\TestCase;
 
 class PayrollAuthorizationHardeningTest extends TestCase
 {
+    use AssertsRemovedPayrollPaymentFeatures;
     use RefreshDatabase;
 
     private function seedPeople(): array
@@ -131,29 +133,24 @@ class PayrollAuthorizationHardeningTest extends TestCase
         $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $payroll->fresh()->status);
 
         $payroll->update(['status' => PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED]);
-        $paid = app(PayrollPaymentWorkflowService::class)->markPaid(
+        $this->expectException(\RuntimeException::class);
+        app(PayrollPaymentWorkflowService::class)->markPaid(
             $payroll->fresh(),
             ['payment_method' => 'cash'],
             $superAdmin
         );
-        $this->assertSame(PayrollPaymentWorkflowService::PAID, $paid->status);
     }
 
-    public function test_employee_cannot_confirm_another_persons_payroll(): void
+    public function test_employee_payroll_confirm_endpoint_is_removed(): void
     {
         ['aliceUser' => $aliceUser, 'bobPayroll' => $bobPayroll, 'alicePayroll' => $alicePayroll] = $this->seedPeople();
 
-        $this->actingAs($aliceUser)
-            ->post(route('me.payroll.confirm', $bobPayroll))
-            ->assertForbidden();
+        $this->assertNamedRouteRemoved('me.payroll.confirm', $bobPayroll);
+        $this->actingAs($aliceUser)->postEmployeePayrollConfirm($bobPayroll)->assertNotFound();
+        $this->actingAs($aliceUser)->postEmployeePayrollConfirm($alicePayroll->fresh())->assertNotFound();
 
         $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $bobPayroll->fresh()->status);
-
-        $this->actingAs($aliceUser)
-            ->post(route('me.payroll.confirm', $alicePayroll->fresh()))
-            ->assertRedirect();
-
-        $this->assertSame(PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, $alicePayroll->fresh()->status);
+        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $alicePayroll->fresh()->status);
     }
 
     public function test_accountant_cannot_recalculate_after_hr_checked_or_lock_individual_slip(): void
@@ -249,19 +246,11 @@ class PayrollAuthorizationHardeningTest extends TestCase
         ['director' => $director, 'aliceUser' => $aliceUser, 'bob' => $bob, 'alicePayroll' => $payroll] = $this->seedPeople();
 
         $this->actingAs($aliceUser)
-            ->post(route('me.payroll.confirm', $payroll), [
-                'status' => PayrollPaymentWorkflowService::PAID,
-                'employee_id' => $bob->id,
-                'paid_at' => now()->toDateTimeString(),
-                'confirmation_token' => 'hacked-token',
-                'hr_checked' => true,
-                'director_approved' => true,
-                'employee_confirmed' => true,
-            ])
-            ->assertRedirect();
+            ->postEmployeePayrollConfirm($payroll)
+            ->assertNotFound();
 
         $fresh = $payroll->fresh();
-        $this->assertSame(PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, $fresh->status);
+        $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $fresh->status);
         $this->assertNull($fresh->paid_at);
         $this->assertNotEquals($bob->id, $fresh->employee_id);
 
@@ -285,19 +274,11 @@ class PayrollAuthorizationHardeningTest extends TestCase
         $this->assertNull($other->fresh()->paid_at);
     }
 
-    public function test_second_confirm_is_idempotent_and_second_pay_is_rejected(): void
+    public function test_mark_paid_is_rejected_even_for_legacy_confirmed_status(): void
     {
-        ['accountant' => $accountant, 'aliceUser' => $aliceUser, 'alicePayroll' => $payroll] = $this->seedPeople();
+        ['accountant' => $accountant, 'alicePayroll' => $payroll] = $this->seedPeople();
         $workflow = app(PayrollPaymentWorkflowService::class);
-
-        $this->actingAs($aliceUser)->post(route('me.payroll.confirm', $payroll))->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, $payroll->fresh()->status);
-
-        $this->actingAs($aliceUser)->post(route('me.payroll.confirm', $payroll->fresh()))->assertRedirect();
-        $this->assertSame(PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED, $payroll->fresh()->status);
-
-        $workflow->markPaid($payroll->fresh(), ['payment_method' => 'cash'], $accountant);
-        $this->assertSame(PayrollPaymentWorkflowService::PAID, $payroll->fresh()->status);
+        $payroll->update(['status' => PayrollPaymentWorkflowService::EMPLOYEE_CONFIRMED]);
 
         $this->expectException(\RuntimeException::class);
         $workflow->markPaid($payroll->fresh(), ['payment_method' => 'cash'], $accountant);
@@ -393,19 +374,18 @@ class PayrollAuthorizationHardeningTest extends TestCase
         }
     }
 
-    public function test_service_confirm_binds_employee_from_logged_in_user(): void
+    public function test_service_confirm_is_removed(): void
     {
         ['alicePayroll' => $payroll, 'bobUser' => $bobUser] = $this->seedPeople();
         $workflow = app(PayrollPaymentWorkflowService::class);
 
         try {
             $workflow->confirm($payroll, $bobUser);
-            $this->fail('Xác nhận phiếu người khác phải bị chặn ở service.');
+            $this->fail('confirm() must be removed.');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('chính mình', $e->getMessage());
+            $this->assertStringContainsString('bỏ bước nhân viên xác nhận', $e->getMessage());
         }
 
         $this->assertSame(PayrollPaymentWorkflowService::DIRECTOR_APPROVED, $payroll->fresh()->status);
-        $this->assertSame($payroll->employee_id, $payroll->fresh()->employee_id);
     }
 }
