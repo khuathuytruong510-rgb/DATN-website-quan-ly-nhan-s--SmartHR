@@ -17,6 +17,7 @@ class LeaveRequest extends Model
         'type',
         'children_count',
         'birth_complication',
+        'is_second_child',
         'document_path',
         'document_name',
         'reason',
@@ -42,6 +43,7 @@ class LeaveRequest extends Model
             'half_day' => 'boolean',
             'children_count' => 'integer',
             'birth_complication' => 'boolean',
+            'is_second_child' => 'boolean',
             'is_urgent' => 'boolean',
         ];
     }

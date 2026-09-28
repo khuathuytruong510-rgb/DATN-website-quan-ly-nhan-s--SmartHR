@@ -1,9 +1,16 @@
 <div id="spouse-birth-fields" class="callout info" style="display:none;margin:12px 0;">
-    <p class="callout-title">Nghỉ thai sản (vợ sinh con)</p>
+    <p class="callout-title">Nghỉ thai sản khi vợ sinh con</p>
+    <p class="form-hint" style="margin-top:0;">
+        Theo Luật Bảo hiểm xã hội 2024 Điều 53 và Luật Dân số 2025 (từ 01/7/2026):
+        5 ngày làm việc khi sinh thường một con; 7 ngày nếu sinh mổ hoặc con dưới 32 tuần;
+        10 ngày khi sinh đôi hoặc sinh con thứ hai; 14 ngày khi sinh đôi phải phẫu thuật;
+        sinh ba trở lên cộng thêm 3 ngày cho mỗi con từ con thứ ba.
+        Ngày bắt đầu nghỉ phải trong 60 ngày kể từ ngày vợ sinh.
+    </p>
     <div class="row g-3">
         <div class="col-12 col-md-6">
             <div class="field">
-                <label class="form-label" for="children-count">Số con</label>
+                <label class="form-label" for="children-count">Số con sinh ra trong lần sinh này</label>
                 <input class="form-control" type="number" id="children-count" name="children_count" min="1" max="255" value="{{ old('children_count', 1) }}">
                 @error('children_count')<span class="error">{{ $message }}</span>@enderror
             </div>
@@ -12,9 +19,17 @@
             <div class="field">
                 <label class="check-row" for="birth-complication">
                     <input type="checkbox" id="birth-complication" name="birth_complication" value="1" {{ old('birth_complication') ? 'checked' : '' }}>
-                    Sinh mổ hoặc có con dưới 32 tuần
+                    Sinh mổ hoặc có con dưới 32 tuần tuổi
                 </label>
                 @error('birth_complication')<span class="error">{{ $message }}</span>@enderror
+            </div>
+            <div class="field" style="margin-top:8px;">
+                <label class="check-row" for="is-second-child">
+                    <input type="checkbox" id="is-second-child" name="is_second_child" value="1" {{ old('is_second_child') ? 'checked' : '' }}>
+                    Vợ sinh con thứ hai (đã có một con đẻ còn sống)
+                </label>
+                <span class="form-hint">Từ 01/7/2026 được nghỉ 10 ngày làm việc theo Luật Dân số 2025.</span>
+                @error('is_second_child')<span class="error">{{ $message }}</span>@enderror
             </div>
         </div>
     </div>
@@ -37,6 +52,7 @@
     const endInput = document.getElementById('leave-end');
     const countInput = document.getElementById('children-count');
     const complicationInput = document.getElementById('birth-complication');
+    const secondChildInput = document.getElementById('is-second-child');
     const halfDayInput = document.getElementById('half_day');
     const halfDayField = document.getElementById('half-day-field');
     const reasonInput = document.getElementById('leave-reason');
@@ -105,8 +121,17 @@
         }
 
         const complicated = complicationInput.checked;
-        const base = children === 1 ? (complicated ? 7 : 5) : (complicated ? 14 : 10);
-        const days = base + Math.max(0, children - 2) * 3;
+        const secondChild = !!(secondChildInput && secondChildInput.checked);
+        let days;
+        if (children >= 3) {
+            days = (complicated ? 14 : 10) + Math.max(0, children - 2) * 3;
+        } else if (children === 2) {
+            days = complicated ? 14 : 10;
+        } else if (secondChild) {
+            days = 10;
+        } else {
+            days = complicated ? 7 : 5;
+        }
         endInput.value = calculateEndDate(startInput.value, days);
         if (daysInput) daysInput.value = String(days);
         const [year, month, day] = endInput.value.split('-');
@@ -118,6 +143,7 @@
     startInput.addEventListener('change', syncSpouseBirth);
     countInput.addEventListener('input', syncSpouseBirth);
     complicationInput.addEventListener('change', syncSpouseBirth);
+    if (secondChildInput) secondChildInput.addEventListener('change', syncSpouseBirth);
     syncSpouseBirth();
 })();
 </script>

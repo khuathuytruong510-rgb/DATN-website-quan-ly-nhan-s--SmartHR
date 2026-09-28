@@ -14,8 +14,13 @@ class LeaveTypes
     public static function available(?\App\Models\Employee $employee = null): array
     {
         $types = self::all();
+        // Nghỉ thai sản khi sinh con: chỉ lao động nữ (Bộ luật Lao động Điều 139).
         if (! $employee?->isFemale()) {
             unset($types['maternity']);
+        }
+        // Nghỉ thai sản khi vợ sinh con: chỉ lao động nam (Luật BHXH 2024 Điều 53, Luật Dân số 2025).
+        if ($employee && ! $employee->isMale()) {
+            unset($types[self::SPOUSE_BIRTH]);
         }
 
         return $types;

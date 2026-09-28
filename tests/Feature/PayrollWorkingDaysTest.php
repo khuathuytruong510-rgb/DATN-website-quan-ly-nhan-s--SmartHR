@@ -103,7 +103,7 @@ class PayrollWorkingDaysTest extends TestCase
         $this->assertEqualsWithDelta($tax, $amounts['tax'], 0.01);
         $this->assertEqualsWithDelta($gross - $insurance - $tax, $amounts['total_salary'], 1);
         $this->assertEqualsWithDelta($amounts['base_salary'], $amounts['working_salary'], 0.01);
-        $this->assertSame(11_000_000.0, $familyDeduction);
+        $this->assertSame(15_500_000.0, $familyDeduction);
     }
 
     private function employee(): Employee

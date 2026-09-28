@@ -197,6 +197,13 @@ class Employee extends Model
         return in_array($gender, ['female', 'nu', 'nữ'], true);
     }
 
+    public function isMale(): bool
+    {
+        $gender = mb_strtolower(trim((string) $this->gender));
+
+        return in_array($gender, ['male', 'nam'], true);
+    }
+
     public function leaveRequests(): HasMany
     {
         return $this->hasMany(LeaveRequest::class);
