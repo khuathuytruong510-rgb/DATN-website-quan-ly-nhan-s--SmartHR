@@ -650,7 +650,6 @@
                                 <a class="{{ request()->routeIs('payroll.*') ? 'active' : '' }}" href="{{ route('payroll.index') }}">Bảng lương</a>
                                 <a class="{{ request()->routeIs('accountant.*') ? 'active' : '' }}" href="{{ route('accountant.dashboard') }}">Nghiệp vụ kế toán</a>
                                 <a class="{{ request()->routeIs('salary_histories.*') ? 'active' : '' }}" href="{{ route('salary_histories.index') }}">Lịch sử lương</a>
-                                <a class="{{ request()->routeIs('salary_payments.*') ? 'active' : '' }}" href="{{ route('salary_payments.index') }}">Thanh toán</a>
                                 <a class="{{ request()->routeIs('statistics.*') ? 'active' : '' }}" href="{{ route('statistics.index') }}">Thống kê</a>
                                 <a class="{{ request()->routeIs('hr-dashboard.*') ? 'active' : '' }}" href="{{ route('hr-dashboard.index') }}">Báo cáo HR</a>
                                 <a class="{{ request()->routeIs('benefits.*') ? 'active' : '' }}" href="{{ route('benefits.index') }}">Phúc lợi</a>
@@ -684,7 +683,6 @@
                         @php
                             $payrollActive = request()->routeIs('payroll.*')
                                 || request()->routeIs('salary_histories.*')
-                                || request()->routeIs('salary_payments.*')
                                 || request()->routeIs('statistics.*')
                                 || request()->routeIs('hr-dashboard.*');
                         @endphp
@@ -693,8 +691,6 @@
                             <a class="{{ request()->routeIs('payroll.index') ? 'active' : '' }}" href="{{ route('payroll.index') }}">Kiểm tra bảng lương</a>
                             <a class="{{ request()->routeIs('salary_histories.index') ? 'active' : '' }}" href="{{ route('salary_histories.index') }}">Lịch sử lương</a>
                             <a class="{{ request()->routeIs('payroll.bank_requests.*') ? 'active' : '' }}" href="{{ route('payroll.bank_requests.index') }}">Duyệt đổi STK/QR</a>
-                            <a class="{{ request()->routeIs('payroll.issues.*') ? 'active' : '' }}" href="{{ route('payroll.issues.index') }}">Sự cố lương</a>
-                            <a class="{{ request()->routeIs('salary_payments.*') ? 'active' : '' }}" href="{{ route('salary_payments.index') }}">Lịch sử thanh toán</a>
                             <a class="{{ request()->routeIs('statistics.*') ? 'active' : '' }}" href="{{ route('statistics.index') }}">Thống kê & Báo cáo</a>
                             <a class="{{ request()->routeIs('hr-dashboard.*') ? 'active' : '' }}" href="{{ route('hr-dashboard.index') }}">Báo cáo tổng hợp</a>
                         </details>
@@ -728,8 +724,7 @@
                         <a class="{{ request()->routeIs('accountant.dashboard') ? 'active' : '' }}" href="{{ route('accountant.dashboard') }}"><i class="bi bi-house"></i>Dashboard</a>
                         <a class="{{ request()->routeIs('accountant.payroll.generate') ? 'active' : '' }}" href="{{ route('accountant.payroll.generate') }}"><i class="bi bi-calculator"></i>Tính lương</a>
                         <a class="{{ request()->routeIs('accountant.payroll.index') || request()->routeIs('accountant.payroll.show') ? 'active' : '' }}" href="{{ route('accountant.payroll.index') }}"><i class="bi bi-table"></i>Bảng lương</a>
-                        <a class="{{ request()->routeIs('payroll.index') || request()->routeIs('payroll.payment.*') || request()->routeIs('payroll.show') ? 'active' : '' }}" href="{{ route('payroll.index') }}"><i class="bi bi-wallet2"></i>Thanh toán lương</a>
-                        <a class="{{ request()->routeIs('accountant.payroll.feedback') || request()->routeIs('payroll.issues.*') ? 'active' : '' }}" href="{{ route('accountant.payroll.feedback') }}"><i class="bi bi-exclamation-triangle"></i>Sự cố lương</a>
+                        <a class="{{ request()->routeIs('payroll.index') || request()->routeIs('payroll.show') ? 'active' : '' }}" href="{{ route('payroll.index') }}"><i class="bi bi-table"></i>Theo dõi bảng lương</a>
                         <a class="{{ request()->routeIs('accountant.leave_requests') ? 'active' : '' }}" href="{{ route('accountant.leave_requests') }}"><i class="bi bi-calendar-check"></i>Xem nghỉ phép</a>
                         <a class="{{ request()->routeIs('salary_histories.*') && ! request()->routeIs('me.salary_histories*') ? 'active' : '' }}" href="{{ route('salary_histories.index') }}"><i class="bi bi-clock-history"></i>Lịch sử lương</a>
                         @if($user->linkedEmployee())

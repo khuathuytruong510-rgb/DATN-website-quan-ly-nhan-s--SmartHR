@@ -37,7 +37,7 @@ class PayrollEmailController extends Controller
     {
         if (! $this->canNotify($payroll)) {
             return redirect()->route('payroll.email.index')
-                ->with('error', 'Chỉ gửi email thông báo khi phiếu đã được Giám đốc duyệt (hoặc NV đã xác nhận / đã trả). Email không đổi trạng thái.');
+                ->with('error', 'Chỉ gửi email thông báo khi phiếu đã được Giám đốc duyệt. Email không đổi trạng thái.');
         }
 
         $employee = $payroll->employee;
@@ -121,8 +121,7 @@ class PayrollEmailController extends Controller
     {
         $workflow = app(PayrollPaymentWorkflowService::class);
 
-        return $workflow->isDirectorApproved($payroll->status)
-            || $workflow->canPay($payroll)
-            || $payroll->status === PayrollPaymentWorkflowService::PAID;
+        return in_array($payroll->status, PayrollPaymentWorkflowService::completedStatuses(), true)
+            || $workflow->isDirectorApproved($payroll->status);
     }
 }

@@ -35,7 +35,6 @@ class EnsureNotAdminOrHr
         'me.support_requests.*',
         'me.trainings',
         'me.rewards',
-        'me.payment_history',
         'me.salary_advances',
         'me.salary_advances.*',
         'me.password.change',

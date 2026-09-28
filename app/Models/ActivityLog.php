@@ -23,8 +23,6 @@ class ActivityLog extends Model
             'change_password' => 'Đổi mật khẩu',
             'payroll_confirmed' => 'Xác nhận bảng lương',
             'payroll_auto_ready' => 'Hệ thống tự xác nhận bảng lương',
-            'payroll_issue_reported' => 'Báo sai sót bảng lương',
-            'payroll_issue_remediated' => 'Xử lý sự cố bảng lương',
             'attendance_check_in' => 'Chấm công vào',
             'attendance_check_out' => 'Chấm công ra',
             'attendance_adjustment_requested' => 'Yêu cầu điều chỉnh chấm công',

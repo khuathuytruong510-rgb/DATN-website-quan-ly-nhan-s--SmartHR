@@ -78,37 +78,6 @@ class PayrollConfirmationController extends Controller
         ]);
     }
 
-    public function reportIssue(Request $request, Payroll $payroll): RedirectResponse
-    {
-        $this->authorizePayroll($payroll);
-
-        $data = $request->validate([
-            'issue_types' => ['nullable', 'array'],
-            'issue_types.*' => ['in:working_days,allowance,deduction,overtime,other'],
-            'issue_report' => ['required', 'string', 'max:1000'],
-        ]);
-
-        $typeLabels = [
-            'working_days' => 'Sai ngày công',
-            'allowance' => 'Sai phụ cấp',
-            'deduction' => 'Sai khấu trừ',
-            'overtime' => 'Sai OT',
-            'other' => 'Khác',
-        ];
-        $types = collect($data['issue_types'] ?? [])
-            ->map(fn ($type) => $typeLabels[$type] ?? $type)
-            ->implode(', ');
-        $issue = trim(($types ? "Loại lỗi: {$types}\n" : '').$data['issue_report']);
-
-        try {
-            $this->workflow->reportIssue($payroll, $issue, $request->user());
-        } catch (\Throwable $e) {
-            return redirect()->route('me.payrolls')->with('error', $e->getMessage());
-        }
-
-        return redirect()->route('me.payrolls')->with('success', 'Đã gửi báo cáo sự cố đến HR / Kế toán.');
-    }
-
     public function requestBankChange(Request $request): RedirectResponse
     {
         $employee = $this->currentEmployee();

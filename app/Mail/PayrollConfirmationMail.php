@@ -23,21 +23,15 @@ class PayrollConfirmationMail extends Mailable
 
     public function build()
     {
-        $confirmUrl = null;
-        if ($this->payroll->confirmation_token) {
-            $confirmUrl = url('/payroll/confirm/'.$this->payroll->confirmation_token);
-        }
-
         $subject = $this->isRevision
-            ? 'Bảng lương đã chỉnh sửa — xác nhận lại tháng '.$this->payroll->display_month
-            : 'Xác nhận lương tháng '.$this->payroll->display_month;
+            ? 'Bảng lương đã cập nhật tháng '.$this->payroll->display_month
+            : 'Thông báo bảng lương tháng '.$this->payroll->display_month;
 
         return $this->subject($subject)
             ->view('emails.payroll_confirmation')
             ->with([
                 'payroll' => $this->payroll,
                 'employee' => $this->payroll->employee,
-                'confirmUrl' => $confirmUrl,
                 'isRevision' => $this->isRevision,
             ]);
     }

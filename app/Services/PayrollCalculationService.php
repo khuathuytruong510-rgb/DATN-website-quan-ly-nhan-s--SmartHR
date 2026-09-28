@@ -226,7 +226,7 @@ class PayrollCalculationService
      * Tính / tính lại một phiếu. Backend tự tính số liệu và gán calculated.
      * Không nhận status / total_salary từ client.
      *
-     * Chỉ được tính phiếu mới, nháp, đã tính, hoặc đang sự cố.
+     * Chỉ được tính phiếu mới, nháp hoặc đã tính.
      */
     public function calculate(Employee $employee, int $month, int $year)
     {
@@ -240,7 +240,7 @@ class PayrollCalculationService
 
             if ($existing && ! in_array($existing->status, PayrollPaymentWorkflowService::recalculableStatuses(), true)) {
                 throw new PayrollNotRecalculableException(
-                    'Không được tính lại phiếu đã vào vòng HR kiểm tra / Giám đốc duyệt / NV xác nhận / đã thanh toán. Phải đi vòng sự cố chính thức.'
+                    'Không được tính lại phiếu đã gửi duyệt / Giám đốc duyệt / NV xác nhận / đã thanh toán.'
                 );
             }
 
@@ -262,17 +262,6 @@ class PayrollCalculationService
 
         $employees = Employee::query()->where('status', 'active')->orderBy('id')->get();
         foreach ($employees as $employee) {
-            if ($skipPayrollIssues && Payroll::query()
-                ->where('employee_id', $employee->id)
-                ->where('month', $month)
-                ->where('year', $year)
-                ->where('status', PayrollPaymentWorkflowService::PAYROLL_ISSUE)
-                ->exists()) {
-                $skipped++;
-
-                continue;
-            }
-
             try {
                 $this->calculate($employee, $month, $year);
                 $calculated++;
@@ -432,24 +421,13 @@ class PayrollCalculationService
     {
         $payload = array_merge($this->buildAmounts($employee, $month, $year), [
             'status' => PayrollPaymentWorkflowService::CALCULATED,
+            'issue_report' => null,
+            'issue_reported_at' => null,
+            'confirmation_status' => 'pending',
+            'confirmed_at' => null,
+            'confirmation_token' => null,
+            'confirmation_deadline' => null,
         ]);
-
-        // Tính lại từ vòng sự cố: xóa dấu vết issue / xác nhận cũ (giống remediateIssue).
-        if ($existing && $existing->status === PayrollPaymentWorkflowService::PAYROLL_ISSUE) {
-            $payload = array_merge($payload, [
-                'issue_report' => null,
-                'issue_reported_at' => null,
-                'confirmation_status' => 'pending',
-                'confirmed_at' => null,
-                'confirmation_token' => null,
-                'confirmation_deadline' => null,
-                'sent_at' => null,
-                'email_status' => 'pending',
-                'director_approved_by' => null,
-                'director_approved_name' => null,
-                'director_approved_at' => null,
-            ]);
-        }
 
         if ($existing) {
             $existing->fill($payload)->save();

@@ -396,7 +396,6 @@ class SmartHrController extends Controller
             'awaitingEmployee' => (clone $payrollQuery)->whereIn('status', $directorApprovalStatuses)->count(),
             'awaitingPayment' => (clone $payrollQuery)->whereIn('status', PayrollPaymentWorkflowService::payableStatuses())->count(),
             'paid' => (clone $payrollQuery)->where('status', PayrollPaymentWorkflowService::PAID)->count(),
-            'issues' => (clone $payrollQuery)->where('status', PayrollPaymentWorkflowService::PAYROLL_ISSUE)->count(),
         ];
 
         $previousPayrollQuery = Payroll::where('month', $previousMonth->month)->where('year', $previousMonth->year);
@@ -407,7 +406,6 @@ class SmartHrController extends Controller
             'awaitingEmployee' => (clone $previousPayrollQuery)->whereIn('status', $directorApprovalStatuses)->count(),
             'awaitingPayment' => (clone $previousPayrollQuery)->whereIn('status', PayrollPaymentWorkflowService::payableStatuses())->count(),
             'paid' => (clone $previousPayrollQuery)->where('status', PayrollPaymentWorkflowService::PAID)->count(),
-            'issues' => (clone $previousPayrollQuery)->where('status', PayrollPaymentWorkflowService::PAYROLL_ISSUE)->count(),
         ];
 
         $approvedLeaves = LeaveRequest::where('status', 'approved')
@@ -1958,21 +1956,17 @@ class SmartHrController extends Controller
 
         if (! $employee || ! filter_var($employee->email, FILTER_VALIDATE_EMAIL)) {
             return redirect()->route('payroll.show', $payroll)
-                ->with('error', 'Không thể gửi email xác nhận lương: nhân viên chưa có email hợp lệ.');
+                ->with('error', 'Không thể gửi email thông báo lương: nhân viên chưa có email hợp lệ.');
         }
 
-        $updateData = [
+        $payroll->update([
             'sent_at' => now(),
             'sent_by' => Auth::id(),
             'email_status' => 'sent',
-            'confirmation_deadline' => PayrollPaymentWorkflowService::confirmationDeadlineFor($payroll),
-        ];
-
-        if ($payroll->confirmation_status !== 'confirmed') {
-            $updateData['confirmation_status'] = 'pending';
-        }
-
-        $payroll->update($updateData);
+            'confirmation_status' => 'notified',
+            'confirmation_deadline' => null,
+            'confirmation_token' => null,
+        ]);
 
         try {
             Mail::to($employee->email)
@@ -1985,28 +1979,18 @@ class SmartHrController extends Controller
         }
 
         return redirect()->route('payroll.show', $payroll)
-            ->with('success', 'Đã gửi email xác nhận lương đến ' . $employee->email);
+            ->with('success', 'Đã gửi email thông báo bảng lương đến ' . $employee->email);
     }
 
     public function approvePayroll(Payroll $payroll): RedirectResponse
     {
-        abort(403, 'Không đổi trạng thái lương thủ công. Dùng đúng bước: HR kiểm tra → Giám đốc duyệt → Nhân viên xác nhận → Kế toán thanh toán.');
+        abort(403, 'Không đổi trạng thái lương thủ công. Dùng đúng bước: HR xác nhận nguồn → Kế toán gửi duyệt → Giám đốc duyệt → thông báo NV.');
     }
 
     public function markPaid(Payroll $payroll): RedirectResponse
     {
-        if ($payroll->status === 'paid') {
-            return redirect()->route('payroll.show', $payroll)
-                ->with('info', 'Phiếu lương đã được thanh toán.');
-        }
-
-        if (! in_array($payroll->status, \App\Services\PayrollPaymentWorkflowService::payableStatuses(), true)) {
-            return redirect()->route('payroll.show', $payroll)
-                ->with('error', 'Chỉ thanh toán khi bảng lương đủ điều kiện thanh toán (đã xác nhận).');
-        }
-
-        return redirect()->route('payroll.payment.show', $payroll)
-            ->with('info', 'Vui lòng hoàn tất thanh toán tại trang quy trình.');
+        return redirect()->route('payroll.show', $payroll)
+            ->with('error', 'Đã bỏ chức năng thanh toán lương. Quy trình dừng ở Giám đốc duyệt và thông báo bảng lương.');
     }
 
     public function editPayroll(Payroll $payroll): View
@@ -2019,7 +2003,7 @@ class SmartHrController extends Controller
 
     public function updatePayroll(Request $request, Payroll $payroll): RedirectResponse
     {
-        abort(403, 'Không cho phép client đổi trạng thái hoặc số liệu lương tùy ý. Dùng quy trình tính / kiểm tra / duyệt / thanh toán.');
+        abort(403, 'Không cho phép client đổi trạng thái hoặc số liệu lương tùy ý. Dùng quy trình tính / gửi duyệt / Giám đốc duyệt.');
     }
 
     public function destroyPayroll(Payroll $payroll): RedirectResponse
