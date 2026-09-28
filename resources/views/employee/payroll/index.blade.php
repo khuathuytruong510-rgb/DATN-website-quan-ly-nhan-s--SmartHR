@@ -88,11 +88,7 @@
                             <p class="text-sm text-gray-500 mt-1">{{ optional($p->employee)->position }}</p>
                         </div>
                         <div class="flex flex-wrap gap-2">
-                            @if($p->status === 'payroll_issue' || $p->confirmation_status === 'issue_reported')
-                                <span class="inline-flex rounded-full bg-amber-100 text-amber-800 text-xs font-semibold px-3 py-1">Đã báo sự cố</span>
-                            @else
-                                <span class="inline-flex rounded-full bg-slate-100 text-slate-700 text-xs font-semibold px-3 py-1">{{ $workflow->statusLabel($p->status) }}</span>
-                            @endif
+                            <span class="inline-flex rounded-full bg-slate-100 text-slate-700 text-xs font-semibold px-3 py-1">{{ $workflow->statusLabel($p->status) }}</span>
                         </div>
                     </div>
 
@@ -133,73 +129,24 @@
                     </details>
 
                     <div class="flex flex-wrap gap-2">
-                        @if($p->status === 'payroll_issue' || $p->confirmation_status === 'issue_reported')
-                            <div class="w-full rounded-xl bg-amber-50 text-amber-800 px-4 py-3 text-sm border border-amber-200">
-                                Đã gửi báo cáo sự cố. Đang chờ HR / kế toán khắc phục, rồi Giám đốc phê duyệt lại.
-                            </div>
-                        @elseif($workflow->isCalculated($p->status) || $workflow->isHrChecked($p->status))
+                        @if($workflow->isCalculated($p->status) || $workflow->isHrChecked($p->status))
                             <div class="w-full rounded-xl bg-slate-50 text-slate-700 px-4 py-3 text-sm border border-slate-200">
                                 {{ $workflow->statusLabel($p->status) }}. Bạn chỉ xem phiếu ở bước này.
                             </div>
-                        @elseif($workflow->isDirectorApproved($p->status) && $p->confirmation_status !== 'confirmed')
-                            <div class="w-full rounded-xl bg-blue-50 text-blue-800 px-4 py-3 text-sm border border-blue-100 mb-1">
-                                Phiếu lương cần bạn xác nhận{{ $p->sent_at ? ' (đã cập nhật '.optional($p->sent_at)->format('d/m/Y H:i').')' : '' }}.
+                        @elseif($workflow->isDirectorApproved($p->status))
+                            <div class="w-full rounded-xl bg-green-50 text-green-800 px-4 py-3 text-sm border border-green-100">
+                                Giám đốc đã duyệt bảng lương{{ $p->sent_at ? ' (cập nhật '.optional($p->sent_at)->format('d/m/Y H:i').')' : '' }}.
+                                Bạn chỉ xem chi tiết phiếu đã được phê duyệt.
                             </div>
-                            <form method="POST" action="{{ route('me.payroll.confirm', $p) }}">
-                                @csrf
-                                <button class="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700" type="submit">
-                                    Xác nhận bảng lương
-                                </button>
-                            </form>
-                            <details class="rounded-xl border border-gray-200">
-                                <summary class="px-4 py-2.5 cursor-pointer font-semibold text-gray-700">Báo cáo sai sót bảng lương</summary>
-                                <form method="POST" action="{{ route('me.payroll.report_issue', $p) }}" class="p-4 border-t">
-                                    @csrf
-                                    <p class="text-sm font-semibold mb-2">Loại lỗi</p>
-                                    <div class="grid grid-cols-2 gap-2 text-sm mb-3">
-                                        <label><input type="checkbox" name="issue_types[]" value="working_days"> Sai ngày công</label>
-                                        <label><input type="checkbox" name="issue_types[]" value="allowance"> Sai phụ cấp</label>
-                                        <label><input type="checkbox" name="issue_types[]" value="deduction"> Sai khấu trừ</label>
-                                        <label><input type="checkbox" name="issue_types[]" value="overtime"> Sai OT</label>
-                                        <label><input type="checkbox" name="issue_types[]" value="other"> Khác</label>
-                                    </div>
-                                    <textarea name="issue_report" rows="3" required class="w-full rounded-xl border border-gray-300 px-3 py-2 mb-3" placeholder="Nội dung..."></textarea>
-                                    <button class="px-4 py-2 bg-amber-500 text-white rounded-xl font-semibold" type="submit">Gửi báo cáo sai sót</button>
-                                </form>
-                            </details>
-                        @elseif($workflow->canPay($p))
-                            <div class="w-full rounded-xl bg-blue-50 text-blue-800 px-4 py-3 text-sm border border-blue-100">
-                                Bạn đã xác nhận. Phiếu đang chờ kế toán thanh toán.
-                            </div>
-                        @elseif($p->status === 'paid')
-                            <div class="w-full rounded-xl bg-green-50 text-green-700 px-4 py-3 text-sm">
-                                Đã thanh toán{{ $p->paid_at ? ' lúc '.$p->paid_at->format('d/m/Y H:i') : '' }}
-                                @if($p->payment_method) · {{ $p->payment_method }} @endif
+                        @elseif(in_array($p->status, ['employee_confirmed', 'ready_for_payment', 'paid'], true))
+                            <div class="w-full rounded-xl bg-slate-50 text-slate-700 px-4 py-3 text-sm border border-slate-200">
+                                {{ $workflow->statusLabel($p->status) }}. Bạn chỉ xem phiếu.
                             </div>
                         @endif
                     </div>
                 </article>
             @endforeach
         </div>
-
-        {{-- Lịch sử thanh toán --}}
-        @php $paidList = $payrolls->where('status', 'paid'); @endphp
-        @if($paidList->isNotEmpty())
-            <div class="mt-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                <h2 class="text-lg font-bold mb-4">Lịch sử thanh toán</h2>
-                <div class="space-y-3">
-                    @foreach($paidList as $paid)
-                        <div class="flex justify-between gap-3 border-b border-gray-100 pb-3 text-sm">
-                            <div>
-                                <strong>Tháng {{ $paid->display_month }}</strong>
-                                <div class="text-gray-500">{{ optional($paid->paid_at)->format('d/m/Y H:i') ?? '—' }} · {{ $paid->payment_method ?? '—' }}</div>
-                            </div>
-                            <div class="font-bold text-blue-600">{{ number_format($paid->total_salary ?? 0, 0, '.', ',') }} ₫</div>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-        @endif
     @endif
 </div>
 @endsection

@@ -18,10 +18,9 @@ use Illuminate\Support\Facades\Schema;
 class PayrollCalculationService
 {
     /**
-     * Thuế TNCN theo biểu lũy tiến từng phần (tháng).
-     * Luật thuế TNCN / Thông tư 111/2013/TT-BTC:
-     * 0–5tr: 5%; 5–10tr: 10%; 10–18tr: 15%; 18–32tr: 20%;
-     * 32–52tr: 25%; 52–80tr: 30%; >80tr: 35%.
+     * Thuế thu nhập cá nhân theo biểu lũy tiến từng phần (tháng).
+     * Luật Thuế thu nhập cá nhân 2025 (kỳ thuế năm 2026):
+     * 0–10tr: 5%; 10–30tr: 10%; 30–60tr: 20%; 60–100tr: 30%; >100tr: 35%.
      */
     public function calculateTax(float $taxableIncome): float
     {
@@ -61,8 +60,9 @@ class PayrollCalculationService
         $employerBhytRate = max(0.0, (float) $this->payrollConfig('insurance.employer_bhyt_rate', 0.03));
         $employerBhtnRate = max(0.0, (float) $this->payrollConfig('insurance.employer_bhtn_rate', 0.01));
         $multiplier = max(1, (int) $this->payrollConfig('insurance.cap_multiplier', 20));
-        $socialBase = max(0.0, (float) $this->payrollConfig('insurance.base_salary', 2_340_000));
-        $regionalMin = max(0.0, (float) $this->payrollConfig('insurance.regional_minimum_wage', 4_960_000));
+        // Mức lương cơ sở từ 01/7/2026 (NĐ 161/2026); lương tối thiểu vùng I từ 01/1/2026 (NĐ 293/2025).
+        $socialBase = max(0.0, (float) $this->payrollConfig('insurance.base_salary', 2_530_000));
+        $regionalMin = max(0.0, (float) $this->payrollConfig('insurance.regional_minimum_wage', 5_310_000));
 
         $bhxhBhytCap = $multiplier * $socialBase;
         $bhtnCap = $multiplier * $regionalMin;
@@ -175,12 +175,10 @@ class PayrollCalculationService
         }
 
         return [
-            [5_000_000, 0.05],
-            [10_000_000, 0.10],
-            [18_000_000, 0.15],
-            [32_000_000, 0.20],
-            [52_000_000, 0.25],
-            [80_000_000, 0.30],
+            [10_000_000, 0.05],
+            [30_000_000, 0.10],
+            [60_000_000, 0.20],
+            [100_000_000, 0.30],
             [null, 0.35],
         ];
     }
@@ -226,7 +224,7 @@ class PayrollCalculationService
      * Tính / tính lại một phiếu. Backend tự tính số liệu và gán calculated.
      * Không nhận status / total_salary từ client.
      *
-     * Chỉ được tính phiếu mới, nháp, đã tính, hoặc đang sự cố.
+     * Chỉ được tính phiếu mới, nháp hoặc đã tính.
      */
     public function calculate(Employee $employee, int $month, int $year)
     {
@@ -240,7 +238,7 @@ class PayrollCalculationService
 
             if ($existing && ! in_array($existing->status, PayrollPaymentWorkflowService::recalculableStatuses(), true)) {
                 throw new PayrollNotRecalculableException(
-                    'Không được tính lại phiếu đã vào vòng HR kiểm tra / Giám đốc duyệt / NV xác nhận / đã thanh toán. Phải đi vòng sự cố chính thức.'
+                    'Không được tính lại phiếu đã gửi duyệt / Giám đốc duyệt / NV xác nhận / đã thanh toán.'
                 );
             }
 
@@ -262,17 +260,6 @@ class PayrollCalculationService
 
         $employees = Employee::query()->where('status', 'active')->orderBy('id')->get();
         foreach ($employees as $employee) {
-            if ($skipPayrollIssues && Payroll::query()
-                ->where('employee_id', $employee->id)
-                ->where('month', $month)
-                ->where('year', $year)
-                ->where('status', PayrollPaymentWorkflowService::PAYROLL_ISSUE)
-                ->exists()) {
-                $skipped++;
-
-                continue;
-            }
-
             try {
                 $this->calculate($employee, $month, $year);
                 $calculated++;
@@ -432,24 +419,13 @@ class PayrollCalculationService
     {
         $payload = array_merge($this->buildAmounts($employee, $month, $year), [
             'status' => PayrollPaymentWorkflowService::CALCULATED,
+            'issue_report' => null,
+            'issue_reported_at' => null,
+            'confirmation_status' => 'pending',
+            'confirmed_at' => null,
+            'confirmation_token' => null,
+            'confirmation_deadline' => null,
         ]);
-
-        // Tính lại từ vòng sự cố: xóa dấu vết issue / xác nhận cũ (giống remediateIssue).
-        if ($existing && $existing->status === PayrollPaymentWorkflowService::PAYROLL_ISSUE) {
-            $payload = array_merge($payload, [
-                'issue_report' => null,
-                'issue_reported_at' => null,
-                'confirmation_status' => 'pending',
-                'confirmed_at' => null,
-                'confirmation_token' => null,
-                'confirmation_deadline' => null,
-                'sent_at' => null,
-                'email_status' => 'pending',
-                'director_approved_by' => null,
-                'director_approved_name' => null,
-                'director_approved_at' => null,
-            ]);
-        }
 
         if ($existing) {
             $existing->fill($payload)->save();
@@ -642,7 +618,8 @@ class PayrollCalculationService
         $personalDeduction = $this->personalDeduction();
         $dependentDeduction = $dependents * $this->dependentDeduction();
         $familyDeduction = $personalDeduction + $dependentDeduction;
-        // TNTT = tổng TN chịu thuế − BH bắt buộc NLĐ − giảm trừ gia cảnh (NQ 954/2020/UBTVQH14).
+        // Thu nhập tính thuế = tổng thu nhập − bảo hiểm bắt buộc người lao động − giảm trừ gia cảnh
+        // (Luật Thuế thu nhập cá nhân 2025 — kỳ thuế năm 2026).
         $taxableIncome = max(0, $gross - $insurance - $familyDeduction);
         $taxParts = $this->calculateTaxBreakdown($taxableIncome);
         $tax = $taxParts['tax'];
@@ -760,12 +737,12 @@ class PayrollCalculationService
 
     public function personalDeduction(): float
     {
-        return max(0, (float) $this->payrollConfig('personal_deduction', 11_000_000));
+        return max(0, (float) $this->payrollConfig('personal_deduction', 15_500_000));
     }
 
     public function dependentDeduction(): float
     {
-        return max(0, (float) $this->payrollConfig('dependent_deduction', 4_400_000));
+        return max(0, (float) $this->payrollConfig('dependent_deduction', 6_200_000));
     }
 
     public function dependentCount(?Employee $employee = null): int

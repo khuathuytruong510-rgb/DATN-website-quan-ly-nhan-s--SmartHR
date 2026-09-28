@@ -27,13 +27,15 @@ class LeaveRequestService
         $isSpouseBirth = ($data['type'] ?? null) === LeaveTypes::SPOUSE_BIRTH;
         $childrenCount = $isSpouseBirth ? (int) ($data['children_count'] ?? 0) : null;
         $birthComplication = $isSpouseBirth && (bool) ($data['birth_complication'] ?? false);
+        $isSecondChild = $isSpouseBirth && (bool) ($data['is_second_child'] ?? false);
         $halfDay = ! $isSpouseBirth && (bool) ($data['half_day'] ?? false);
 
         if ($isSpouseBirth) {
             $schedule = $this->eligibility->spouseBirthSchedule(
                 $data['start_date'],
                 $childrenCount,
-                $birthComplication
+                $birthComplication,
+                $isSecondChild
             );
             $data['end_date'] = $schedule['end_date'];
             $data['half_day'] = false;
@@ -48,7 +50,8 @@ class LeaveRequestService
             $halfDay,
             null,
             $childrenCount,
-            $birthComplication
+            $birthComplication,
+            $isSecondChild
         );
 
         $this->periodLock->assertWritableRange($data['start_date'], $data['end_date'], 'đơn nghỉ phép');
@@ -56,7 +59,7 @@ class LeaveRequestService
         $documentPath = $document?->store('leave-evidence', 'local');
 
         try {
-            return DB::transaction(function () use ($employee, $actor, $data, $check, $isSpouseBirth, $childrenCount, $birthComplication, $document, $documentPath) {
+            return DB::transaction(function () use ($employee, $actor, $data, $check, $isSpouseBirth, $childrenCount, $birthComplication, $isSecondChild, $document, $documentPath) {
                 $leave = LeaveRequest::create([
                     'employee_id' => $employee->id,
                     'start_date' => $data['start_date'],
@@ -65,6 +68,7 @@ class LeaveRequestService
                     'type' => $data['type'],
                     'children_count' => $isSpouseBirth ? $childrenCount : null,
                     'birth_complication' => $isSpouseBirth ? $birthComplication : null,
+                    'is_second_child' => $isSpouseBirth ? $isSecondChild : null,
                     'document_path' => $documentPath,
                     'document_name' => $document?->getClientOriginalName(),
                     'reason' => $data['reason'] ?? null,

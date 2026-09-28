@@ -56,8 +56,9 @@ class LeaveRequestWorkflowTest extends TestCase
         $this->actingAs($user)
             ->get(route('me.leave_requests.create'))
             ->assertOk()
-            ->assertDontSee('value="maternity"')
-            ->assertSee('Nghỉ thai sản (vợ sinh con)')
+            ->assertDontSee('value="maternity"', false)
+            ->assertSee('value="spouse_birth"', false)
+            ->assertSee('Nghỉ thai sản khi vợ sinh con')
             ->assertSee('Nghỉ phép năm');
     }
 
@@ -86,10 +87,43 @@ class LeaveRequestWorkflowTest extends TestCase
         $this->assertSame(['days' => 5, 'end_date' => '2026-09-08'], $eligibility->spouseBirthSchedule('2026-09-01', 1));
         $this->assertSame(['days' => 5, 'end_date' => '2026-09-12'], $eligibility->spouseBirthSchedule('2026-09-08', 1));
         $this->assertSame(['days' => 7, 'end_date' => '2026-09-15'], $eligibility->spouseBirthSchedule('2026-09-08', 1, true));
+        // Luật Dân số 2025 (từ 01/7/2026): sinh con thứ hai → 10 ngày làm việc
+        $this->assertSame(['days' => 10, 'end_date' => '2026-09-18'], $eligibility->spouseBirthSchedule('2026-09-08', 1, false, true));
         $this->assertSame(['days' => 10, 'end_date' => '2026-09-18'], $eligibility->spouseBirthSchedule('2026-09-08', 2));
         $this->assertSame(['days' => 14, 'end_date' => '2026-09-23'], $eligibility->spouseBirthSchedule('2026-09-08', 2, true));
         $this->assertSame(['days' => 13, 'end_date' => '2026-09-22'], $eligibility->spouseBirthSchedule('2026-09-08', 3));
         $this->assertSame(['days' => 17, 'end_date' => '2026-09-26'], $eligibility->spouseBirthSchedule('2026-09-08', 3, true));
+    }
+
+    public function test_female_form_hides_spouse_birth_leave_type(): void
+    {
+        ['user' => $user, 'employee' => $employee] = $this->people();
+        $employee->update(['gender' => 'female']);
+
+        $this->actingAs($user)
+            ->get(route('me.leave_requests.create'))
+            ->assertOk()
+            ->assertDontSee('value="spouse_birth"', false)
+            ->assertDontSee('Nghỉ thai sản khi vợ sinh con')
+            ->assertSee('value="maternity"', false);
+    }
+
+    public function test_second_child_spouse_birth_submission_uses_ten_working_days(): void
+    {
+        ['user' => $user, 'employee' => $employee] = $this->people();
+
+        $leave = app(\App\Services\LeaveRequestService::class)->submit($employee, $user, [
+            'type' => \App\Support\LeaveTypes::SPOUSE_BIRTH,
+            'start_date' => '2026-09-08',
+            'end_date' => '2026-09-09',
+            'children_count' => 1,
+            'birth_complication' => false,
+            'is_second_child' => true,
+        ]);
+
+        $this->assertSame('2026-09-18', $leave->end_date->toDateString());
+        $this->assertSame(10.0, $leave->days);
+        $this->assertTrue($leave->is_second_child);
     }
 
     public function test_spouse_birth_schedule_uses_company_holidays_from_payroll_calendar(): void

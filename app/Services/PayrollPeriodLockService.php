@@ -268,7 +268,7 @@ class PayrollPeriodLockService
 
             if ($inWorkflow) {
                 throw new RuntimeException(
-                    'Kỳ đã có phiếu vào vòng duyệt / thanh toán. Không mở khóa nguồn. Dùng vòng sự cố lương.'
+                    'Kỳ đã có phiếu vào vòng duyệt / thanh toán. Không mở khóa nguồn.'
                 );
             }
 

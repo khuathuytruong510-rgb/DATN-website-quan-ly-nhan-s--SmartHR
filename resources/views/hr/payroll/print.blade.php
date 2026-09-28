@@ -211,8 +211,8 @@
         </table>
 
         <div class="note">
-            <strong>Ghi chú:</strong> Bảng lương tổng hợp sau khi HR xác nhận nghiệp vụ, dùng để Giám đốc phê duyệt cuối.
-            Sau khi phê duyệt cuối, hệ thống phát hành phiếu và gửi xác nhận cho từng nhân viên.
+            <strong>Ghi chú:</strong> Bảng lương tổng hợp sau khi HR xác nhận nguồn và Kế toán gửi duyệt, dùng để Giám đốc phê duyệt cuối.
+            Sau khi phê duyệt cuối, hệ thống thông báo bảng lương đến từng nhân viên.
         </div>
 
         <div class="signs">

@@ -27,7 +27,7 @@
 <div class="card">
     <form method="POST" action="{{ route('accountant.payroll.send_all') }}">
         @csrf
-        <button class="btn primary" type="submit">Gửi email xác nhận</button>
+        <button class="btn primary" type="submit">Gửi email thông báo bảng lương</button>
     </form>
 </div>
 

@@ -89,12 +89,6 @@ class NavBadgeCounts
         $bank = Schema::hasTable('salary_receive_change_requests')
             ? SalaryReceiveChangeRequest::query()->where('status', 'pending')->count()
             : 0;
-        $issues = Payroll::query()
-            ->where(function ($q) {
-                $q->where('status', W::PAYROLL_ISSUE)
-                    ->orWhere('confirmation_status', 'issue_reported');
-            })
-            ->count();
         $payrollReview = Payroll::query()->whereIn('status', W::calculatedStatuses())->count();
         $needVerify = PayrollPeriodLock::query()
             ->where('is_locked', true)
@@ -111,9 +105,8 @@ class NavBadgeCounts
             'overtime_requests' => $overtime,
             'support_requests' => $support,
             'deletion_requests' => $deletions,
-            'payroll' => $payrollReview + $issues + $bank + $needVerify,
+            'payroll' => $payrollReview + $bank + $needVerify,
             'payroll_review' => $payrollReview,
-            'payroll_issues' => $issues,
             'bank_requests' => $bank,
             'period_verify' => $needVerify,
         ];
@@ -123,12 +116,6 @@ class NavBadgeCounts
     protected function forAccountant(User $user): array
     {
         $payable = Payroll::query()->whereIn('status', W::payableStatuses())->count();
-        $issues = Payroll::query()
-            ->where(function ($q) {
-                $q->where('status', W::PAYROLL_ISSUE)
-                    ->orWhere('confirmation_status', 'issue_reported');
-            })
-            ->count();
         $readyPeriods = PayrollPeriodLock::query()
             ->where('is_locked', true)
             ->whereNotNull('hr_verified_at')
@@ -137,7 +124,6 @@ class NavBadgeCounts
         return [
             'generate' => $readyPeriods,
             'payroll' => $payable,
-            'issues' => $issues,
             'notifications' => 0,
         ];
     }

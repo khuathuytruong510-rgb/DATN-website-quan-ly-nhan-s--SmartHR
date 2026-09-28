@@ -22,10 +22,10 @@
     </div>
     <div class="actions">
         <a class="btn" href="{{ route('accountant.payroll.index') }}">Quay lại</a>
-        @if($workflow->isDirectorApproved($payroll->status) || $workflow->canPay($payroll))
+        @if($workflow->isDirectorApproved($payroll->status) || in_array($payroll->status, \App\Services\PayrollPaymentWorkflowService::completedStatuses(), true))
         <form method="POST" action="{{ route('accountant.payroll.send_email', $payroll) }}" style="display:inline;">
             @csrf
-            <button class="btn" type="submit">Gửi email xác nhận</button>
+            <button class="btn" type="submit">Gửi lại email thông báo</button>
         </form>
         @endif
         @if(in_array($payroll->status, \App\Services\PayrollPaymentWorkflowService::recalculableStatuses(), true))
@@ -33,9 +33,6 @@
             @csrf
             <button class="btn" type="submit">Tính lại</button>
         </form>
-        @endif
-        @if($workflow->canPay($payroll))
-        <a class="btn primary" href="{{ route('payroll.payment.show', $payroll) }}">Thanh toán</a>
         @endif
     </div>
 </div>

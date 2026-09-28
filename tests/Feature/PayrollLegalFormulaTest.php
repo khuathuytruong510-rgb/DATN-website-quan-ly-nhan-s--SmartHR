@@ -37,13 +37,13 @@ class PayrollLegalFormulaTest extends TestCase
 
         $gross = $amounts['working_salary'] + $amounts['overtime_salary'] + $amounts['allowance'] + $amounts['bonus'];
         $insurance = $service->calculateInsurance(20_000_000);
-        $family = 11_000_000 + (2 * 4_400_000);
+        $family = 15_500_000 + (2 * 6_200_000);
         $taxable = max(0, $gross - $insurance - $family);
         $tax = $service->calculateTax($taxable);
 
         $this->assertEqualsWithDelta($insurance, $amounts['insurance'], 0.01);
         $this->assertEqualsWithDelta($tax, $amounts['tax'], 0.01);
-        $this->assertEqualsWithDelta(19_800_000.0, $family, 0.01);
+        $this->assertEqualsWithDelta(27_900_000.0, $family, 0.01);
         $this->assertLessThan($service->calculateTax(max(0, $gross - $insurance)), $amounts['tax']);
     }
 
@@ -69,8 +69,8 @@ class PayrollLegalFormulaTest extends TestCase
 
         $this->assertEqualsWithDelta($expected, $amounts['insurance'], 0.01);
         $this->assertLessThan($uncapped, $amounts['insurance']);
-        $this->assertEqualsWithDelta(round(46_800_000 * 0.08, 2), $amounts['insurance_bhxh'], 0.01);
-        $this->assertEqualsWithDelta(round(46_800_000 * 0.015, 2), $amounts['insurance_bhyt'], 0.01);
+        $this->assertEqualsWithDelta(round(50_600_000 * 0.08, 2), $amounts['insurance_bhxh'], 0.01);
+        $this->assertEqualsWithDelta(round(50_600_000 * 0.015, 2), $amounts['insurance_bhyt'], 0.01);
         $this->assertEqualsWithDelta(round(60_000_000 * 0.01, 2), $amounts['insurance_bhtn'], 0.01);
     }
 
@@ -80,8 +80,8 @@ class PayrollLegalFormulaTest extends TestCase
         Contract::create([
             'employee_id' => $employee->id,
             'title' => 'HĐ',
-            'salary' => 20_000_000,
-            'base_salary' => 20_000_000,
+            'salary' => 40_000_000,
+            'base_salary' => 40_000_000,
             'allowance' => 1_000_000,
             'status' => 'active',
             'start_date' => '2026-01-01',
@@ -99,12 +99,12 @@ class PayrollLegalFormulaTest extends TestCase
         ]));
 
         $this->assertGreaterThan(0, (float) $payroll->actual_working_salary);
-        $this->assertEqualsWithDelta(20_000_000 * 0.08, (float) $payroll->insurance_bhxh, 1);
-        $this->assertEqualsWithDelta(20_000_000 * 0.015, (float) $payroll->insurance_bhyt, 1);
-        $this->assertEqualsWithDelta(20_000_000 * 0.01, (float) $payroll->insurance_bhtn, 1);
-        $this->assertEqualsWithDelta(11_000_000, (float) $payroll->personal_deduction_amount, 0.01);
+        $this->assertEqualsWithDelta(40_000_000 * 0.08, (float) $payroll->insurance_bhxh, 1);
+        $this->assertEqualsWithDelta(40_000_000 * 0.015, (float) $payroll->insurance_bhyt, 1);
+        $this->assertEqualsWithDelta(40_000_000 * 0.01, (float) $payroll->insurance_bhtn, 1);
+        $this->assertEqualsWithDelta(15_500_000, (float) $payroll->personal_deduction_amount, 0.01);
         $this->assertSame(1, (int) $payroll->dependent_count);
-        $this->assertEqualsWithDelta(4_400_000, (float) $payroll->dependent_deduction_amount, 0.01);
+        $this->assertEqualsWithDelta(6_200_000, (float) $payroll->dependent_deduction_amount, 0.01);
         $this->assertGreaterThan(0, (float) $payroll->taxable_income);
         $this->assertGreaterThan(0, (float) $payroll->gross_salary);
         $this->assertEqualsWithDelta(

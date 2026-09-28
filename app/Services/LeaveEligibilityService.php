@@ -37,11 +37,12 @@ class LeaveEligibilityService
         bool $halfDay,
         ?int $excludeId = null,
         ?int $childrenCount = null,
-        bool $birthComplication = false
+        bool $birthComplication = false,
+        bool $isSecondChild = false
     ): array
     {
         $days = $type === LeaveTypes::SPOUSE_BIRTH
-            ? $this->spouseBirthSchedule($startDate, (int) $childrenCount, $birthComplication)['days']
+            ? $this->spouseBirthSchedule($startDate, (int) $childrenCount, $birthComplication, $isSecondChild)['days']
             : $this->calculateLeaveDays($startDate, $endDate, $halfDay);
         $contract = $this->activeContract($employee);
         $quota = $this->quotaSummary($employee, $excludeId);
@@ -52,6 +53,10 @@ class LeaveEligibilityService
 
         if ($type === 'maternity' && ! $employee->isFemale()) {
             throw new RuntimeException('Nghỉ thai sản chỉ áp dụng cho nhân viên nữ.');
+        }
+
+        if ($type === LeaveTypes::SPOUSE_BIRTH && ! $employee->isMale()) {
+            throw new RuntimeException('Nghỉ thai sản khi vợ sinh con chỉ áp dụng cho nhân viên nam đang tham gia bảo hiểm xã hội bắt buộc.');
         }
 
         if (! in_array($type, LeaveTypes::keys($employee), true)) {
@@ -76,17 +81,34 @@ class LeaveEligibilityService
         ];
     }
 
-    /** @return array{days: int, end_date: string} */
-    public function spouseBirthSchedule(string $startDate, int $childrenCount, bool $birthComplication = false): array
-    {
+    /**
+     * Số ngày nghỉ khi vợ sinh con theo Luật Bảo hiểm xã hội 2024 Điều 53
+     * và Luật Dân số 2025 (từ 01/7/2026: sinh con thứ hai được nghỉ 10 ngày làm việc).
+     *
+     * @return array{days: int, end_date: string}
+     */
+    public function spouseBirthSchedule(
+        string $startDate,
+        int $childrenCount,
+        bool $birthComplication = false,
+        bool $isSecondChild = false
+    ): array {
         if ($childrenCount < 1 || $childrenCount > 255) {
             throw new RuntimeException('Số con phải từ 1 đến 255.');
         }
 
-        $baseDays = $childrenCount === 1
-            ? ($birthComplication ? 7 : 5)
-            : ($birthComplication ? 14 : 10);
-        $days = $baseDays + (max(0, $childrenCount - 2) * 3);
+        // childrenCount = số con sinh ra trong lần sinh này.
+        // isSecondChild = vợ sinh con thứ hai (đã có một con đẻ còn sống) — Luật Dân số 2025.
+        if ($childrenCount >= 3) {
+            $days = ($birthComplication ? 14 : 10) + (($childrenCount - 2) * 3);
+        } elseif ($childrenCount === 2) {
+            $days = $birthComplication ? 14 : 10;
+        } elseif ($isSecondChild) {
+            $days = 10;
+        } else {
+            $days = $birthComplication ? 7 : 5;
+        }
+
         $offWeekdays = config('payroll.off_weekdays', [Carbon::SUNDAY]);
         $cursor = Carbon::parse($startDate)->startOfDay();
         $remaining = $days;
@@ -335,15 +357,21 @@ class LeaveEligibilityService
             ];
         }
 
-        $guides[LeaveTypes::SPOUSE_BIRTH] = [
-            'label' => LeaveTypes::label(LeaveTypes::SPOUSE_BIRTH),
-            'capped' => false,
-            'allowed' => null,
-            'used' => null,
-            'remaining' => null,
-            'unit' => 'ngày làm việc/theo lần sinh',
-            'basis' => '5 ngày một con; 7 ngày nếu sinh mổ hoặc con dưới 32 tuần; 10/14 ngày khi sinh đôi; từ con thứ 3 cộng 3 ngày mỗi con.',
-        ];
+        if ($employee->isMale()) {
+            $guides[LeaveTypes::SPOUSE_BIRTH] = [
+                'label' => LeaveTypes::label(LeaveTypes::SPOUSE_BIRTH),
+                'capped' => false,
+                'allowed' => null,
+                'used' => null,
+                'remaining' => null,
+                'unit' => 'ngày làm việc/theo lần sinh',
+                'basis' => 'Luật Bảo hiểm xã hội 2024 Điều 53 + Luật Dân số 2025 (từ 01/7/2026): '
+                    .'5 ngày làm việc khi vợ sinh thường một con; 7 ngày nếu sinh mổ hoặc con dưới 32 tuần; '
+                    .'10 ngày khi sinh đôi hoặc sinh con thứ hai; 14 ngày khi sinh đôi phải phẫu thuật; '
+                    .'từ sinh ba trở lên cộng thêm 3 ngày làm việc cho mỗi con từ con thứ ba. '
+                    .'Ngày bắt đầu nghỉ phải trong 60 ngày kể từ ngày vợ sinh.',
+            ];
+        }
 
         return $guides;
     }

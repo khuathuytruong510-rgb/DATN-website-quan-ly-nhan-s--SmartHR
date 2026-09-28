@@ -45,7 +45,9 @@
             @include('components.leave_type_select', ['leaveTypes' => $leaveTypes ?? null, 'selected' => $defaultType ?? null])
         </div>
 
-        @include('components.spouse_birth_leave_fields')
+        @if(!empty($employee) && $employee->isMale())
+            @include('components.spouse_birth_leave_fields')
+        @endif
 
         @include('components.leave_quota_card', [
             'guides' => $leaveLimit['types'] ?? [],
